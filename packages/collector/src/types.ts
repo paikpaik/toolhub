@@ -1,3 +1,5 @@
+import type { KeywordStat } from "./naver-searchad.ts";
+
 export type SourceName = "google" | "nate" | "signal";
 
 /** 소스 하나에서 수집한 키워드 한 건 */
@@ -31,6 +33,8 @@ export interface DayKeyword {
   maxTraffic: number | null;
   related: string | null;
   url: string | null;
+  /** 네이버 검색광고 기준 검색량. undefined = 아직 조회 안 함, null = 데이터 없음 */
+  stats?: KeywordStat | null;
 }
 
 /** data/YYYY-MM-DD.json */

@@ -9,7 +9,7 @@ export function DateSelect({ dates, value, today }: { dates: string[]; value: st
   return (
     <select
       value={value}
-      onChange={(e) => router.push(e.target.value === today ? "/" : `/?date=${e.target.value}`)}
+      onChange={(e) => router.push(e.target.value === today ? "/history" : `/history?date=${e.target.value}`)}
     >
       {options.map((d) => (
         <option key={d} value={d}>
