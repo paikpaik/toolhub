@@ -1,11 +1,14 @@
 import {
-  fetchRelatedKeywords,
-  normalizeKeyword,
+  fetchKeywordInsight,
+  formatWritingBrief,
+  PLATFORMS,
+  rankByRelevance,
   searchAdConfigFromEnv,
-  toHintKeyword,
   type KeywordStat,
+  type Platform,
 } from "@toolhub/collector";
 import Link from "next/link";
+import { CopyBriefButton, PlatformSelect } from "../brief-copy";
 import { CompetitionBadge, formatSearches, SearchAdNotice } from "../search-ad";
 
 export const dynamic = "force-dynamic";
@@ -18,19 +21,24 @@ export default async function KeywordPage({ searchParams }: { searchParams: Prom
   const keyword = q.trim();
   const searchAd = searchAdConfigFromEnv();
 
-  let related: KeywordStat[] = [];
+  // self: 조회한 키워드 자신의 수치 (맨 위 카드), others: 연관 키워드
+  let self: KeywordStat | null | undefined;
+  let others: KeywordStat[] = [];
+  let tokens: string[] = [];
   let error: string | null = null;
   if (searchAd && keyword) {
     try {
-      related = await fetchRelatedKeywords(searchAd, [keyword]);
+      ({ self, related: others, tokens } = await fetchKeywordInsight(searchAd, keyword));
     } catch (e) {
       error = e instanceof Error ? e.message : String(e);
     }
   }
-  // 응답에는 조회한 키워드 자신도 섞여 있으므로 따로 꺼내 맨 위에 보여준다
-  const selfKey = normalizeKeyword(toHintKeyword(keyword));
-  const self = related.find((r) => normalizeKeyword(r.keyword) === selfKey);
-  const others = related.filter((r) => r !== self);
+
+  // 플랫폼을 바꿔도 바로 복사되도록 세 플랫폼의 브리프를 미리 만들어 둔다
+  const ranked = rankByRelevance(others, tokens);
+  const briefs = Object.fromEntries(
+    PLATFORMS.map((platform) => [platform, formatWritingBrief({ platform, keyword, self, related: ranked })]),
+  ) as Record<Platform, string>;
 
   return (
     <main>
@@ -55,6 +63,16 @@ export default async function KeywordPage({ searchParams }: { searchParams: Prom
         )}
       </form>
 
+      {keyword && (
+        <div className="brief-bar card">
+          <span>
+            <strong>글쓰기</strong> <small>브리프를 복사해 claude.ai 프로젝트에 붙여넣으면 초안이 나옵니다</small>
+          </span>
+          <PlatformSelect />
+          <CopyBriefButton keyword={keyword} briefs={briefs} />
+        </div>
+      )}
+
       <SearchAdNotice configured={!!searchAd} error={error} />
 
       {searchAd && keyword && !error && (
@@ -73,7 +91,7 @@ export default async function KeywordPage({ searchParams }: { searchParams: Prom
             &ldquo;{keyword}&rdquo; 연관 키워드{" "}
             <small>
               {others.length > MAX_RELATED ? `${others.length}개 중 상위 ${MAX_RELATED}개` : `${others.length}개`} · 네이버
-              월간 검색량 많은 순
+              월간 검색량 많은 순{tokens.length > 1 && " · 각 단어의 연관 키워드 포함"}
             </small>
           </h2>
           {others.length ? (

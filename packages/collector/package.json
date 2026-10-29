@@ -4,10 +4,12 @@
   "private": true,
   "type": "module",
   "exports": {
-    ".": "./src/index.ts"
+    ".": "./src/index.ts",
+    "./platforms": "./src/platforms.ts"
   },
   "scripts": {
     "collect": "node src/cli.ts",
+    "brief": "node --env-file-if-exists=../../apps/web/.env.local src/brief-cli.ts",
     "typecheck": "tsc -p ."
   },
   "dependencies": {

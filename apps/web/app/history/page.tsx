@@ -9,6 +9,7 @@ import {
 import Link from "next/link";
 import { DATA_DIR } from "../../lib/data";
 import { SOURCE_LABELS } from "../../lib/labels";
+import { CopyBriefButton, PlatformSelect } from "../brief-copy";
 import { DateSelect } from "../date-select";
 import { CompetitionBadge, formatSearches, SearchAdNotice } from "../search-ad";
 
@@ -38,6 +39,7 @@ export default async function HistoryPage({
           키워드 기록 <small>{day?.keywords.length ?? 0}개</small>
         </h1>
         <DateSelect dates={dates} value={date} today={today} />
+        <PlatformSelect />
       </header>
 
       <SearchAdNotice configured={!!searchAd} error={enriched?.error} />
@@ -107,6 +109,7 @@ function DayTable({ rows }: { rows: DayKeyword[] }) {
       <table>
         <thead>
           <tr>
+            <th title="선택한 플랫폼용 글쓰기 브리프 복사">✍</th>
             <th>처음 본 시각</th>
             <th>키워드</th>
             <th className="num">월간 검색량</th>
@@ -120,6 +123,9 @@ function DayTable({ rows }: { rows: DayKeyword[] }) {
         <tbody>
           {rows.map((r) => (
             <tr key={r.keyword}>
+              <td>
+                <CopyBriefButton keyword={r.keyword} compact />
+              </td>
               <td>{r.firstSeen}</td>
               <td className="keyword">
                 <Link href={`/keyword?q=${encodeURIComponent(r.keyword)}`}>{r.keyword}</Link>

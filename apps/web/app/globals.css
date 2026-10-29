@@ -119,6 +119,40 @@ h1 small {
   color: #fff;
 }
 
+.brief-bar {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+  margin-top: 16px;
+}
+
+.brief-bar > span {
+  flex: 1;
+  min-width: 200px;
+}
+
+.brief-bar small {
+  color: var(--muted);
+  margin-left: 6px;
+}
+
+.icon-button {
+  font: inherit;
+  width: 28px;
+  height: 28px;
+  padding: 0;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: var(--surface);
+  color: var(--text);
+  cursor: pointer;
+}
+
+.icon-button:hover {
+  border-color: var(--accent);
+}
+
 .stat-cards {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));

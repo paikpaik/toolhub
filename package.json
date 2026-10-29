@@ -11,6 +11,7 @@
   },
   "scripts": {
     "collect": "npm run collect -w @toolhub/collector --",
+    "brief": "npm run --silent brief -w @toolhub/collector --",
     "web": "npm run dev -w @toolhub/web",
     "typecheck": "npm run typecheck --workspaces --if-present"
   },
