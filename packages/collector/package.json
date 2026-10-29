@@ -1,0 +1,16 @@
+{
+  "name": "@toolhub/collector",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "scripts": {
+    "collect": "node src/cli.ts",
+    "typecheck": "tsc -p ."
+  },
+  "dependencies": {
+    "fast-xml-parser": "^5.2.0"
+  }
+}
