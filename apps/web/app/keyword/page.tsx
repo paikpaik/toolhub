@@ -13,7 +13,7 @@ import {
   type KeywordStat,
 } from "@toolhub/collector";
 import Link from "next/link";
-import { CopyBriefButton, PlatformSelect, WritingTypeSelect } from "../brief-copy";
+import { CopyBriefButton, PlatformSelect, StructureSelect, WritingTypeSelect } from "../brief-copy";
 import { CompetitionBadge, formatSearches, SearchAdNotice } from "../search-ad";
 import { TrendChart } from "./trend-chart";
 
@@ -85,6 +85,7 @@ export default async function KeywordPage({ searchParams }: { searchParams: Prom
             <strong>글쓰기</strong> <small>브리프를 복사해 claude.ai 프로젝트에 붙여넣으면 초안이 나옵니다</small>
           </span>
           <WritingTypeSelect />
+          <StructureSelect />
           <PlatformSelect />
           <CopyBriefButton keyword={keyword} briefs={briefs} />
         </div>

@@ -4,7 +4,15 @@
  */
 import type { HubConfig } from "./naver-hub.ts";
 import { fetchRelatedKeywords, toHintKeyword, type KeywordStat, type SearchAdConfig } from "./naver-searchad.ts";
-import { PLATFORM_LABELS, WRITING_TYPE_LABELS, type Platform, type WritingType } from "./platforms.ts";
+import {
+  PLATFORM_LABELS,
+  randomStructure,
+  structureLine,
+  WRITING_TYPE_LABELS,
+  type Platform,
+  type Structure,
+  type WritingType,
+} from "./platforms.ts";
 import { computeSaturation, researchKeyword, type KeywordResearch } from "./research.ts";
 import { normalizeKeyword, SOURCE_LABELS } from "./sources.ts";
 import type { DayKeyword } from "./types.ts";
@@ -56,6 +64,8 @@ export function rankByRelevance(related: KeywordStat[], tokens: string[]) {
 export interface WritingBriefInput {
   platform: Platform;
   type?: WritingType;
+  /** 생략하면 무작위로 고른다 */
+  structure?: Structure;
   keyword: string;
   /** null = 검색광고에 데이터 없음, undefined = 조회하지 않음(키 미설정 등) */
   self?: KeywordStat | null;
@@ -68,7 +78,16 @@ export interface WritingBriefInput {
 /** 표 칸에 넣을 수 있게 | 와 줄바꿈을 정리 */
 const cell = (value: string | null | undefined) => (value ?? "").replace(/\|/g, "/").replace(/\s+/g, " ").trim();
 
-export function formatWritingBrief({ platform, type = "info", keyword, self, related = [], research, note }: WritingBriefInput) {
+export function formatWritingBrief({
+  platform,
+  type = "info",
+  structure = randomStructure(),
+  keyword,
+  self,
+  related = [],
+  research,
+  note,
+}: WritingBriefInput) {
   const stats =
     self === undefined
       ? "조회하지 않음"
@@ -80,6 +99,7 @@ export function formatWritingBrief({ platform, type = "info", keyword, self, rel
     "[글쓰기 브리프]",
     `플랫폼: ${PLATFORM_LABELS[platform]}`,
     `유형: ${WRITING_TYPE_LABELS[type]}`,
+    structureLine(type, structure),
     `키워드: ${keyword}`,
     `월간 검색량: ${stats}`,
   ];
@@ -181,7 +201,7 @@ export async function buildWritingBrief(
   { searchAd, hub }: BriefSources,
   keyword: string,
   platform: Platform,
-  { type = "info", note }: { type?: WritingType; note?: string } = {},
+  { type = "info", structure, note }: { type?: WritingType; structure?: Structure; note?: string } = {},
 ) {
   const [insight, research] = await Promise.all([
     searchAd ? fetchKeywordInsight(searchAd, keyword) : null,
@@ -190,6 +210,7 @@ export async function buildWritingBrief(
   return formatWritingBrief({
     platform,
     type,
+    structure,
     keyword,
     self: insight?.self,
     related: insight ? rankByRelevance(insight.related, insight.tokens) : [],

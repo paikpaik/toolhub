@@ -31,6 +31,8 @@ import {
   searchPlaces,
   SHOPPING_CATEGORIES,
   SOURCE_LABELS,
+  STRUCTURE_NAMES,
+  STRUCTURES,
   summarizeTrend,
   WRITING_TYPE_LABELS,
   WRITING_TYPES,
@@ -53,6 +55,15 @@ const platformSchema = z.enum(PLATFORMS).describe("발행 플랫폼: tistory(티
 const typeSchema = z
   .enum(WRITING_TYPES)
   .describe("글 유형: info(정보 - 제도·방법·비교), review(리뷰 - 상품·서비스 사용기), place(장소 - 맛집·여행지 방문기)");
+
+const structureSchema = z
+  .enum(STRUCTURES)
+  .optional()
+  .describe(
+    `글 구성 변형. 보통은 생략해 무작위로 고르게 둔다 (글마다 구조가 같아지지 않도록). 사용자가 원할 때만 지정. ${Object.entries(STRUCTURE_NAMES)
+      .map(([type, names]) => `${type}: ${Object.entries(names).map(([k, v]) => `${k}=${v}`).join(", ")}`)
+      .join(" / ")}`,
+  );
 
 const briefSources = () => ({ searchAd: searchAdConfigFromEnv(), hub: hubConfigFromEnv() });
 const HUB_MISSING = "NAVER API HUB 키가 없습니다. apps/web/.env.local에 NAVER_API_HUB_CLIENT_ID, NAVER_API_HUB_CLIENT_SECRET을 설정하세요.";
@@ -243,13 +254,14 @@ server.registerTool(
       keyword: z.string().min(1).describe("글을 쓸 키워드"),
       platform: platformSchema.default("tistory"),
       type: typeSchema.default("info"),
+      structure: structureSchema,
       note: z.string().optional().describe("글 각도, 직접 경험 메모 등 참고 사항"),
     },
     annotations: { readOnlyHint: true, openWorldHint: true },
   },
-  async ({ keyword, platform, type, note }) => {
+  async ({ keyword, platform, type, structure, note }) => {
     try {
-      return text(await buildWritingBrief(briefSources(), keyword, platform, { type, note }));
+      return text(await buildWritingBrief(briefSources(), keyword, platform, { type, structure, note }));
     } catch (e) {
       return failure(e);
     }
@@ -483,14 +495,16 @@ server.registerPrompt(
       keyword: z.string().describe("글을 쓸 키워드"),
       platform: z.string().optional().describe("tistory | blogger | naver (기본 tistory)"),
       type: z.string().optional().describe("info(정보) | review(리뷰) | place(장소) (기본 info)"),
+      structure: z.string().optional().describe("구성 A | B | C | D (생략하면 무작위)"),
     },
   },
-  async ({ keyword, platform, type }) => {
+  async ({ keyword, platform, type, structure }) => {
     const target: Platform = PLATFORMS.find((p) => p === platform) ?? "tistory";
     const writingType: WritingType = WRITING_TYPES.find((t) => t === type) ?? "info";
+    const pickedStructure = STRUCTURES.find((s) => s === structure?.toUpperCase());
     const [rules, brief] = await Promise.all([
       writingRules(target, writingType),
-      buildWritingBrief(briefSources(), keyword, target, { type: writingType }),
+      buildWritingBrief(briefSources(), keyword, target, { type: writingType, structure: pickedStructure }),
     ]);
     return {
       messages: [

@@ -11,7 +11,7 @@ import {
 import Link from "next/link";
 import { DATA_DIR } from "../../lib/data";
 import { SOURCE_LABELS } from "../../lib/labels";
-import { CopyBriefButton, PlatformSelect } from "../brief-copy";
+import { CopyBriefButton, PlatformSelect, StructureSelect, WritingTypeSelect } from "../brief-copy";
 import { DateSelect } from "../date-select";
 import { CompetitionBadge, formatSearches, SearchAdNotice } from "../search-ad";
 
@@ -41,6 +41,8 @@ export default async function HistoryPage({
           키워드 기록 <small>{day?.keywords.length ?? 0}개</small>
         </h1>
         <DateSelect dates={dates} value={date} today={today} />
+        <WritingTypeSelect />
+        <StructureSelect />
         <PlatformSelect />
       </header>
 
