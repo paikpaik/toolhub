@@ -426,18 +426,23 @@ server.registerTool(
       "toolhub 웹 대시보드를 브라우저로 연다. 웹은 항상 main 브랜치의 최신 커밋으로 실행되며, 꺼져 있거나 옛 커밋이면 (재)시작한 뒤 연다. 사용자가 웹·화면·대시보드를 열어 달라고 하면 쓴다. 준비 중이라는 응답을 받으면 잠시 후 다시 호출한다.",
     inputSchema: {
       page: z
-        .enum(["live", "history", "keyword", "drafts"])
+        .enum(["live", "history", "keyword", "drafts", "thumbnail"])
         .default("live")
-        .describe("live: 실시간, history: 키워드 기록, keyword: 키워드 분석, drafts: 초안(발행 도우미)"),
+        .describe("live: 실시간, history: 키워드 기록, keyword: 키워드 분석, drafts: 초안(발행 도우미), thumbnail: 썸네일 만들기"),
+      title: z.string().optional().describe("page=thumbnail일 때 미리 채울 제목 (*강조* 구문 가능)"),
       keyword: z.string().optional().describe("page=keyword일 때 분석할 키워드"),
       date: dateSchema.describe("page=history일 때 볼 날짜 (YYYY-MM-DD, 생략하면 오늘)"),
       draft: z.string().optional().describe("page=drafts일 때 열 초안 파일 이름 (save_draft가 돌려준 이름). 생략하면 초안 목록"),
     },
     annotations: { readOnlyHint: false, destructiveHint: false, openWorldHint: false },
   },
-  async ({ page, keyword, date, draft }) => {
+  async ({ page, keyword, date, draft, title }) => {
     const pagePath =
-      page === "drafts"
+      page === "thumbnail"
+        ? title
+          ? `/thumbnail?title=${encodeURIComponent(title)}`
+          : "/thumbnail"
+        : page === "drafts"
         ? draft
           ? `/drafts/view?file=${encodeURIComponent(path.basename(draft))}`
           : "/drafts"

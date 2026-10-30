@@ -8,6 +8,7 @@ const MENUS = [
   { href: "/history", label: "키워드 기록" },
   { href: "/keyword", label: "키워드 분석" },
   { href: "/drafts", label: "초안" },
+  { href: "/thumbnail", label: "썸네일" },
 ];
 
 const isActive = (pathname: string, href: string) => (href === "/" ? pathname === "/" : pathname.startsWith(href));

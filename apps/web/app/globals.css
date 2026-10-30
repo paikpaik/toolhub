@@ -431,6 +431,117 @@ h1 small {
   font-size: 12px;
 }
 
+.thumbnail-layout {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 320px;
+  gap: 16px;
+  align-items: start;
+  margin-top: 16px;
+}
+
+@media (max-width: 900px) {
+  .thumbnail-layout {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
+.thumbnail-canvas {
+  display: block;
+  width: 100%;
+  height: auto;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+}
+
+.thumbnail-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+  margin-top: 12px;
+}
+
+.thumbnail-actions small {
+  color: var(--muted);
+}
+
+.thumbnail-form {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.thumbnail-form label {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  font-size: 13px;
+  font-weight: 500;
+}
+
+.thumbnail-form label small {
+  font-weight: normal;
+  color: var(--muted);
+}
+
+.thumbnail-form input:not([type="color"]),
+.thumbnail-form textarea {
+  font: inherit;
+  padding: 6px 10px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--bg);
+  color: var(--text);
+}
+
+.thumbnail-form fieldset {
+  border: none;
+  margin: 0;
+  padding: 0;
+}
+
+.thumbnail-form legend {
+  font-size: 13px;
+  font-weight: 500;
+  margin-bottom: 6px;
+}
+
+.swatches {
+  display: flex;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+
+.swatch {
+  width: 36px;
+  height: 36px;
+  border: 2px solid;
+  border-radius: 8px;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.color-inputs {
+  display: flex;
+  gap: 12px;
+  margin-top: 8px;
+}
+
+.color-inputs label {
+  flex-direction: row;
+  align-items: center;
+  gap: 4px;
+}
+
+.font-warmup {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  opacity: 0;
+  pointer-events: none;
+}
+
 .brief-bar {
   display: flex;
   align-items: center;

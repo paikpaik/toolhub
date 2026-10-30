@@ -30,6 +30,8 @@ export default async function DraftViewPage({ searchParams }: { searchParams: Pr
 
   const draft = parseDraft(markdown);
   const platform = summary.platform;
+  const recommendedTitle = draft.titles.find((t) => t.recommended)?.text ?? draft.titles[0]?.text ?? summary.keyword;
+  const thumbnailHref = `/thumbnail?title=${encodeURIComponent(recommendedTitle)}`;
 
   return (
     <main>
@@ -37,6 +39,9 @@ export default async function DraftViewPage({ searchParams }: { searchParams: Pr
         <h1>
           {summary.keyword} <small>{platform ? PLATFORM_LABELS[platform] : ""} · {summary.date}</small>
         </h1>
+        <Link className="button" href={thumbnailHref}>
+          썸네일 만들기
+        </Link>
         <Link className="button" href="/drafts">
           목록으로
         </Link>
