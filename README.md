@@ -231,6 +231,25 @@ toolhub MCP 서버를 데스크톱 앱에 연결하면, Claude가 키워드 데�
 | `get_writing_rules` | `docs/prompts/`의 글감 선정·초안 작성 규칙 |
 | `get_writing_brief` | 키워드 + 플랫폼 → `[글쓰기 브리프]` |
 | `save_draft` | 초안을 `drafts/`에 파일로 저장 |
+| `open_web` | toolhub 웹을 브라우저로 열기 (http://localhost:3100). **항상 로컬 main 브랜치의 최신 커밋으로 실행**하며, 꺼져 있거나 옛 커밋이면 (재)시작한 뒤 엽니다. 페이지(실시간·기록·분석)와 키워드·날짜 지정 가능 |
+| `stop_web` | `open_web`으로 시작한 웹 서버 끄기 (터미널에서 직접 띄운 서버는 끄지 않음) |
+
+예: "toolhub 웹 열어줘", "어제 키워드 기록 화면 열어줘", "국민연금 수령나이 분석 화면 띄워줘", "웹 서버 꺼줘"
+
+#### `open_web`은 어떤 코드로 실행되나
+
+| | 개발용 `npm run web` | 사용용 `open_web` |
+|---|---|---|
+| 주소 | http://localhost:3000 | http://localhost:3100 |
+| 코드 | 지금 작업 중인 코드 (커밋 안 한 수정 포함) | **로컬 main 브랜치의 최신 커밋** |
+| 실행 위치 | 이 저장소 | `~/.toolhub/runtime/toolhub` (git worktree) |
+| 데이터·키 | `data/`, `apps/web/.env.local` | 같은 파일을 공유 |
+
+- main에 커밋하면, 다음에 `open_web`을 부를 때 실행 폴더를 새 커밋으로 맞추고 웹을 재시작합니다. 커밋하지 않은 수정이나 다른 브랜치 작업은 반영되지 않습니다.
+- 의존성(`package-lock.json`)이 바뀐 커밋이면 실행 폴더에 `npm install`을 다시 합니다. 오래 걸리면 Claude가 "준비 중"이라고 답하는데, 잠시 후 다시 요청하면 이어서 엽니다.
+- `open_web`으로 시작한 웹 서버는 데스크톱 앱을 꺼도 계속 실행됩니다. 다 쓰면 "웹 서버 꺼줘"로 끄세요. 로그는 `.toolhub/web.log`에 남습니다.
+- `git worktree list`에 실행 폴더가 함께 보이는 것은 정상입니다. 지우고 싶으면 `git worktree remove --force ~/.toolhub/runtime/toolhub`를 실행하면 되고, 다음 `open_web` 때 다시 만들어집니다.
+- 3100번 포트를 다른 프로그램이 쓰고 있으면 MCP 설정의 `env`에 `"TOOLHUB_WEB_PORT": "3200"`처럼 다른 포트를 지정합니다.
 
 대화창의 `+` 메뉴에서 **프롬프트**도 고를 수 있습니다.
 

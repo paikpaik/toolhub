@@ -28,6 +28,10 @@ import {
   type Platform,
 } from "@toolhub/collector";
 import { z } from "zod";
+import { openWeb, stopWeb, WEB_LOG_FILE, WEB_URL } from "./web.ts";
+
+/** 도구 호출이 클라이언트 제한 시간(보통 60초)에 걸리지 않도록, 이 시간이 지나면 먼저 응답한다 */
+const TOOL_SOFT_TIMEOUT_MS = 45_000;
 
 const ROOT = path.resolve(import.meta.dirname, "../../..");
 const DATA_DIR = process.env.TOOLHUB_DATA_DIR ?? path.join(ROOT, "data");
@@ -40,6 +44,8 @@ const dateSchema = z
   .regex(/^\d{4}-\d{2}-\d{2}$/)
   .optional()
   .describe("YYYY-MM-DD (KST). 생략하면 오늘");
+
+const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
 
 const text = (value: string) => ({ content: [{ type: "text" as const, text: value }] });
 const failure = (e: unknown) => ({
@@ -264,6 +270,69 @@ server.registerTool(
       for (let n = 2; await exists(file); n++) file = path.join(DRAFTS_DIR, `${base}-${n}.md`);
       await writeFile(file, content.endsWith("\n") ? content : `${content}\n`);
       return text(`저장했습니다: ${file}`);
+    } catch (e) {
+      return failure(e);
+    }
+  },
+);
+
+server.registerTool(
+  "open_web",
+  {
+    title: "toolhub 웹 열기",
+    description:
+      "toolhub 웹 대시보드를 브라우저로 연다. 웹은 항상 main 브랜치의 최신 커밋으로 실행되며, 꺼져 있거나 옛 커밋이면 (재)시작한 뒤 연다. 사용자가 웹·화면·대시보드를 열어 달라고 하면 쓴다. 준비 중이라는 응답을 받으면 잠시 후 다시 호출한다.",
+    inputSchema: {
+      page: z
+        .enum(["live", "history", "keyword"])
+        .default("live")
+        .describe("live: 실시간, history: 키워드 기록, keyword: 키워드 분석"),
+      keyword: z.string().optional().describe("page=keyword일 때 분석할 키워드"),
+      date: dateSchema.describe("page=history일 때 볼 날짜 (YYYY-MM-DD, 생략하면 오늘)"),
+    },
+    annotations: { readOnlyHint: false, destructiveHint: false, openWorldHint: false },
+  },
+  async ({ page, keyword, date }) => {
+    const pagePath =
+      page === "history"
+        ? date
+          ? `/history?date=${date}`
+          : "/history"
+        : page === "keyword"
+          ? keyword
+            ? `/keyword?q=${encodeURIComponent(keyword)}`
+            : "/keyword"
+          : "/";
+    try {
+      // 처음 실행이나 의존성이 바뀐 커밋은 npm install 때문에 오래 걸린다. 준비는 뒤에서 계속되고, 다시 호출하면 이어받는다
+      const opening = openWeb(pagePath);
+      const result = await Promise.race([opening, sleep(TOOL_SOFT_TIMEOUT_MS).then(() => null)]);
+      if (!result) {
+        opening.catch(() => {});
+        return text(
+          `main 최신 커밋으로 웹 실행 환경을 준비하고 있습니다 (의존성 설치 중일 수 있음). 30초~1분 뒤 다시 open_web을 호출하세요. 진행 로그: ${WEB_LOG_FILE}`,
+        );
+      }
+      const { url, commit, action } = result;
+      const what = { none: "", started: "웹 서버를 시작하고 ", restarted: "새 커밋으로 웹 서버를 재시작하고 " }[action];
+      return text(`${what}브라우저로 열었습니다: ${url}\n실행 중인 버전: main ${commit.short} ${commit.subject}`);
+    } catch (e) {
+      return failure(e);
+    }
+  },
+);
+
+server.registerTool(
+  "stop_web",
+  {
+    title: "toolhub 웹 서버 끄기",
+    description: "open_web으로 시작한 toolhub 웹 서버를 끈다. 터미널에서 직접 실행한 웹 서버는 끄지 않는다.",
+    annotations: { readOnlyHint: false, destructiveHint: false, openWorldHint: false },
+  },
+  async () => {
+    try {
+      const { stopped } = await stopWeb();
+      return text(stopped ? `웹 서버(${WEB_URL})를 껐습니다.` : "open_web으로 켠 웹 서버가 없습니다.");
     } catch (e) {
       return failure(e);
     }
