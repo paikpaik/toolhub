@@ -2,13 +2,18 @@
  * claude.ai 프로젝트(docs/prompts)에 붙여넣을 [글쓰기 브리프]를 만든다.
  * 형식은 docs/prompts/writing.md의 "입력 형식"과 맞춰야 한다.
  */
+import type { HubConfig } from "./naver-hub.ts";
 import { fetchRelatedKeywords, toHintKeyword, type KeywordStat, type SearchAdConfig } from "./naver-searchad.ts";
-import { PLATFORM_LABELS, type Platform } from "./platforms.ts";
+import { PLATFORM_LABELS, WRITING_TYPE_LABELS, type Platform, type WritingType } from "./platforms.ts";
+import { computeSaturation, researchKeyword, type KeywordResearch } from "./research.ts";
 import { normalizeKeyword, SOURCE_LABELS } from "./sources.ts";
 import type { DayKeyword } from "./types.ts";
 
-/** 브리프에 넣을 연관 키워드 수 */
+/** 브리프에 넣을 항목 수 */
 const BRIEF_RELATED_COUNT = 20;
+const BRIEF_QUESTION_COUNT = 8;
+const BRIEF_BLOG_COUNT = 5;
+const BRIEF_CAFE_COUNT = 5;
 
 /** 검색량 표시. 네이버가 "< 10"으로 주는 값은 0으로 저장돼 있다 */
 export function formatSearchCount(value: number | null | undefined) {
@@ -50,14 +55,20 @@ export function rankByRelevance(related: KeywordStat[], tokens: string[]) {
 
 export interface WritingBriefInput {
   platform: Platform;
+  type?: WritingType;
   keyword: string;
   /** null = 검색광고에 데이터 없음, undefined = 조회하지 않음(키 미설정 등) */
   self?: KeywordStat | null;
   related?: KeywordStat[];
+  /** NAVER API HUB 조사 결과 (키가 없으면 생략) */
+  research?: KeywordResearch | null;
   note?: string;
 }
 
-export function formatWritingBrief({ platform, keyword, self, related = [], note }: WritingBriefInput) {
+/** 표 칸에 넣을 수 있게 | 와 줄바꿈을 정리 */
+const cell = (value: string | null | undefined) => (value ?? "").replace(/\|/g, "/").replace(/\s+/g, " ").trim();
+
+export function formatWritingBrief({ platform, type = "info", keyword, self, related = [], research, note }: WritingBriefInput) {
   const stats =
     self === undefined
       ? "조회하지 않음"
@@ -65,7 +76,23 @@ export function formatWritingBrief({ platform, keyword, self, related = [], note
         ? "데이터 없음"
         : `${formatSearchCount(self.totalSearches)} (PC ${formatSearchCount(self.pcSearches)} / 모바일 ${formatSearchCount(self.mobileSearches)}) · 경쟁도: ${self.competition}`;
 
-  const lines = ["[글쓰기 브리프]", `플랫폼: ${PLATFORM_LABELS[platform]}`, `키워드: ${keyword}`, `월간 검색량: ${stats}`];
+  const lines = [
+    "[글쓰기 브리프]",
+    `플랫폼: ${PLATFORM_LABELS[platform]}`,
+    `유형: ${WRITING_TYPE_LABELS[type]}`,
+    `키워드: ${keyword}`,
+    `월간 검색량: ${stats}`,
+  ];
+
+  if (research?.trend && research.trend.label !== "데이터 부족") {
+    lines.push(`검색 추이: ${research.trend.label} — ${research.trend.reason}`);
+  }
+  if (research?.blog) {
+    const saturation = computeSaturation(self?.totalSearches, research.blog.total);
+    lines.push(
+      `블로그 문서 수: ${research.blog.total.toLocaleString("ko-KR")}${saturation ? ` (검색량의 ${saturation.ratio}배 · 포화도 ${saturation.level})` : ""}`,
+    );
+  }
 
   const top = related.slice(0, BRIEF_RELATED_COUNT);
   if (top.length > 0) {
@@ -74,6 +101,27 @@ export function formatWritingBrief({ platform, keyword, self, related = [], note
       "| 키워드 | 월간 검색량 | 경쟁도 |",
       "|---|---|---|",
       ...top.map((r) => `| ${r.keyword} | ${formatSearchCount(r.totalSearches)} | ${r.competition} |`),
+    );
+  }
+
+  if (research?.kin?.length) {
+    lines.push("실제 질문 (지식iN):", ...research.kin.slice(0, BRIEF_QUESTION_COUNT).map((q) => `- ${cell(q.title)}`));
+  }
+  if (research?.blog?.items.length) {
+    lines.push(
+      "상위 블로그 글 (겹치지 않는 각도를 잡기 위한 참고):",
+      ...research.blog.items.slice(0, BRIEF_BLOG_COUNT).map((b) => `- ${cell(b.title)} (${b.date})`),
+    );
+  }
+  if (type !== "info" && research?.cafe?.length) {
+    lines.push("카페 글 (실제 후기·고민):", ...research.cafe.slice(0, BRIEF_CAFE_COUNT).map((c) => `- ${cell(c.title)}`));
+  }
+  if (type === "place" && research?.places?.length) {
+    lines.push(
+      "장소 정보 (네이버 지역 검색):",
+      "| 이름 | 분류 | 도로명 주소 | 링크 |",
+      "|---|---|---|---|",
+      ...research.places.map((p) => `| ${cell(p.title)} | ${cell(p.category)} | ${cell(p.roadAddress || p.address)} | ${p.link || "-"} |`),
     );
   }
   if (note?.trim()) lines.push(`참고: ${note.trim()}`);
@@ -99,7 +147,6 @@ export function formatPlanningBriefing(
   keywords: DayKeyword[],
   { sort = "search", limit = 20 }: { sort?: DaySort; limit?: number } = {},
 ) {
-  const cell = (value: string | null | undefined) => (value ?? "").replace(/\|/g, "/").replace(/\s+/g, " ");
   const rows = sortDayKeywords(keywords, sort).slice(0, limit);
   return [
     "[글감 브리핑]",
@@ -121,14 +168,32 @@ export function formatPlanningBriefing(
   ].join("\n");
 }
 
-/** 검색광고 API로 키워드 수치와 연관 키워드를 조회해 브리프를 만든다. 키가 없으면 수치 없이 만든다. */
+export interface BriefSources {
+  searchAd: SearchAdConfig | null;
+  hub: HubConfig | null;
+}
+
+/**
+ * 검색광고(검색량·연관 키워드)와 NAVER API HUB(추이·문서 수·질문·상위 글 등)를 함께 조회해 브리프를 만든다.
+ * 키가 없는 쪽은 건너뛰고, HUB 조사가 실패해도 브리프는 만든다.
+ */
 export async function buildWritingBrief(
-  config: SearchAdConfig | null,
+  { searchAd, hub }: BriefSources,
   keyword: string,
   platform: Platform,
-  { note }: { note?: string } = {},
+  { type = "info", note }: { type?: WritingType; note?: string } = {},
 ) {
-  if (!config) return formatWritingBrief({ platform, keyword, note });
-  const { self, related, tokens } = await fetchKeywordInsight(config, keyword);
-  return formatWritingBrief({ platform, keyword, self, related: rankByRelevance(related, tokens), note });
+  const [insight, research] = await Promise.all([
+    searchAd ? fetchKeywordInsight(searchAd, keyword) : null,
+    hub ? researchKeyword(hub, keyword).catch(() => null) : null,
+  ]);
+  return formatWritingBrief({
+    platform,
+    type,
+    keyword,
+    self: insight?.self,
+    related: insight ? rankByRelevance(insight.related, insight.tokens) : [],
+    research,
+    note,
+  });
 }

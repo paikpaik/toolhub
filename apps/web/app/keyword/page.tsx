@@ -1,44 +1,60 @@
 import {
+  briefKey,
+  computeSaturation,
   fetchKeywordInsight,
   formatWritingBrief,
+  hubConfigFromEnv,
   PLATFORMS,
   rankByRelevance,
+  researchKeyword,
   searchAdConfigFromEnv,
+  WRITING_TYPES,
+  type KeywordResearch,
   type KeywordStat,
-  type Platform,
 } from "@toolhub/collector";
 import Link from "next/link";
-import { CopyBriefButton, PlatformSelect } from "../brief-copy";
+import { CopyBriefButton, PlatformSelect, WritingTypeSelect } from "../brief-copy";
 import { CompetitionBadge, formatSearches, SearchAdNotice } from "../search-ad";
+import { TrendChart } from "./trend-chart";
 
 export const dynamic = "force-dynamic";
 
 /** 연관 키워드가 천 개 넘게 오기도 해서 상위만 보여준다 */
 const MAX_RELATED = 100;
 
+const SATURATION_HELP = "블로그 문서 수 ÷ 월간 검색량. 10배 이하 기회, 50배 이하 보통, 그 이상 높음 (참고용 기준)";
+
 export default async function KeywordPage({ searchParams }: { searchParams: Promise<{ q?: string }> }) {
   const { q = "" } = await searchParams;
   const keyword = q.trim();
   const searchAd = searchAdConfigFromEnv();
+  const hub = hubConfigFromEnv();
 
   // self: 조회한 키워드 자신의 수치 (맨 위 카드), others: 연관 키워드
   let self: KeywordStat | null | undefined;
   let others: KeywordStat[] = [];
   let tokens: string[] = [];
   let error: string | null = null;
-  if (searchAd && keyword) {
-    try {
-      ({ self, related: others, tokens } = await fetchKeywordInsight(searchAd, keyword));
-    } catch (e) {
-      error = e instanceof Error ? e.message : String(e);
-    }
+  let research: KeywordResearch | null = null;
+  if (keyword) {
+    // 검색광고와 API HUB를 동시에 조회한다
+    const [insight, hubResult] = await Promise.all([
+      searchAd ? fetchKeywordInsight(searchAd, keyword).catch((e: unknown) => (e instanceof Error ? e.message : String(e))) : null,
+      hub ? researchKeyword(hub, keyword).catch(() => null) : null,
+    ]);
+    if (typeof insight === "string") error = insight;
+    else if (insight) ({ self, related: others, tokens } = insight);
+    research = hubResult;
   }
+  const saturation = computeSaturation(self?.totalSearches, research?.blog?.total);
 
-  // 플랫폼을 바꿔도 바로 복사되도록 세 플랫폼의 브리프를 미리 만들어 둔다
+  // 플랫폼·유형을 바꿔도 바로 복사되도록 모든 조합의 브리프를 미리 만들어 둔다
   const ranked = rankByRelevance(others, tokens);
   const briefs = Object.fromEntries(
-    PLATFORMS.map((platform) => [platform, formatWritingBrief({ platform, keyword, self, related: ranked })]),
-  ) as Record<Platform, string>;
+    PLATFORMS.flatMap((platform) =>
+      WRITING_TYPES.map((type) => [briefKey(platform, type), formatWritingBrief({ platform, type, keyword, self, related: ranked, research })]),
+    ),
+  );
 
   return (
     <main>
@@ -68,22 +84,51 @@ export default async function KeywordPage({ searchParams }: { searchParams: Prom
           <span>
             <strong>글쓰기</strong> <small>브리프를 복사해 claude.ai 프로젝트에 붙여넣으면 초안이 나옵니다</small>
           </span>
+          <WritingTypeSelect />
           <PlatformSelect />
           <CopyBriefButton keyword={keyword} briefs={briefs} />
         </div>
       )}
 
       <SearchAdNotice configured={!!searchAd} error={error} />
+      {keyword && !hub && (
+        <p className="notice">
+          NAVER API HUB 키(<code>NAVER_API_HUB_CLIENT_ID</code>, <code>NAVER_API_HUB_CLIENT_SECRET</code>)를{" "}
+          <code>apps/web/.env.local</code>에 넣으면 검색 추이·블로그 문서 수·실제 질문·상위 글이 표시됩니다.
+        </p>
+      )}
 
-      {searchAd && keyword && !error && (
+      {keyword && (searchAd || research) && (
         <div className="stat-cards">
-          <StatCard label="월간 검색량" value={self ? formatSearches(self.totalSearches) : "-"} />
-          <StatCard label="PC" value={self ? formatSearches(self.pcSearches) : "-"} />
-          <StatCard label="모바일" value={self ? formatSearches(self.mobileSearches) : "-"} />
-          <StatCard label="경쟁도" value={self ? <CompetitionBadge value={self.competition} /> : "-"} />
-          <StatCard label="월평균 클릭" value={self ? self.monthlyClicks.toLocaleString() : "-"} />
+          {searchAd && !error && (
+            <>
+              <StatCard label="월간 검색량" value={self ? formatSearches(self.totalSearches) : "-"} />
+              <StatCard label="경쟁도" value={self ? <CompetitionBadge value={self.competition} /> : "-"} />
+            </>
+          )}
+          {research?.trend && <StatCard label="검색 추이" value={research.trend.label} />}
+          {research?.blog && <StatCard label="블로그 문서 수" value={research.blog.total.toLocaleString()} />}
+          {saturation && (
+            <StatCard
+              label="포화도"
+              hint={SATURATION_HELP}
+              value={
+                <span className={`saturation ${saturation.level}`}>
+                  {saturation.level} <small>{saturation.ratio}배</small>
+                </span>
+              }
+            />
+          )}
+          {searchAd && !error && self && (
+            <>
+              <StatCard label="PC / 모바일" value={`${formatSearches(self.pcSearches)} / ${formatSearches(self.mobileSearches)}`} />
+              <StatCard label="월평균 클릭" value={self.monthlyClicks.toLocaleString()} />
+            </>
+          )}
         </div>
       )}
+
+      {research && <ResearchSections research={research} />}
 
       {searchAd && keyword && !error && (
         <section>
@@ -134,11 +179,137 @@ export default async function KeywordPage({ searchParams }: { searchParams: Prom
   );
 }
 
-function StatCard({ label, value }: { label: string; value: React.ReactNode }) {
+function StatCard({ label, value, hint }: { label: string; value: React.ReactNode; hint?: string }) {
   return (
-    <div className="card stat-card">
+    <div className="card stat-card" title={hint}>
       <span className="stat-label">{label}</span>
       <span className="stat-value">{value}</span>
     </div>
+  );
+}
+
+function ResearchSections({ research }: { research: KeywordResearch }) {
+  const { trend, blog, kin, news, cafe, places, errors } = research;
+  const failed = Object.entries(errors);
+  return (
+    <>
+      {trend && trend.label !== "데이터 부족" && (
+        <section>
+          <h2>
+            검색 추이 <small>{trend.reason}</small>
+          </h2>
+          <div className="card">
+            <TrendChart points={trend.points} title="최근 24개월 네이버 검색 추이 (기간 중 최고 = 100)" />
+          </div>
+        </section>
+      )}
+
+      <div className="research-grid">
+        {kin && kin.length > 0 && (
+          <section className="card">
+            <h3>
+              실제 질문 <small>지식iN</small>
+            </h3>
+            <ul className="link-list">
+              {kin.map((q) => (
+                <li key={q.link}>
+                  <a href={q.link} target="_blank" rel="noreferrer">
+                    {q.title}
+                  </a>
+                </li>
+              ))}
+            </ul>
+          </section>
+        )}
+
+        {blog && blog.items.length > 0 && (
+          <section className="card">
+            <h3>
+              상위 블로그 글 <small>겹치지 않는 각도 잡기용</small>
+            </h3>
+            <ul className="link-list">
+              {blog.items.map((b) => (
+                <li key={b.link}>
+                  <a href={b.link} target="_blank" rel="noreferrer">
+                    {b.title}
+                  </a>
+                  <small>
+                    {b.blogger} · {b.date}
+                  </small>
+                </li>
+              ))}
+            </ul>
+          </section>
+        )}
+
+        {news && news.length > 0 && (
+          <section className="card">
+            <h3>
+              최신 뉴스 <small>왜 뜨는지 맥락</small>
+            </h3>
+            <ul className="link-list">
+              {news.map((n) => (
+                <li key={n.link}>
+                  <a href={n.link} target="_blank" rel="noreferrer">
+                    {n.title}
+                  </a>
+                  <small>{n.date.slice(0, 10)}</small>
+                </li>
+              ))}
+            </ul>
+          </section>
+        )}
+
+        {cafe && cafe.length > 0 && (
+          <section className="card">
+            <h3>
+              카페 글 <small>실제 후기·고민</small>
+            </h3>
+            <ul className="link-list">
+              {cafe.map((c) => (
+                <li key={c.link}>
+                  <a href={c.link} target="_blank" rel="noreferrer">
+                    {c.title}
+                  </a>
+                  <small>{c.cafe}</small>
+                </li>
+              ))}
+            </ul>
+          </section>
+        )}
+      </div>
+
+      {places && places.length > 0 && (
+        <details className="raw">
+          <summary>장소 검색 결과 {places.length}개 (장소 유형 글에 쓰임)</summary>
+          <div className="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>이름</th>
+                  <th>분류</th>
+                  <th>도로명 주소</th>
+                </tr>
+              </thead>
+              <tbody>
+                {places.map((p) => (
+                  <tr key={`${p.title}-${p.roadAddress}`}>
+                    <td className="keyword">{p.link ? <a href={p.link} target="_blank" rel="noreferrer">{p.title}</a> : p.title}</td>
+                    <td>{p.category}</td>
+                    <td>{p.roadAddress || p.address}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </details>
+      )}
+
+      {failed.length > 0 && (
+        <p className="notice error">
+          일부 조회 실패: {failed.map(([name, message]) => `${name} (${message.slice(0, 80)})`).join(", ")}
+        </p>
+      )}
+    </>
   );
 }

@@ -15,17 +15,28 @@ import {
   collectKeywords,
   enrichDayWithStats,
   fetchKeywordInsight,
+  computeSaturation,
+  fetchShoppingTrend,
   formatPlanningBriefing,
   formatSearchCount,
+  hubConfigFromEnv,
   kstNow,
   PLATFORM_LABELS,
   PLATFORMS,
   rankByRelevance,
   readDay,
   recordKeywords,
+  researchKeyword,
   searchAdConfigFromEnv,
+  searchPlaces,
+  SHOPPING_CATEGORIES,
   SOURCE_LABELS,
+  summarizeTrend,
+  WRITING_TYPE_LABELS,
+  WRITING_TYPES,
   type Platform,
+  type ShoppingCategory,
+  type WritingType,
 } from "@toolhub/collector";
 import { z } from "zod";
 import { openWeb, stopWeb, WEB_LOG_FILE, WEB_URL } from "./web.ts";
@@ -39,6 +50,12 @@ const DRAFTS_DIR = path.join(ROOT, "drafts");
 const PROMPTS_DIR = path.join(ROOT, "docs/prompts");
 
 const platformSchema = z.enum(PLATFORMS).describe("발행 플랫폼: tistory(티스토리), blogger(Blogger), naver(네이버)");
+const typeSchema = z
+  .enum(WRITING_TYPES)
+  .describe("글 유형: info(정보 - 제도·방법·비교), review(리뷰 - 상품·서비스 사용기), place(장소 - 맛집·여행지 방문기)");
+
+const briefSources = () => ({ searchAd: searchAdConfigFromEnv(), hub: hubConfigFromEnv() });
+const HUB_MISSING = "NAVER API HUB 키가 없습니다. apps/web/.env.local에 NAVER_API_HUB_CLIENT_ID, NAVER_API_HUB_CLIENT_SECRET을 설정하세요.";
 const dateSchema = z
   .string()
   .regex(/^\d{4}-\d{2}-\d{2}$/)
@@ -57,9 +74,9 @@ const failure = (e: unknown) => ({
 const readPrompt = async (file: string) =>
   (await readFile(path.join(PROMPTS_DIR, file), "utf-8")).replace(/<!--[\s\S]*?-->\s*/g, "");
 
-/** 초안 작성에 필요한 규칙 전체 (프로젝트 지침 + 작성 공통 + 플랫폼 + 스레드) */
-async function writingRules(platform: Platform) {
-  const files = ["project-instructions.md", "writing.md", `platforms/${platform}.md`, "threads.md"];
+/** 초안 작성에 필요한 규칙 전체 (프로젝트 지침 + 작성 공통 + 유형 + 플랫폼 + 스레드) */
+async function writingRules(platform: Platform, type: WritingType) {
+  const files = ["project-instructions.md", "writing.md", `types/${type}.md`, `platforms/${platform}.md`, "threads.md"];
   return (await Promise.all(files.map(readPrompt))).join("\n\n---\n\n");
 }
 
@@ -72,8 +89,9 @@ const server = new McpServer(
   {
     instructions: [
       "toolhub는 블로그 글감을 찾기 위한 한국어 키워드 도구다.",
-      "글감 고르기: get_daily_keywords(또는 get_live_keywords)로 키워드를 보고, get_writing_rules(task=planning)의 규칙으로 판단한다.",
-      "초안 쓰기: get_writing_rules(task=writing, platform)로 규칙을 읽고, get_writing_brief로 브리프를 받아, 규칙대로 웹 검색으로 사실을 확인하며 쓴다. 사용자가 원하면 save_draft로 저장한다.",
+      "글감 고르기: get_daily_keywords(또는 get_live_keywords)로 키워드를 보고, get_writing_rules(task=planning)의 규칙으로 판단한다. 상위 후보는 research_keyword로 검색 추이·포화도를 확인한다.",
+      "초안 쓰기: get_writing_rules(task=writing, platform, type)로 규칙을 읽고, get_writing_brief로 브리프를 받아, 규칙대로 웹 검색으로 사실을 확인하며 쓴다. 사용자가 원하면 save_draft로 저장하고 open_web(page=drafts)으로 보여준다.",
+      "글 유형: 상품·서비스 사용기는 review, 맛집·여행지·시설 방문기는 place, 그 밖에는 info. 리뷰 상품의 쇼핑 트렌드는 get_shopping_trend, 장소 정보는 search_places로 확인한다.",
       "사용자가 플랫폼을 말하지 않으면 티스토리(tistory)로 쓴다.",
     ].join("\n"),
   },
@@ -198,16 +216,17 @@ server.registerTool(
   {
     title: "글쓰기 규칙 조회",
     description:
-      "블로그 글감 선정(planning) 또는 초안 작성(writing) 규칙을 돌려준다. 글감을 고르거나 초안을 쓰기 전에 반드시 먼저 호출해 규칙을 따른다. writing은 platform이 필요하다.",
+      "블로그 글감 선정(planning) 또는 초안 작성(writing) 규칙을 돌려준다. 글감을 고르거나 초안을 쓰기 전에 반드시 먼저 호출해 규칙을 따른다. writing은 platform과 type이 필요하다.",
     inputSchema: {
       task: z.enum(["planning", "writing"]).describe("planning: 글감 선정, writing: 초안 작성"),
       platform: platformSchema.optional(),
+      type: typeSchema.optional(),
     },
     annotations: { readOnlyHint: true },
   },
-  async ({ task, platform = "tistory" }) => {
+  async ({ task, platform = "tistory", type = "info" }) => {
     try {
-      return text(task === "planning" ? await planningRules() : await writingRules(platform));
+      return text(task === "planning" ? await planningRules() : await writingRules(platform, type));
     } catch (e) {
       return failure(e);
     }
@@ -219,17 +238,126 @@ server.registerTool(
   {
     title: "글쓰기 브리프 조회",
     description:
-      "키워드와 플랫폼으로 [글쓰기 브리프](검색량·경쟁도·연관 키워드 상위 20개)를 만든다. 초안 작성의 입력으로 쓴다.",
+      "키워드·플랫폼·유형으로 [글쓰기 브리프]를 만든다. 검색량·경쟁도·연관 키워드에 더해, 키가 있으면 검색 추이·블로그 문서 수(포화도)·실제 질문(지식iN)·상위 블로그 글·카페 글(리뷰·장소)·장소 정보(장소)가 들어간다. 초안 작성의 입력으로 쓴다.",
     inputSchema: {
       keyword: z.string().min(1).describe("글을 쓸 키워드"),
       platform: platformSchema.default("tistory"),
+      type: typeSchema.default("info"),
       note: z.string().optional().describe("글 각도, 직접 경험 메모 등 참고 사항"),
     },
     annotations: { readOnlyHint: true, openWorldHint: true },
   },
-  async ({ keyword, platform, note }) => {
+  async ({ keyword, platform, type, note }) => {
     try {
-      return text(await buildWritingBrief(searchAdConfigFromEnv(), keyword, platform, { note }));
+      return text(await buildWritingBrief(briefSources(), keyword, platform, { type, note }));
+    } catch (e) {
+      return failure(e);
+    }
+  },
+);
+
+server.registerTool(
+  "research_keyword",
+  {
+    title: "키워드 조사",
+    description:
+      "키워드의 24개월 네이버 검색 추이(시즌·급등 이력·상승세 등 해석 포함), 블로그 문서 수와 포화도(문서 수 ÷ 월간 검색량), 지식iN 질문, 상위 블로그 글, 최신 뉴스, 카페 글을 한 번에 조사한다. 글감이 오래 검색될지, 경쟁이 심한지 판단할 때 쓴다.",
+    inputSchema: { keyword: z.string().min(1).describe("조사할 키워드") },
+    annotations: { readOnlyHint: true, openWorldHint: true },
+  },
+  async ({ keyword }) => {
+    const hub = hubConfigFromEnv();
+    if (!hub) return failure(HUB_MISSING);
+    try {
+      const searchAd = searchAdConfigFromEnv();
+      const [research, insight] = await Promise.all([
+        researchKeyword(hub, keyword),
+        searchAd ? fetchKeywordInsight(searchAd, keyword).catch(() => null) : null,
+      ]);
+      const monthly = insight?.self?.totalSearches;
+      const saturation = computeSaturation(monthly, research.blog?.total);
+      const { trend, blog, kin, news, cafe, errors } = research;
+
+      const lines = [`# ${keyword} 조사`];
+      lines.push(`- 월간 검색량: ${monthly === undefined ? "조회 안 됨" : formatSearchCount(monthly)}`);
+      if (trend) {
+        lines.push(`- 검색 추이: ${trend.label} — ${trend.reason}`);
+        lines.push(`  월별 상대값(최고=100): ${trend.points.map((p) => `${p.month} ${p.ratio}`).join(", ")}`);
+      }
+      if (blog) {
+        lines.push(
+          `- 블로그 문서 수: ${blog.total.toLocaleString("ko-KR")}${saturation ? ` (검색량의 ${saturation.ratio}배 · 포화도 ${saturation.level})` : ""}`,
+        );
+      }
+      if (kin?.length) lines.push("", "## 실제 질문 (지식iN)", ...kin.map((q) => `- ${q.title}`));
+      if (blog?.items.length) lines.push("", "## 상위 블로그 글", ...blog.items.map((b) => `- ${b.title} — ${b.blogger} (${b.date}) ${b.link}`));
+      if (news?.length) lines.push("", "## 최신 뉴스", ...news.map((n) => `- ${n.title} (${n.date.slice(0, 10)}) ${n.link}`));
+      if (cafe?.length) lines.push("", "## 카페 글", ...cafe.map((c) => `- ${c.title} — ${c.cafe}`));
+      const failed = Object.entries(errors);
+      if (failed.length) lines.push("", "## 조회 실패", ...failed.map(([name, message]) => `- ${name}: ${message}`));
+      return text(lines.join("\n"));
+    } catch (e) {
+      return failure(e);
+    }
+  },
+);
+
+server.registerTool(
+  "search_places",
+  {
+    title: "장소 검색",
+    description: "네이버 지역 검색으로 장소의 이름·분류·주소·링크를 최대 5개 찾는다. 장소 유형 글에서 정확한 장소 정보를 확인할 때 쓴다. 지역명과 함께 검색하면 정확하다 (예: '성수동 브런치').",
+    inputSchema: { query: z.string().min(1).describe("검색어 (지역명 + 장소 이름이나 업종)") },
+    annotations: { readOnlyHint: true, openWorldHint: true },
+  },
+  async ({ query }) => {
+    const hub = hubConfigFromEnv();
+    if (!hub) return failure(HUB_MISSING);
+    try {
+      const places = await searchPlaces(hub, query);
+      if (!places.length) return text(`"${query}"로 찾은 장소가 없습니다.`);
+      return text(
+        [
+          "| 이름 | 분류 | 도로명 주소 | 지번 주소 | 링크 |",
+          "|---|---|---|---|---|",
+          ...places.map((p) => `| ${p.title} | ${p.category} | ${p.roadAddress} | ${p.address} | ${p.link || "-"} |`),
+        ].join("\n"),
+      );
+    } catch (e) {
+      return failure(e);
+    }
+  },
+);
+
+const categoryCodes = Object.keys(SHOPPING_CATEGORIES) as [ShoppingCategory, ...ShoppingCategory[]];
+
+server.registerTool(
+  "get_shopping_trend",
+  {
+    title: "쇼핑 트렌드 조회",
+    description: `네이버쇼핑 분야 안에서 키워드의 24개월 검색 클릭 추이를 조회한다. 리뷰 글의 상품이 지금 많이 찾는지, 시즌이 있는지 판단할 때 쓴다. 분야 코드: ${Object.entries(
+      SHOPPING_CATEGORIES,
+    )
+      .map(([code, name]) => `${code}=${name}`)
+      .join(", ")}`,
+    inputSchema: {
+      keyword: z.string().min(1).describe("상품 키워드 (예: 에어프라이어)"),
+      category: z.enum(categoryCodes).describe("쇼핑 분야 코드"),
+    },
+    annotations: { readOnlyHint: true, openWorldHint: true },
+  },
+  async ({ keyword, category }) => {
+    const hub = hubConfigFromEnv();
+    if (!hub) return failure(HUB_MISSING);
+    try {
+      const trend = summarizeTrend(await fetchShoppingTrend(hub, keyword, category));
+      return text(
+        [
+          `# ${keyword} 쇼핑 트렌드 (${SHOPPING_CATEGORIES[category]})`,
+          `- 해석: ${trend.label} — ${trend.reason}`,
+          `- 월별 상대값(최고=100): ${trend.points.map((p) => `${p.month} ${p.ratio}`).join(", ")}`,
+        ].join("\n"),
+      );
     } catch (e) {
       return failure(e);
     }
@@ -350,22 +478,27 @@ server.registerPrompt(
   "blog_draft",
   {
     title: "블로그 초안 작성",
-    description: "키워드와 플랫폼을 받아 규칙과 브리프를 담은 초안 작성 요청을 만든다.",
+    description: "키워드·플랫폼·유형을 받아 규칙과 브리프를 담은 초안 작성 요청을 만든다.",
     argsSchema: {
       keyword: z.string().describe("글을 쓸 키워드"),
       platform: z.string().optional().describe("tistory | blogger | naver (기본 tistory)"),
+      type: z.string().optional().describe("info(정보) | review(리뷰) | place(장소) (기본 info)"),
     },
   },
-  async ({ keyword, platform }) => {
+  async ({ keyword, platform, type }) => {
     const target: Platform = PLATFORMS.find((p) => p === platform) ?? "tistory";
-    const [rules, brief] = await Promise.all([writingRules(target), buildWritingBrief(searchAdConfigFromEnv(), keyword, target)]);
+    const writingType: WritingType = WRITING_TYPES.find((t) => t === type) ?? "info";
+    const [rules, brief] = await Promise.all([
+      writingRules(target, writingType),
+      buildWritingBrief(briefSources(), keyword, target, { type: writingType }),
+    ]);
     return {
       messages: [
         {
           role: "user" as const,
           content: {
             type: "text" as const,
-            text: `아래 규칙에 따라 ${PLATFORM_LABELS[target]}용 블로그 초안을 작성해 주세요. 사실은 웹 검색으로 확인하고, 다 쓰면 save_draft로 저장해 주세요.\n\n${rules}\n\n---\n\n${brief}`,
+            text: `아래 규칙에 따라 ${PLATFORM_LABELS[target]}용 ${WRITING_TYPE_LABELS[writingType]} 블로그 초안을 작성해 주세요. 사실은 웹 검색으로 확인하고, 다 쓰면 save_draft로 저장해 주세요.\n\n${rules}\n\n---\n\n${brief}`,
           },
         },
       ],

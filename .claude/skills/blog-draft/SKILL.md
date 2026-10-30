@@ -1,7 +1,7 @@
 ---
 name: blog-draft
-description: 키워드 하나(또는 쉼표로 여러 개)를 받아 toolhub로 검색량·연관 키워드를 조회하고, docs/prompts 규칙에 따라 플랫폼별 블로그 초안을 drafts/ 폴더에 파일로 작성한다. "/blog-draft 국민연금 수령나이 티스토리"처럼 쓴다.
-argument-hint: <키워드>[, <키워드>…] [티스토리|blogger|네이버]
+description: 키워드 하나(또는 쉼표로 여러 개)를 받아 toolhub로 검색량·연관 키워드·검색 추이·실제 질문 등을 조회하고, docs/prompts 규칙에 따라 플랫폼·유형별 블로그 초안을 drafts/ 폴더에 파일로 작성한다. "/blog-draft 국민연금 수령나이 티스토리"처럼 쓴다.
+argument-hint: <키워드>[, <키워드>…] [정보|리뷰|장소] [티스토리|blogger|네이버]
 ---
 
 # 블로그 초안 작성
@@ -10,11 +10,9 @@ argument-hint: <키워드>[, <키워드>…] [티스토리|blogger|네이버]
 
 ## 1. 인자 해석
 
-- 마지막 단어가 플랫폼이면 플랫폼으로 쓰고, 나머지를 키워드로 본다.
-  - `티스토리`, `tistory` → `tistory`
-  - `블로거`, `blogger`, `구글` → `blogger`
-  - `네이버`, `naver` → `naver`
-  - 플랫폼이 없으면 `tistory`
+- 끝에 붙은 플랫폼·유형 단어를 떼어 내고, 나머지를 키워드로 본다. 순서는 상관없다.
+  - 플랫폼: `티스토리`·`tistory` → `tistory`, `블로거`·`blogger`·`구글` → `blogger`, `네이버`·`naver` → `naver`. 없으면 `tistory`
+  - 유형: `정보`·`info` → `info`, `리뷰`·`후기`·`review` → `review`, `장소`·`맛집`·`여행`·`place` → `place`. 없으면 키워드를 보고 판단한다 (상품·서비스 사용기면 `review`, 맛집·카페·여행지·시설 방문기면 `place`, 그 밖에는 `info`)
 - 키워드가 쉼표로 여러 개면 키워드마다 아래 2~5단계를 반복한다.
 - 키워드가 없으면 작성하지 말고 사용법(`/blog-draft <키워드> [플랫폼]`)을 안내한다.
 
@@ -23,17 +21,18 @@ argument-hint: <키워드>[, <키워드>…] [티스토리|blogger|네이버]
 저장소 루트에서 실행한다.
 
 ```bash
-npm run --silent brief -- "<키워드>" --platform <플랫폼>
+npm run --silent brief -- "<키워드>" --platform <플랫폼> --type <유형>
 ```
 
-출력된 `[글쓰기 브리프]`가 이번 작업의 입력이다. 검색광고 키가 없다는 안내가 나오면 수치 없이 진행하고, 마지막 보고에 그 사실을 알린다.
+출력된 `[글쓰기 브리프]`가 이번 작업의 입력이다. 키가 없다는 안내(검색광고·API HUB)가 나오면 있는 정보만으로 진행하고, 마지막 보고에 그 사실을 알린다.
 
 ## 3. 규칙 읽기
 
 아래 파일을 모두 읽고, claude.ai 프로젝트에 브리프를 붙여넣었을 때와 똑같이 따른다.
 
 - `docs/prompts/project-instructions.md` (역할, 내 블로그 정보, 공통 원칙)
-- `docs/prompts/writing.md` (작성 순서, 글 구조, 사람이 채울 자리, 출력 형식)
+- `docs/prompts/writing.md` (브리프 항목 쓰는 법, 작성 순서, 사람이 채울 자리, 출력 형식)
+- `docs/prompts/types/<유형>.md` (글 구조, 이미지·직접 작성 자리 기준)
 - `docs/prompts/platforms/<플랫폼>.md`
 - `docs/prompts/threads.md`
 
@@ -64,6 +63,7 @@ npm run --silent brief -- "<키워드>" --platform <플랫폼>
 초안 전체를 대화창에 다시 출력하지 않는다. 키워드마다 아래만 짧게 보고한다.
 
 - 저장한 파일 경로
-- 추천 제목
+- 추천 제목, 글 유형
+- 웹에서 보려면 toolhub 웹의 초안 메뉴(`/drafts`)에서 열 수 있다는 안내
 - 사람이 채울 자리 개수: `[이미지]` n개, `[직접 작성]` n개, `[확인 필요]` n개
 - 확인이 필요한 사항이 있으면 한 줄씩

@@ -1,41 +1,53 @@
 "use client";
 
-import { isPlatform, PLATFORM_LABELS, PLATFORMS, type Platform } from "@toolhub/collector/platforms";
+import {
+  briefKey,
+  isPlatform,
+  isWritingType,
+  PLATFORM_LABELS,
+  PLATFORMS,
+  WRITING_TYPE_LABELS,
+  WRITING_TYPES,
+  type Platform,
+  type WritingType,
+} from "@toolhub/collector/platforms";
 import { useEffect, useState } from "react";
 
-/** 마지막으로 고른 플랫폼을 페이지 간에 공유한다 */
-const STORAGE_KEY = "toolhub:platform";
-const CHANGE_EVENT = "toolhub:platform-change";
+/** 브라우저에 기억해 두고 페이지 간에 공유하는 선택값 (플랫폼, 글 유형) */
+function useStoredChoice<T extends string>(key: string, isValid: (v: unknown) => v is T, fallback: T) {
+  const event = `toolhub:${key}-change`;
+  const read = (): T => {
+    try {
+      const value = localStorage.getItem(`toolhub:${key}`);
+      return isValid(value) ? value : fallback;
+    } catch {
+      return fallback;
+    }
+  };
 
-function readPlatform(): Platform {
-  try {
-    const value = localStorage.getItem(STORAGE_KEY);
-    return isPlatform(value) ? value : "tistory";
-  } catch {
-    return "tistory";
-  }
-}
-
-function usePlatform() {
-  const [platform, setPlatform] = useState<Platform>("tistory");
+  const [value, setValue] = useState<T>(fallback);
   useEffect(() => {
-    const sync = () => setPlatform(readPlatform());
+    const sync = () => setValue(read());
     sync();
-    window.addEventListener(CHANGE_EVENT, sync);
-    return () => window.removeEventListener(CHANGE_EVENT, sync);
+    window.addEventListener(event, sync);
+    return () => window.removeEventListener(event, sync);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  const change = (value: Platform) => {
+  const change = (next: T) => {
     try {
-      localStorage.setItem(STORAGE_KEY, value);
+      localStorage.setItem(`toolhub:${key}`, next);
     } catch {
       // 저장 못 해도 이번 화면에서는 동작한다
     }
-    setPlatform(value);
-    window.dispatchEvent(new Event(CHANGE_EVENT));
+    setValue(next);
+    window.dispatchEvent(new Event(event));
   };
-  return [platform, change] as const;
+  return [value, change] as const;
 }
+
+const usePlatform = () => useStoredChoice<Platform>("platform", isPlatform, "tistory");
+const useWritingType = () => useStoredChoice<WritingType>("writing-type", isWritingType, "info");
 
 export function PlatformSelect() {
   const [platform, setPlatform] = usePlatform();
@@ -50,10 +62,23 @@ export function PlatformSelect() {
   );
 }
 
+export function WritingTypeSelect() {
+  const [type, setType] = useWritingType();
+  return (
+    <select value={type} onChange={(e) => isWritingType(e.target.value) && setType(e.target.value)} title="글 유형">
+      {WRITING_TYPES.map((t) => (
+        <option key={t} value={t}>
+          {WRITING_TYPE_LABELS[t]}
+        </option>
+      ))}
+    </select>
+  );
+}
+
 type CopyState = "idle" | "copying" | "done" | "error";
 
-const fetchBrief = (keyword: string, platform: Platform) =>
-  fetch(`/api/brief?q=${encodeURIComponent(keyword)}&platform=${platform}`).then((res) => {
+const fetchBrief = (keyword: string, platform: Platform, type: WritingType) =>
+  fetch(`/api/brief?q=${encodeURIComponent(keyword)}&platform=${platform}&type=${type}`).then((res) => {
     if (!res.ok) throw new Error(`HTTP ${res.status}`);
     return res.text();
   });
@@ -68,20 +93,24 @@ export function CopyBriefButton({
   compact = false,
 }: {
   keyword: string;
-  briefs?: Record<Platform, string>;
+  /** briefKey(platform, type) → 브리프 */
+  briefs?: Record<string, string>;
   compact?: boolean;
 }) {
   const [platform] = usePlatform();
+  const [type] = useWritingType();
   const [state, setState] = useState<CopyState>("idle");
+  const label = `${PLATFORM_LABELS[platform]} · ${WRITING_TYPE_LABELS[type]}`;
 
   const copy = async () => {
     setState("copying");
     try {
-      if (briefs) {
-        await navigator.clipboard.writeText(briefs[platform]);
+      const ready = briefs?.[briefKey(platform, type)];
+      if (ready) {
+        await navigator.clipboard.writeText(ready);
       } else {
         // Safari는 클릭 직후가 아니면 복사를 막으므로, 내용을 Promise로 넘겨 클릭 시점에 복사를 시작한다
-        const text = fetchBrief(keyword, platform);
+        const text = fetchBrief(keyword, platform, type);
         try {
           await navigator.clipboard.write([new ClipboardItem({ "text/plain": text.then((t) => new Blob([t], { type: "text/plain" })) })]);
         } catch {
@@ -95,8 +124,8 @@ export function CopyBriefButton({
     setTimeout(() => setState("idle"), 2000);
   };
 
-  const label = {
-    idle: compact ? "✍" : `✍ ${PLATFORM_LABELS[platform]} 브리프 복사`,
+  const text = {
+    idle: compact ? "✍" : `✍ ${label} 브리프 복사`,
     copying: compact ? "…" : "복사 중…",
     done: compact ? "✓" : "복사됨 ✓",
     error: compact ? "!" : "복사 실패",
@@ -108,9 +137,9 @@ export function CopyBriefButton({
       className={compact ? "icon-button" : "button primary"}
       onClick={copy}
       disabled={state === "copying"}
-      title={`${PLATFORM_LABELS[platform]}용 글쓰기 브리프 복사 → claude.ai 프로젝트에 붙여넣기`}
+      title={`${label} 글쓰기 브리프 복사 → claude.ai 프로젝트에 붙여넣기`}
     >
-      {label}
+      {text}
     </button>
   );
 }

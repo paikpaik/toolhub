@@ -291,6 +291,146 @@ h1 small {
   color: #991b1b;
 }
 
+.saturation {
+  font-weight: 600;
+}
+
+.saturation.기회 {
+  color: var(--low);
+}
+
+.saturation.보통 {
+  color: var(--new);
+}
+
+.saturation.높음 {
+  color: var(--up);
+}
+
+.saturation small {
+  font-size: 13px;
+  font-weight: normal;
+  color: var(--muted);
+}
+
+.research-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
+  gap: 12px;
+  margin-top: 16px;
+}
+
+.research-grid h3 small {
+  font-weight: normal;
+  color: var(--muted);
+  margin-left: 4px;
+}
+
+.link-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  font-size: 13px;
+}
+
+.link-list li {
+  padding: 6px 0;
+  border-bottom: 1px solid var(--border);
+}
+
+.link-list li:last-child {
+  border-bottom: none;
+}
+
+.link-list a {
+  text-decoration: none;
+}
+
+.link-list a:hover {
+  text-decoration: underline;
+}
+
+.link-list small {
+  display: block;
+  color: var(--muted);
+}
+
+/* 검색 추이 차트: 선만 강조색, 격자·눈금·텍스트는 흐린 색 */
+.trend-chart {
+  margin: 0;
+}
+
+.trend-chart figcaption {
+  font-size: 12px;
+  color: var(--muted);
+  margin-bottom: 4px;
+}
+
+.trend-plot {
+  position: relative;
+}
+
+.trend-plot svg {
+  display: block;
+  width: 100%;
+  height: auto;
+}
+
+.trend-plot .grid {
+  stroke: var(--border);
+  stroke-width: 1;
+}
+
+.trend-plot .tick {
+  fill: var(--muted);
+  font-size: 11px;
+}
+
+.trend-plot .series {
+  fill: none;
+  stroke: var(--accent);
+  stroke-width: 2;
+  stroke-linejoin: round;
+  stroke-linecap: round;
+}
+
+.trend-plot .crosshair {
+  stroke: var(--muted);
+  stroke-width: 1;
+}
+
+.trend-plot .dot {
+  fill: var(--accent);
+  stroke: var(--surface);
+  stroke-width: 2;
+}
+
+.trend-tooltip {
+  position: absolute;
+  top: 0;
+  transform: translateX(-50%);
+  padding: 2px 8px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: var(--surface);
+  color: var(--text);
+  font-size: 12px;
+  pointer-events: none;
+  white-space: nowrap;
+}
+
+.trend-table summary {
+  cursor: pointer;
+  font-size: 12px;
+  color: var(--muted);
+  margin-top: 8px;
+}
+
+.trend-table table {
+  width: auto;
+  font-size: 12px;
+}
+
 .brief-bar {
   display: flex;
   align-items: center;
