@@ -15,9 +15,13 @@ export const QuickAdd = forwardRef<
     projects: Project[];
     hint: string | null;
     onAdd: (text: string) => Promise<boolean>;
+    /** 미리 채울 문장 (블로그 화면에서 "할 일로 추가"할 때) */
+    initialText?: string;
+    autoFocus?: boolean;
+    placeholder?: string;
   }
->(function QuickAdd({ today, projects, hint, onAdd }, ref) {
-  const [text, setText] = useState("");
+>(function QuickAdd({ today, projects, hint, onAdd, initialText = "", autoFocus, placeholder }, ref) {
+  const [text, setText] = useState(initialText);
   const [busy, setBusy] = useState(false);
   const parsed = text.trim()
     ? parseQuickAdd(
@@ -45,7 +49,9 @@ export const QuickAdd = forwardRef<
           value={text}
           onChange={(e) => setText(e.target.value)}
           onKeyDown={(e) => e.key === "Escape" && (e.currentTarget.blur(), setText(""))}
-          placeholder="할 일 추가 — 예: 내일 오후 3시 글 발행 #블로그 @블로그운영 !높음 매주   (단축키 C)"
+          autoFocus={autoFocus}
+          onFocus={(e) => autoFocus && e.currentTarget.setSelectionRange(e.currentTarget.value.length, e.currentTarget.value.length)}
+          placeholder={placeholder ?? "할 일 추가 — 예: 내일 오후 3시 글 발행 #블로그 @블로그운영 !높음 매주   (단축키 C)"}
           aria-label="할 일 빠르게 추가"
         />
         {text.trim() && (

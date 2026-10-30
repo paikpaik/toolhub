@@ -16,6 +16,7 @@ import {
 import Link from "next/link";
 import { DATA_DIR, DRAFTS_DIR } from "../../../lib/data";
 import { SOURCE_LABELS } from "../../../lib/labels";
+import { AddTaskPopover } from "../../add-task-popover";
 import { CopyBriefButton, PlatformSelect, StructureSelect, WritingTypeSelect } from "../brief-copy";
 import { DateSelect } from "../date-select";
 import { CompetitionBadge, formatSearches, SearchAdNotice } from "../search-ad";
@@ -158,8 +159,15 @@ function DraftCell({ keyword, drafts }: { keyword: string; drafts: DraftIndex })
 function KeywordCells({ keyword }: { keyword: string }) {
   return (
     <>
-      <td>
+      <td className="row-actions">
         <CopyBriefButton keyword={keyword} compact />
+        {/* 평소엔 숨기고 줄에 마우스를 올렸을 때만 보인다 (표를 복잡하게 만들지 않도록) */}
+        <AddTaskPopover
+          compact
+          text={`${keyword} 글 쓰기 내일`}
+          defaults={{ link: `/blog/keyword?q=${encodeURIComponent(keyword)}` }}
+          title="글 쓰기 할 일로 추가"
+        />
       </td>
       <td className="keyword">
         <Link href={`/blog/keyword?q=${encodeURIComponent(keyword)}`}>{keyword}</Link>

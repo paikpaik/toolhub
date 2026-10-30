@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
-import { computeSaturation, summarizeTrend } from "./research.ts";
+import { computeSaturation, seasonAlertDate, summarizeTrend } from "./research.ts";
 
 /** 2024-10부터 24개월, 값은 f(인덱스, 월) */
 const series = (f: (i: number, month: number) => number) =>
@@ -34,6 +34,19 @@ describe("summarizeTrend", () => {
     const t = summarizeTrend(series((i, m) => (m === 11 ? 100 : 10 + (i % 2))));
     assert.equal(t.label, "시즌");
     assert.match(t.reason, /11월/);
+  });
+});
+
+describe("seasonAlertDate", () => {
+  it("다음 시즌 시작 5주 전", () => {
+    // 10월 30일에 1월 시즌 → 2027-01-01 시작, 35일 전 = 2026-11-27
+    assert.deepEqual(seasonAlertDate("2026-01", "2026-10-30"), { seasonStart: "2027-01-01", alertDate: "2026-11-27" });
+    // 3월에 11월 시즌 → 올해 11월
+    assert.deepEqual(seasonAlertDate("2025-11", "2026-03-10"), { seasonStart: "2026-11-01", alertDate: "2026-09-27" });
+  });
+  it("시즌이 임박했거나 진행 중이면 내일", () => {
+    assert.deepEqual(seasonAlertDate("2025-11", "2026-10-20"), { seasonStart: "2026-11-01", alertDate: "2026-10-21" });
+    assert.deepEqual(seasonAlertDate("2025-11", "2026-11-15"), { seasonStart: "2026-11-01", alertDate: "2026-11-16" });
   });
 });
 

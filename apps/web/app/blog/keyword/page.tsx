@@ -4,15 +4,18 @@ import {
   fetchKeywordInsight,
   formatWritingBrief,
   hubConfigFromEnv,
+  kstNow,
   PLATFORMS,
   rankByRelevance,
   researchKeyword,
   searchAdConfigFromEnv,
+  seasonAlertDate,
   WRITING_TYPES,
   type KeywordResearch,
   type KeywordStat,
 } from "@toolhub/collector";
 import Link from "next/link";
+import { AddTaskPopover } from "../../add-task-popover";
 import { CopyBriefButton, PlatformSelect, StructureSelect, WritingTypeSelect } from "../brief-copy";
 import { CompetitionBadge, formatSearches, SearchAdNotice } from "../search-ad";
 import { TrendChart } from "./trend-chart";
@@ -88,6 +91,7 @@ export default async function KeywordPage({ searchParams }: { searchParams: Prom
           <StructureSelect />
           <PlatformSelect />
           <CopyBriefButton keyword={keyword} briefs={briefs} />
+          <AddTaskPopover text={`${keyword} 글 쓰기 내일`} defaults={{ link: keywordHref(keyword) }} title="글 쓰기 할 일로 추가" />
         </div>
       )}
 
@@ -129,7 +133,7 @@ export default async function KeywordPage({ searchParams }: { searchParams: Prom
         </div>
       )}
 
-      {research && <ResearchSections research={research} />}
+      {research && <ResearchSections research={research} keyword={keyword} />}
 
       {searchAd && keyword && !error && (
         <section>
@@ -189,15 +193,29 @@ function StatCard({ label, value, hint }: { label: string; value: React.ReactNod
   );
 }
 
-function ResearchSections({ research }: { research: KeywordResearch }) {
+const keywordHref = (keyword: string) => `/blog/keyword?q=${encodeURIComponent(keyword)}`;
+
+function ResearchSections({ research, keyword }: { research: KeywordResearch; keyword: string }) {
   const { trend, blog, kin, news, cafe, places, errors } = research;
   const failed = Object.entries(errors);
+  // 시즌 키워드면 다음 시즌 5주 전에 글을 준비하도록 알림 할 일을 제안한다
+  const season = trend?.label === "시즌" && trend.peakMonth ? seasonAlertDate(trend.peakMonth, kstNow().date) : null;
   return (
     <>
       {trend && trend.label !== "데이터 부족" && (
         <section>
           <h2>
             검색 추이 <small>{trend.reason}</small>
+            {season && (
+              <span className="sort">
+                <AddTaskPopover
+                  text={`${keyword} 시즌 글 준비 ${season.alertDate}`}
+                  defaults={{ link: keywordHref(keyword), notes: `${season.seasonStart.slice(0, 7)} 시즌 시작 전에 글을 올려 검색에 노출되도록 준비` }}
+                  label="시즌 전 알림"
+                  title={`시즌 전 알림 만들기 (${Number(season.seasonStart.slice(5, 7))}월 시즌 5주 전)`}
+                />
+              </span>
+            )}
           </h2>
           <div className="card">
             <TrendChart points={trend.points} title="최근 24개월 네이버 검색 추이 (기간 중 최고 = 100)" />

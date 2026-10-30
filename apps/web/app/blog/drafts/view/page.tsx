@@ -1,6 +1,8 @@
 import { listDrafts, parseDraft, PLATFORM_LABELS, readDraftFile } from "@toolhub/collector";
+import { isOpen, readStore } from "@toolhub/tasks";
 import Link from "next/link";
-import { DRAFTS_DIR } from "../../../../lib/data";
+import { DATA_DIR, DRAFTS_DIR } from "../../../../lib/data";
+import { AddTaskPopover } from "../../../add-task-popover";
 import { countBodyChars, previewDocument } from "../../../../lib/preview";
 import { CopyButton } from "../../copy-button";
 import { DraftChecklist } from "../checklist";
@@ -33,12 +35,35 @@ export default async function DraftViewPage({ searchParams }: { searchParams: Pr
   const recommendedTitle = draft.titles.find((t) => t.recommended)?.text ?? draft.titles[0]?.text ?? summary.keyword;
   const thumbnailHref = `/blog/thumbnail?title=${encodeURIComponent(recommendedTitle)}`;
 
+  // 이 초안으로 만든 발행 할 일 (링크로 찾는다). 있으면 새로 만들지 않고 그 할 일로 안내한다
+  const draftHref = `/blog/drafts/view?file=${encodeURIComponent(file)}`;
+  const publishTask = (await readStore(DATA_DIR)).tasks.find((t) => t.link === draftHref && isOpen(t));
+  // 남은 사람이 채울 자리를 발행 할 일의 하위 할 일로
+  const markerLabel = { image: "이미지", write: "직접 작성", check: "확인" } as const;
+  const subtasks = draft.markers.map((m, i) => ({
+    id: `m${i}`,
+    text: `${markerLabel[m.type]}: ${m.text.split("|")[0]!.trim().slice(0, 60)}`,
+    done: false,
+  }));
+
   return (
     <main>
       <header>
         <h1>
           {summary.keyword} <small>{platform ? PLATFORM_LABELS[platform] : ""} · {summary.date}</small>
         </h1>
+        {publishTask ? (
+          <Link className="button" href={`/tasks?view=all&task=${publishTask.id}`} title="이 초안의 발행 할 일">
+            ✓ 할 일 #{publishTask.id}
+          </Link>
+        ) : (
+          <AddTaskPopover
+            text={`${summary.keyword} 글 발행 내일`}
+            defaults={{ link: draftHref, subtasks }}
+            label="발행 할 일"
+            title={`발행 할 일 만들기${subtasks.length ? ` (남은 자리 ${subtasks.length}개가 하위 할 일로)` : ""}`}
+          />
+        )}
         <Link className="button" href={thumbnailHref}>
           썸네일 만들기
         </Link>

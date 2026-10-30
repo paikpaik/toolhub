@@ -43,7 +43,8 @@ export function TrendChart({ points, title }: { points: TrendPoint[]; title: str
             </g>
           ))}
           {xTicks.map(({ i, label }) => (
-            <text key={i} className="tick" x={x(i)} y={HEIGHT - 8} textAnchor="middle">
+            // 양 끝 눈금은 바깥으로 잘리지 않게 안쪽으로 정렬한다
+            <text key={i} className="tick" x={x(i)} y={HEIGHT - 8} textAnchor={i === 0 ? "start" : i === points.length - 1 ? "end" : "middle"}>
               {label}
             </text>
           ))}

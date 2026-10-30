@@ -94,6 +94,22 @@ export function summarizeTrend(points: TrendPoint[]): TrendSummary {
   return { ...base, label: "변동 큼", reason: "뚜렷한 패턴 없이 달마다 오르내립니다." };
 }
 
+/**
+ * 시즌 키워드의 다음 시즌 준비 알림 날짜.
+ * 정점 달(YYYY-MM)의 다음 1일을 시즌 시작으로 보고, 글이 검색에 노출될 시간을 두어 leadDays일 전으로 잡는다.
+ * 이미 그 날짜가 지났으면(시즌이 임박했거나 진행 중) 내일로 잡는다.
+ */
+export function seasonAlertDate(peakMonth: string, today: string, leadDays = 35) {
+  const month = Number(peakMonth.slice(5, 7));
+  const year = Number(today.slice(0, 4));
+  const thisYear = `${year}-${String(month).padStart(2, "0")}-01`;
+  // 올해 시즌이 이미 끝났으면(정점 달이 지났으면) 내년 시즌
+  const seasonStart = thisYear.slice(0, 7) < today.slice(0, 7) ? `${year + 1}${thisYear.slice(4)}` : thisYear;
+  const shift = (date: string, days: number) => new Date(Date.parse(`${date}T00:00:00Z`) + days * 86_400_000).toISOString().slice(0, 10);
+  const alert = shift(seasonStart, -leadDays);
+  return { seasonStart, alertDate: alert > today ? alert : shift(today, 1) };
+}
+
 export type SaturationLevel = "기회" | "보통" | "높음";
 
 export interface Saturation {
