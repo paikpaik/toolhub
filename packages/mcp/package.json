@@ -1,0 +1,15 @@
+{
+  "name": "@toolhub/mcp",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "start": "node --env-file-if-exists=../../apps/web/.env.local src/server.ts",
+    "typecheck": "tsc -p ."
+  },
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "^1.32.2",
+    "@toolhub/collector": "*",
+    "zod": "^4.6.7"
+  }
+}

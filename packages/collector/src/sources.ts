@@ -95,6 +95,12 @@ export const SOURCES: Record<SourceName, () => Promise<KeywordItem[]>> = {
   signal: fetchSignal,
 };
 
+export const SOURCE_LABELS: Record<SourceName, string> = {
+  google: "Google Trends",
+  nate: "네이트",
+  signal: "signal.bz",
+};
+
 /** 소스 간 같은 키워드를 묶기 위한 키. 공백·구두점·대소문자 차이를 무시한다. */
 export function normalizeKeyword(keyword: string): string {
   return keyword.replace(/[\s\p{P}\p{S}]+/gu, "").toLowerCase();

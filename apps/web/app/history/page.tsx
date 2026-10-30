@@ -4,7 +4,9 @@ import {
   listDates,
   readDay,
   searchAdConfigFromEnv,
+  sortDayKeywords,
   type DayKeyword,
+  type DaySort,
 } from "@toolhub/collector";
 import Link from "next/link";
 import { DATA_DIR } from "../../lib/data";
@@ -15,7 +17,7 @@ import { CompetitionBadge, formatSearches, SearchAdNotice } from "../search-ad";
 
 export const dynamic = "force-dynamic";
 
-type SortKey = "recent" | "search";
+type SortKey = DaySort;
 
 export default async function HistoryPage({
   searchParams,
@@ -63,7 +65,7 @@ export default async function HistoryPage({
           </span>
         </h2>
         {day?.keywords.length ? (
-          <DayTable rows={sortKeywords(day.keywords, sort)} />
+          <DayTable rows={sortDayKeywords(day.keywords, sort)} />
         ) : (
           <p className="empty">
             기록이 없습니다. <Link href="/">실시간</Link> 페이지를 열면 그날 기록이 쌓입니다.
@@ -72,13 +74,6 @@ export default async function HistoryPage({
       </section>
     </main>
   );
-}
-
-function sortKeywords(keywords: DayKeyword[], sort: SortKey) {
-  // 파일에는 처음 본 순서대로 저장돼 있다
-  const recent = [...keywords].reverse();
-  if (sort === "recent") return recent;
-  return recent.sort((a, b) => (b.stats?.totalSearches ?? -1) - (a.stats?.totalSearches ?? -1));
 }
 
 function SortLink({

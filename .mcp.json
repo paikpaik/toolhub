@@ -1,0 +1,8 @@
+{
+  "mcpServers": {
+    "toolhub": {
+      "command": "node",
+      "args": ["--env-file-if-exists=apps/web/.env.local", "packages/mcp/src/server.ts"]
+    }
+  }
+}

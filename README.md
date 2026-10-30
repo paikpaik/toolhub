@@ -136,6 +136,16 @@ npm run --silent brief -- "국민연금 수령나이" --platform tistory
 
 > 네이버 검색광고는 "국민연금 수령나이" 같은 롱테일 키워드에 연관 키워드를 거의 주지 않습니다. 그래서 각 단어("국민연금", "수령나이")의 연관 키워드도 함께 조회한 뒤, 키워드의 단어를 많이 포함한 순으로 브리프에 넣습니다.
 
+**방법 C. Claude 데스크톱 앱에서 대화로 (MCP, 추천)**
+
+toolhub MCP 서버를 데스크톱 앱에 연결하면, Claude가 키워드 데이터와 글쓰기 규칙을 직접 조회합니다. 복사·붙여넣기도, 터미널도 필요 없습니다. 설정은 아래 [Claude 데스크톱 앱 연결 (MCP)](#claude-데스크톱-앱-연결-mcp)을 참고하세요.
+
+```
+오늘 뜬 키워드 중에 블로그로 쓸 만한 거 3개 골라줘
+→ 2번으로 네이버 글 써줘
+→ drafts에 저장해줘
+```
+
 ### 브리프 형식
 
 직접 붙여넣을 때는 아래 형식을 따릅니다. 첫 줄을 보고 Claude가 작업을 구분합니다.
@@ -180,6 +190,55 @@ npm run --silent brief -- "국민연금 수령나이" --platform tistory
 
 > 뉴스 사진이나 검색으로 찾은 이미지는 쓰지 마세요. 저작권 문제로 애드센스 승인 거절이나 정지 사유가 됩니다.
 
+## Claude 데스크톱 앱 연결 (MCP)
+
+### 설정 (처음 한 번)
+
+1. 터미널에서 두 경로를 확인합니다.
+
+   ```bash
+   which node   # 예: /usr/local/bin/node
+   pwd          # 저장소 루트에서 실행. 예: /Users/me/source/toolhub
+   ```
+
+2. 데스크톱 앱 설정 파일 `~/Library/Application Support/Claude/claude_desktop_config.json`의 `mcpServers`에 추가합니다. 경로는 1번에서 확인한 값으로 바꾸고, **반드시 절대 경로**를 씁니다. 다른 서버가 이미 있으면 그 옆에 추가합니다.
+
+   ```json
+   {
+     "mcpServers": {
+       "toolhub": {
+         "command": "/usr/local/bin/node",
+         "args": [
+           "--env-file-if-exists=/Users/me/source/toolhub/apps/web/.env.local",
+           "/Users/me/source/toolhub/packages/mcp/src/server.ts"
+         ]
+       }
+     }
+   }
+   ```
+
+3. 데스크톱 앱을 **완전히 종료(⌘Q)했다가 다시 실행**합니다. 대화창의 도구 메뉴에 `toolhub`가 보이면 연결된 것입니다.
+
+> Claude Code는 저장소의 `.mcp.json`으로 같은 서버를 자동으로 인식합니다. 처음 열 때 사용 승인을 묻습니다.
+
+### 쓸 수 있는 도구
+
+| 도구 | 하는 일 |
+|---|---|
+| `get_live_keywords` | 지금 실시간 키워드 조회 (오늘 기록에도 추가) |
+| `get_daily_keywords` | 날짜별 기록을 검색량·경쟁도와 함께 `[글감 브리핑]` 표로 조회 |
+| `analyze_keyword` | 키워드 검색량·경쟁도와 연관 키워드 |
+| `get_writing_rules` | `docs/prompts/`의 글감 선정·초안 작성 규칙 |
+| `get_writing_brief` | 키워드 + 플랫폼 → `[글쓰기 브리프]` |
+| `save_draft` | 초안을 `drafts/`에 파일로 저장 |
+
+대화창의 `+` 메뉴에서 **프롬프트**도 고를 수 있습니다.
+
+- `blog_draft`: 키워드와 플랫폼을 넣으면 규칙과 브리프가 담긴 초안 요청이 만들어집니다.
+- `pick_topics`: 그날 기록으로 글감 선정 요청을 만듭니다.
+
+> MCP로 쓸 때는 claude.ai 프로젝트가 없어도 됩니다. Claude가 `get_writing_rules`로 규칙을 직접 읽습니다. 단, `docs/prompts/project-instructions.md`의 "내 블로그 정보"는 채워 두세요.
+
 ## 터미널에서 수집하기
 
 웹을 띄우지 않고 터미널에서 바로 수집해 기록할 수도 있습니다.
@@ -221,6 +280,7 @@ toolhub/
 │       ├── brief.ts           # 글쓰기 브리프 생성 (웹 버튼·CLI 공용)
 │       ├── cli.ts             # npm run collect
 │       └── brief-cli.ts       # npm run brief
+├── packages/mcp/         # MCP 서버 (Claude 데스크톱 앱·Claude Code 연결)
 ├── apps/web/             # Next.js 로컬 대시보드
 │   └── app/
 │       ├── page.tsx           # 실시간

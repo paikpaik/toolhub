@@ -4,7 +4,8 @@
  */
 import { fetchRelatedKeywords, toHintKeyword, type KeywordStat, type SearchAdConfig } from "./naver-searchad.ts";
 import { PLATFORM_LABELS, type Platform } from "./platforms.ts";
-import { normalizeKeyword } from "./sources.ts";
+import { normalizeKeyword, SOURCE_LABELS } from "./sources.ts";
+import type { DayKeyword } from "./types.ts";
 
 /** 브리프에 넣을 연관 키워드 수 */
 const BRIEF_RELATED_COUNT = 20;
@@ -77,6 +78,47 @@ export function formatWritingBrief({ platform, keyword, self, related = [], note
   }
   if (note?.trim()) lines.push(`참고: ${note.trim()}`);
   return lines.join("\n");
+}
+
+export type DaySort = "search" | "recent";
+
+/** 키워드 기록 정렬. search: 월간 검색량 많은 순(조회 전·데이터 없음은 뒤로), recent: 처음 본 시각이 늦은 순 */
+export function sortDayKeywords(keywords: DayKeyword[], sort: DaySort) {
+  // 파일에는 처음 본 순서대로 저장돼 있다
+  const recent = [...keywords].reverse();
+  if (sort === "recent") return recent;
+  return recent.sort((a, b) => (b.stats?.totalSearches ?? -1) - (a.stats?.totalSearches ?? -1));
+}
+
+/**
+ * claude.ai 프로젝트에 붙여넣을 [글감 브리핑]을 만든다.
+ * 형식은 docs/prompts/planning.md의 "입력 형식"과 맞춰야 한다.
+ */
+export function formatPlanningBriefing(
+  date: string,
+  keywords: DayKeyword[],
+  { sort = "search", limit = 20 }: { sort?: DaySort; limit?: number } = {},
+) {
+  const cell = (value: string | null | undefined) => (value ?? "").replace(/\|/g, "/").replace(/\s+/g, " ");
+  const rows = sortDayKeywords(keywords, sort).slice(0, limit);
+  return [
+    "[글감 브리핑]",
+    `날짜: ${date}`,
+    "| 키워드 | 월간 검색량 | 경쟁도 | 소스 | 처음 본 시각 | 관련 뉴스 |",
+    "|---|---|---|---|---|---|",
+    ...rows.map((k) =>
+      [
+        "",
+        cell(k.keyword),
+        k.stats === undefined ? "조회 전" : formatSearchCount(k.stats?.totalSearches),
+        k.stats?.competition ?? "-",
+        k.sources.map((s) => SOURCE_LABELS[s]).join(", "),
+        k.firstSeen,
+        cell(k.related),
+        "",
+      ].join(" | ").trim(),
+    ),
+  ].join("\n");
 }
 
 /** 검색광고 API로 키워드 수치와 연관 키워드를 조회해 브리프를 만든다. 키가 없으면 수치 없이 만든다. */
