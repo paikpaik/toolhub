@@ -3,9 +3,10 @@
  * 파일 이름: YYYY-MM-DD-<키워드>-<플랫폼>[-n].md
  * 내용 형식은 docs/prompts/writing.md의 "출력 형식"을 따른다.
  */
-import { readdir, readFile, stat } from "node:fs/promises";
+import { copyFile, mkdir, readdir, readFile, stat, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { isPlatform, type Platform } from "./platforms.ts";
+import { normalizeKeyword } from "./sources.ts";
 
 export interface DraftSummary {
   file: string;
@@ -36,10 +37,62 @@ export async function listDrafts(dir: string): Promise<DraftSummary[]> {
   return drafts.sort((a, b) => b.updatedAt.localeCompare(a.updatedAt));
 }
 
-/** 폴더 밖 파일을 읽지 못하도록 파일 이름만 받는다 */
+/** 폴더 밖 파일을 다루지 못하도록 파일 이름만 받는다 */
+const isDraftFileName = (file: string) => path.basename(file) === file && file.endsWith(".md");
+
 export async function readDraftFile(dir: string, file: string): Promise<string | null> {
-  if (path.basename(file) !== file || !file.endsWith(".md")) return null;
+  if (!isDraftFileName(file)) return null;
   return readFile(path.join(dir, file), "utf-8").catch(() => null);
+}
+
+/**
+ * 이미 있는 초안을 고친 내용으로 덮어쓴다. 되돌릴 수 있도록 이전 버전을 drafts/.history/에 남긴다.
+ * 없는 파일이면 만들지 않고 null을 돌려준다 (새 초안은 저장 기능으로 만든다).
+ */
+export async function updateDraftFile(dir: string, file: string, content: string) {
+  if (!isDraftFileName(file) || (await readDraftFile(dir, file)) === null) return null;
+  const historyDir = path.join(dir, ".history");
+  await mkdir(historyDir, { recursive: true });
+  const stamp = new Date().toISOString().replace(/[:.]/g, "-");
+  const backup = path.join(historyDir, `${file.replace(/\.md$/, "")}.${stamp}.md`);
+  await copyFile(path.join(dir, file), backup);
+  await writeFile(path.join(dir, file), content.endsWith("\n") ? content : `${content}\n`);
+  return { file, backup };
+}
+
+/** 같은 키워드(공백·구두점 무시)로 쓴 초안 */
+export function draftsForKeyword(drafts: DraftSummary[], keyword: string) {
+  const key = normalizeKeyword(keyword);
+  return drafts.filter((d) => normalizeKeyword(d.keyword) === key);
+}
+
+/** 키워드(정규화) → 그 키워드로 쓴 초안들. 키워드 기록에 "초안 있음"을 표시할 때 쓴다 */
+export function indexDraftsByKeyword(drafts: DraftSummary[]) {
+  const index = new Map<string, DraftSummary[]>();
+  for (const d of drafts) {
+    const key = normalizeKeyword(d.keyword);
+    index.set(key, [...(index.get(key) ?? []), d]);
+  }
+  return index;
+}
+
+/** 본문의 첫 문장 (새 글이 이전 글과 같은 시작을 하지 않도록 비교하는 용도) */
+export function draftOpening(body: string | null, maxLength = 80) {
+  if (!body) return null;
+  const text = body
+    .replace(MARKER_PATTERN, " ")
+    // 소제목은 도입 문장이 아니므로 뺀다 (HTML 제목 태그, 네이버 ■ 줄, 마크다운 #)
+    .replace(/<h[1-6][^>]*>[\s\S]*?<\/h[1-6]>/gi, " ")
+    .replace(/^\s*(?:■|#).*$/gm, " ")
+    // 문단 경계는 공백으로, 인라인 태그(<strong> 등)는 그냥 지워 "출생연도 에" 같은 빈칸이 생기지 않게 한다
+    .replace(/<\/(?:p|div|li|td|th|blockquote)>|<br\s*\/?>/gi, " ")
+    .replace(/<[^>]+>/g, "")
+    .replace(/&[a-z]+;|&#\d+;/g, " ")
+    .replace(/^[★>\-\s]+/gm, "")
+    .replace(/\s+/g, " ")
+    .trim();
+  const sentence = /^.+?[.!?。]|^.+$/.exec(text)?.[0] ?? "";
+  return sentence.length > maxLength ? `${sentence.slice(0, maxLength)}…` : sentence || null;
 }
 
 export type DraftMarkerType = "image" | "write" | "check";

@@ -16,16 +16,22 @@ import {
   enrichDayWithStats,
   fetchKeywordInsight,
   computeSaturation,
+  draftOpening,
+  draftsForKeyword,
   fetchShoppingTrend,
   formatPlanningBriefing,
   formatSearchCount,
   hubConfigFromEnv,
   kstNow,
+  listDrafts,
+  parseDraft,
   PLATFORM_LABELS,
   PLATFORMS,
   rankByRelevance,
   readDay,
+  readDraftFile,
   recordKeywords,
+  updateDraftFile,
   researchKeyword,
   searchAdConfigFromEnv,
   searchPlaces,
@@ -101,7 +107,8 @@ const server = new McpServer(
     instructions: [
       "toolhub는 블로그 글감을 찾기 위한 한국어 키워드 도구다.",
       "글감 고르기: get_daily_keywords(또는 get_live_keywords)로 키워드를 보고, get_writing_rules(task=planning)의 규칙으로 판단한다. 상위 후보는 research_keyword로 검색 추이·포화도를 확인한다.",
-      "초안 쓰기: get_writing_rules(task=writing, platform, type)로 규칙을 읽고, get_writing_brief로 브리프를 받아, 규칙대로 웹 검색으로 사실을 확인하며 쓴다. 사용자가 원하면 save_draft로 저장하고 open_web(page=drafts)으로 보여준다.",
+      "초안 쓰기: 먼저 list_drafts(keyword)로 같은 키워드의 초안이 있는지 확인해 있으면 사용자에게 알린다. get_writing_rules(task=writing, platform, type)로 규칙을 읽고, get_writing_brief로 브리프를 받아, 규칙대로 웹 검색으로 사실을 확인하며 쓴다. 이때 list_drafts가 보여 준 최근 초안들의 제목·도입 문장과 같은 패턴을 피한다. 사용자가 원하면 save_draft로 저장하고 open_web(page=drafts)으로 보여준다.",
+      "초안 고치기: read_draft로 읽고 고친 뒤 update_draft로 같은 파일에 저장한다 (이전 버전은 자동 보관). 새 초안은 save_draft로 만든다.",
       "글 유형: 상품·서비스 사용기는 review, 맛집·여행지·시설 방문기는 place, 그 밖에는 info. 리뷰 상품의 쇼핑 트렌드는 get_shopping_trend, 장소 정보는 search_places로 확인한다.",
       "사용자가 플랫폼을 말하지 않으면 티스토리(tistory)로 쓴다.",
     ].join("\n"),
@@ -412,6 +419,86 @@ server.registerTool(
       return text(
         `저장했습니다: ${file}\n웹에서 미리보기·복사하려면 open_web(page="drafts", draft="${path.basename(file)}")을 호출하세요.`,
       );
+    } catch (e) {
+      return failure(e);
+    }
+  },
+);
+
+const draftFileSchema = z.string().min(1).describe("초안 파일 이름 (list_drafts·save_draft가 돌려준 이름, 예: 2026-10-30-국민연금-수령나이-tistory.md)");
+
+server.registerTool(
+  "list_drafts",
+  {
+    title: "초안 목록",
+    description:
+      "drafts/의 초안을 최근 수정 순으로 보여준다. 파일 이름·날짜·키워드·플랫폼·추천 제목·도입 첫 문장·사람이 채울 자리 수를 포함한다. keyword를 주면 같은 키워드(공백·구두점 무시)로 쓴 초안만 보여 주므로, 새 글을 쓰기 전에 이미 쓴 주제인지 확인할 때 쓴다.",
+    inputSchema: {
+      keyword: z.string().optional().describe("이 키워드로 쓴 초안만 (생략하면 전체)"),
+      limit: z.number().int().min(1).max(100).default(20),
+    },
+    annotations: { readOnlyHint: true },
+  },
+  async ({ keyword, limit }) => {
+    try {
+      const all = await listDrafts(DRAFTS_DIR);
+      const drafts = (keyword ? draftsForKeyword(all, keyword) : all).slice(0, limit);
+      if (drafts.length === 0) return text(keyword ? `키워드 "${keyword}"의 초안이 없습니다.` : "초안이 없습니다.");
+
+      const rows = await Promise.all(
+        drafts.map(async (d) => {
+          const parsed = parseDraft((await readDraftFile(DRAFTS_DIR, d.file)) ?? "");
+          const title = parsed.titles.find((t) => t.recommended)?.text ?? parsed.titles[0]?.text ?? "-";
+          const count = (type: string) => parsed.markers.filter((m) => m.type === type).length;
+          const cell = (v: string) => v.replace(/\|/g, "/");
+          return `| ${d.file} | ${d.platform ? PLATFORM_LABELS[d.platform] : "-"} | ${cell(title)} | ${cell(draftOpening(parsed.body) ?? "-")} | 이미지 ${count("image")} · 직접 작성 ${count("write")} · 확인 ${count("check")} |`;
+        }),
+      );
+      return text(
+        [
+          `${keyword ? `"${keyword}" 초안` : "최근 초안"} ${drafts.length}개 (전체 ${all.length}개)`,
+          "| 파일 | 플랫폼 | 추천 제목 | 도입 첫 문장 | 사람이 채울 자리 |",
+          "|---|---|---|---|---|",
+          ...rows,
+        ].join("\n"),
+      );
+    } catch (e) {
+      return failure(e);
+    }
+  },
+);
+
+server.registerTool(
+  "read_draft",
+  {
+    title: "초안 읽기",
+    description: "초안 파일 전체(마크다운)를 읽는다. 초안을 고치거나 검토할 때 쓴다.",
+    inputSchema: { draft: draftFileSchema },
+    annotations: { readOnlyHint: true },
+  },
+  async ({ draft }) => {
+    const content = await readDraftFile(DRAFTS_DIR, path.basename(draft));
+    return content === null ? failure(`초안을 찾을 수 없습니다: ${draft}. list_drafts로 파일 이름을 확인하세요.`) : text(content);
+  },
+);
+
+server.registerTool(
+  "update_draft",
+  {
+    title: "초안 고치기",
+    description:
+      "이미 있는 초안 파일을 고친 전체 내용으로 덮어쓴다. 이전 버전은 drafts/.history/에 자동 보관된다. 없는 파일은 만들지 않으므로 새 초안은 save_draft를 쓴다. 일부만 고쳐도 content에는 초안 전체를 넣는다.",
+    inputSchema: {
+      draft: draftFileSchema,
+      content: z.string().min(1).describe("고친 초안 전체 (마크다운)"),
+    },
+    annotations: { readOnlyHint: false, destructiveHint: true, idempotentHint: true },
+  },
+  async ({ draft, content }) => {
+    try {
+      const result = await updateDraftFile(DRAFTS_DIR, path.basename(draft), content);
+      if (!result) return failure(`초안을 찾을 수 없습니다: ${draft}. 새 초안이면 save_draft를 쓰세요.`);
+      return text(`고쳤습니다: ${result.file}\n이전 버전: ${result.backup}\n웹에서 보려면 open_web(page="drafts", draft="${result.file}")`);
     } catch (e) {
       return failure(e);
     }

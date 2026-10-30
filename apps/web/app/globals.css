@@ -542,6 +542,38 @@ h1 small {
   pointer-events: none;
 }
 
+h2 .sort .divider {
+  color: var(--border);
+}
+
+/* 여러 날 보기의 등장 일수 */
+.persist {
+  font-size: 12px;
+  font-weight: 600;
+  padding: 1px 6px;
+  border-radius: 4px;
+}
+
+.persist.지속 {
+  color: var(--low);
+  background: color-mix(in srgb, var(--low) 14%, transparent);
+}
+
+.persist.이틀 {
+  color: var(--new);
+  background: color-mix(in srgb, var(--new) 14%, transparent);
+}
+
+.persist.하루 {
+  color: var(--muted);
+}
+
+.has-draft {
+  color: var(--low);
+  font-weight: 700;
+  text-decoration: none;
+}
+
 .brief-bar {
   display: flex;
   align-items: center;
