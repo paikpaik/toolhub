@@ -1,7 +1,7 @@
 import { listDrafts, parseDraft, PLATFORM_LABELS, readDraftFile } from "@toolhub/collector";
 import Link from "next/link";
-import { DRAFTS_DIR } from "../../../lib/data";
-import { countBodyChars, previewDocument } from "../../../lib/preview";
+import { DRAFTS_DIR } from "../../../../lib/data";
+import { countBodyChars, previewDocument } from "../../../../lib/preview";
 import { CopyButton } from "../../copy-button";
 import { DraftChecklist } from "../checklist";
 
@@ -20,7 +20,7 @@ export default async function DraftViewPage({ searchParams }: { searchParams: Pr
       <main>
         <header>
           <h1>초안을 찾을 수 없습니다</h1>
-          <Link className="button" href="/drafts">
+          <Link className="button" href="/blog/drafts">
             목록으로
           </Link>
         </header>
@@ -31,7 +31,7 @@ export default async function DraftViewPage({ searchParams }: { searchParams: Pr
   const draft = parseDraft(markdown);
   const platform = summary.platform;
   const recommendedTitle = draft.titles.find((t) => t.recommended)?.text ?? draft.titles[0]?.text ?? summary.keyword;
-  const thumbnailHref = `/thumbnail?title=${encodeURIComponent(recommendedTitle)}`;
+  const thumbnailHref = `/blog/thumbnail?title=${encodeURIComponent(recommendedTitle)}`;
 
   return (
     <main>
@@ -42,7 +42,7 @@ export default async function DraftViewPage({ searchParams }: { searchParams: Pr
         <Link className="button" href={thumbnailHref}>
           썸네일 만들기
         </Link>
-        <Link className="button" href="/drafts">
+        <Link className="button" href="/blog/drafts">
           목록으로
         </Link>
       </header>

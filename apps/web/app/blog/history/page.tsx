@@ -1,5 +1,4 @@
 import {
-  enrichDayWithStats,
   indexDraftsByKeyword,
   kstNow,
   listDates,
@@ -15,11 +14,12 @@ import {
   type RangeKeyword,
 } from "@toolhub/collector";
 import Link from "next/link";
-import { DATA_DIR, DRAFTS_DIR } from "../../lib/data";
-import { SOURCE_LABELS } from "../../lib/labels";
+import { DATA_DIR, DRAFTS_DIR } from "../../../lib/data";
+import { SOURCE_LABELS } from "../../../lib/labels";
 import { CopyBriefButton, PlatformSelect, StructureSelect, WritingTypeSelect } from "../brief-copy";
 import { DateSelect } from "../date-select";
 import { CompetitionBadge, formatSearches, SearchAdNotice } from "../search-ad";
+import { StatsEnricher } from "./stats-enricher";
 
 export const dynamic = "force-dynamic";
 
@@ -37,7 +37,7 @@ function historyHref({ date, range, sort }: { date: string | null; range: Range;
   if (range !== 1) params.set("range", String(range));
   if (sort) params.set("sort", sort);
   const query = params.toString();
-  return query ? `/history?${query}` : "/history";
+  return query ? `/blog/history?${query}` : "/blog/history";
 }
 
 export default async function HistoryPage({
@@ -51,16 +51,15 @@ export default async function HistoryPage({
   const defaultSort: SortKey = range === 1 ? "recent" : "days";
   const sort: SortKey = sortParam === "search" || sortParam === "recent" || (sortParam === "days" && range > 1) ? sortParam : defaultSort;
 
-  // 키가 설정돼 있으면 검색량을 아직 모르는 키워드만 조회해 채운다 (기준 날짜만)
   const searchAd = searchAdConfigFromEnv();
-  const enriched = searchAd ? await enrichDayWithStats(DATA_DIR, date, searchAd) : null;
-
   const [day, rangeRows, dates, drafts] = await Promise.all([
-    range === 1 ? readDay(DATA_DIR, date) : null,
+    readDay(DATA_DIR, date),
     range > 1 ? readRange(DATA_DIR, date, range) : null,
     listDates(DATA_DIR),
     listDrafts(DRAFTS_DIR),
   ]);
+  // 검색량을 모르는 키워드는 렌더링을 기다리게 하지 않고 StatsEnricher가 뒤에서 채운다 (기준 날짜만)
+  const missingStats = searchAd ? (day?.keywords.filter((k) => k.stats === undefined).length ?? 0) : 0;
   const draftIndex = indexDraftsByKeyword(drafts);
   const count = range === 1 ? (day?.keywords.length ?? 0) : (rangeRows?.length ?? 0);
   const linkDate = date === today ? null : date;
@@ -77,13 +76,8 @@ export default async function HistoryPage({
         <PlatformSelect />
       </header>
 
-      <SearchAdNotice configured={!!searchAd} error={enriched?.error} />
-      {enriched && enriched.remaining > 0 && !enriched.error && (
-        <p className="notice">
-          검색량을 아직 조회하지 않은 키워드가 {enriched.remaining}개 남았습니다. 호출 한도 때문에 나눠서 조회하니
-          새로고침하면 이어서 조회합니다.
-        </p>
-      )}
+      <SearchAdNotice configured={!!searchAd} />
+      <StatsEnricher key={date} date={date} missing={missingStats} />
 
       <section>
         <h2>
@@ -122,7 +116,7 @@ export default async function HistoryPage({
 
         {count === 0 ? (
           <p className="empty">
-            기록이 없습니다. <Link href="/">실시간</Link> 페이지를 열면 그날 기록이 쌓입니다.
+            기록이 없습니다. <Link href="/blog">실시간</Link> 페이지를 열면 그날 기록이 쌓입니다.
           </p>
         ) : range === 1 ? (
           <DayTable rows={sortDayKeywords(day!.keywords, sort === "days" ? "recent" : sort)} drafts={draftIndex} />
@@ -155,7 +149,7 @@ function DraftCell({ keyword, drafts }: { keyword: string; drafts: DraftIndex })
   const found = drafts.get(normalizeKeyword(keyword));
   if (!found?.length) return null;
   return (
-    <Link href={`/drafts/view?file=${encodeURIComponent(found[0]!.file)}`} title={found.map((d) => d.file).join("\n")} className="has-draft">
+    <Link href={`/blog/drafts/view?file=${encodeURIComponent(found[0]!.file)}`} title={found.map((d) => d.file).join("\n")} className="has-draft">
       ✓{found.length > 1 ? ` ${found.length}` : ""}
     </Link>
   );
@@ -168,7 +162,7 @@ function KeywordCells({ keyword }: { keyword: string }) {
         <CopyBriefButton keyword={keyword} compact />
       </td>
       <td className="keyword">
-        <Link href={`/keyword?q=${encodeURIComponent(keyword)}`}>{keyword}</Link>
+        <Link href={`/blog/keyword?q=${encodeURIComponent(keyword)}`}>{keyword}</Link>
       </td>
     </>
   );

@@ -1,7 +1,8 @@
 import { ALL_SOURCES, collectKeywords, recordKeywords, type KeywordItem, type SourceName } from "@toolhub/collector";
 import Link from "next/link";
-import { DATA_DIR } from "../lib/data";
-import { SOURCE_LABELS } from "../lib/labels";
+import { DATA_DIR } from "../../lib/data";
+import { enrichInBackground } from "../../lib/enrich";
+import { SOURCE_LABELS } from "../../lib/labels";
 
 // 요청마다 실시간으로 조회한다
 export const dynamic = "force-dynamic";
@@ -10,6 +11,8 @@ export default async function LivePage() {
   // 실시간으로 조회하고, 조회한 키워드를 그날 기록에 추가한다
   const live = await collectKeywords();
   const recorded = await recordKeywords(live, DATA_DIR);
+  // 새 키워드의 검색량은 기다리지 않고 뒤에서 미리 채워 둔다 (키워드 기록을 열 때 대부분 채워져 있도록)
+  if (recorded.added.length > 0) enrichInBackground(recorded.date);
 
   return (
     <main>
@@ -17,14 +20,14 @@ export default async function LivePage() {
         <h1>
           실시간 <small>{live.collectedAt.slice(11, 16)} 조회</small>
         </h1>
-        <a className="button" href="/">
+        <a className="button" href="/blog">
           새로고침
         </a>
       </header>
 
       <p className="notice">
         새 키워드 {recorded.added.length}개를 오늘 기록에 추가했습니다 (오늘 누적 {recorded.total}개) ·{" "}
-        <Link href="/history">키워드 기록 보기</Link>
+        <Link href="/blog/history">키워드 기록 보기</Link>
       </p>
 
       <div className="sources">

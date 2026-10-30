@@ -12,7 +12,7 @@ export function DateSelect({ dates, value, today, range = 1 }: { dates: string[]
     if (date !== today) params.set("date", date);
     if (range !== 1) params.set("range", String(range));
     const query = params.toString();
-    router.push(query ? `/history?${query}` : "/history");
+    router.push(query ? `/blog/history?${query}` : "/blog/history");
   };
 
   return (

@@ -62,7 +62,7 @@ export default async function KeywordPage({ searchParams }: { searchParams: Prom
         <h1>키워드 분석</h1>
       </header>
 
-      <form className="search" action="/keyword">
+      <form className="search" action="/blog/keyword">
         <input name="q" defaultValue={keyword} placeholder="분석할 키워드 (예: 캠핑, 연말정산)" autoFocus={!keyword} />
         <button type="submit" className="button primary">
           조회
@@ -157,7 +157,7 @@ export default async function KeywordPage({ searchParams }: { searchParams: Prom
                   {others.slice(0, MAX_RELATED).map((r) => (
                     <tr key={r.keyword}>
                       <td className="keyword">
-                        <Link href={`/keyword?q=${encodeURIComponent(r.keyword)}`}>{r.keyword}</Link>
+                        <Link href={`/blog/keyword?q=${encodeURIComponent(r.keyword)}`}>{r.keyword}</Link>
                       </td>
                       <td className="num">{formatSearches(r.totalSearches)}</td>
                       <td className="num">{formatSearches(r.pcSearches)}</td>

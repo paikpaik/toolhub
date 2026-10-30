@@ -1,6 +1,6 @@
 import { listDrafts, PLATFORM_LABELS } from "@toolhub/collector";
 import Link from "next/link";
-import { DRAFTS_DIR } from "../../lib/data";
+import { DRAFTS_DIR } from "../../../lib/data";
 
 export const dynamic = "force-dynamic";
 
@@ -35,7 +35,7 @@ export default async function DraftsPage() {
               {drafts.map((d) => (
                 <tr key={d.file}>
                   <td className="keyword">
-                    <Link href={`/drafts/view?file=${encodeURIComponent(d.file)}`}>{d.keyword}</Link>
+                    <Link href={`/blog/drafts/view?file=${encodeURIComponent(d.file)}`}>{d.keyword}</Link>
                   </td>
                   <td>{d.platform ? PLATFORM_LABELS[d.platform] : "-"}</td>
                   <td>{d.date ?? "-"}</td>

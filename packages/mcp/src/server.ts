@@ -46,7 +46,9 @@ import {
   type ShoppingCategory,
   type WritingType,
 } from "@toolhub/collector";
+import { VIEWS } from "@toolhub/tasks";
 import { z } from "zod";
+import { registerTaskTools } from "./tasks-tools.ts";
 import { openWeb, stopWeb, WEB_LOG_FILE, WEB_URL } from "./web.ts";
 
 /** 도구 호출이 클라이언트 제한 시간(보통 60초)에 걸리지 않도록, 이 시간이 지나면 먼저 응답한다 */
@@ -111,6 +113,7 @@ const server = new McpServer(
       "초안 고치기: read_draft로 읽고 고친 뒤 update_draft로 같은 파일에 저장한다 (이전 버전은 자동 보관). 새 초안은 save_draft로 만든다.",
       "글 유형: 상품·서비스 사용기는 review, 맛집·여행지·시설 방문기는 place, 그 밖에는 info. 리뷰 상품의 쇼핑 트렌드는 get_shopping_trend, 장소 정보는 search_places로 확인한다.",
       "사용자가 플랫폼을 말하지 않으면 티스토리(tistory)로 쓴다.",
+      "일정 관리: 할 일·일정·스케줄 이야기는 list_tasks / add_task / update_task / complete_task를 쓴다. 사용자가 한 말을 add_task의 text에 그대로 넣으면 날짜·시간·태그·프로젝트를 해석한다. 블로그 글감을 일정으로 잡아 달라고 하면 add_task에 link로 키워드 분석·초안 주소를 함께 넣는다.",
     ].join("\n"),
   },
 );
@@ -513,9 +516,12 @@ server.registerTool(
       "toolhub 웹 대시보드를 브라우저로 연다. 웹은 항상 main 브랜치의 최신 커밋으로 실행되며, 꺼져 있거나 옛 커밋이면 (재)시작한 뒤 연다. 사용자가 웹·화면·대시보드를 열어 달라고 하면 쓴다. 준비 중이라는 응답을 받으면 잠시 후 다시 호출한다.",
     inputSchema: {
       page: z
-        .enum(["live", "history", "keyword", "drafts", "thumbnail"])
-        .default("live")
-        .describe("live: 실시간, history: 키워드 기록, keyword: 키워드 분석, drafts: 초안(발행 도우미), thumbnail: 썸네일 만들기"),
+        .enum(["tasks", "live", "history", "keyword", "drafts", "thumbnail"])
+        .default("tasks")
+        .describe(
+          "tasks: 일정 관리, live: 실시간 키워드, history: 키워드 기록, keyword: 키워드 분석, drafts: 초안(발행 도우미), thumbnail: 썸네일 만들기",
+        ),
+      view: z.enum(VIEWS).optional().describe("page=tasks일 때 보기: today(오늘), week(다음 7일), inbox(날짜 없음), all, done, board, calendar"),
       title: z.string().optional().describe("page=thumbnail일 때 미리 채울 제목 (*강조* 구문 가능)"),
       keyword: z.string().optional().describe("page=keyword일 때 분석할 키워드"),
       date: dateSchema.describe("page=history일 때 볼 날짜 (YYYY-MM-DD, 생략하면 오늘)"),
@@ -523,25 +529,16 @@ server.registerTool(
     },
     annotations: { readOnlyHint: false, destructiveHint: false, openWorldHint: false },
   },
-  async ({ page, keyword, date, draft, title }) => {
-    const pagePath =
-      page === "thumbnail"
-        ? title
-          ? `/thumbnail?title=${encodeURIComponent(title)}`
-          : "/thumbnail"
-        : page === "drafts"
-        ? draft
-          ? `/drafts/view?file=${encodeURIComponent(path.basename(draft))}`
-          : "/drafts"
-        : page === "history"
-        ? date
-          ? `/history?date=${date}`
-          : "/history"
-        : page === "keyword"
-          ? keyword
-            ? `/keyword?q=${encodeURIComponent(keyword)}`
-            : "/keyword"
-          : "/";
+  async ({ page, view, keyword, date, draft, title }) => {
+    const q = (name: string, value: string | undefined) => (value ? `?${name}=${encodeURIComponent(value)}` : "");
+    const pagePath = {
+      tasks: `/tasks${q("view", view)}`,
+      live: "/blog",
+      history: `/blog/history${q("date", date)}`,
+      keyword: `/blog/keyword${q("q", keyword)}`,
+      drafts: draft ? `/blog/drafts/view${q("file", path.basename(draft))}` : "/blog/drafts",
+      thumbnail: `/blog/thumbnail${q("title", title)}`,
+    }[page];
     try {
       // 처음 실행이나 의존성이 바뀐 커밋은 npm install 때문에 오래 걸린다. 준비는 뒤에서 계속되고, 다시 호출하면 이어받는다
       const opening = openWeb(pagePath);
@@ -632,6 +629,8 @@ server.registerPrompt(
     };
   },
 );
+
+registerTaskTools(server, DATA_DIR);
 
 await server.connect(new StdioServerTransport());
 console.error(`toolhub MCP 서버 시작 (data: ${DATA_DIR})`);
