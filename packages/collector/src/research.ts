@@ -39,7 +39,7 @@ const median = (values: number[]) => {
 
 /**
  * 월별 추이를 해석한다. 기준은 경험칙이며 글감 판단의 참고용이다.
- * - 시즌: 두 해 모두 같은 달에 정점이 오고, 정점이 중앙값의 2배 이상
+ * - 시즌: 두 해 모두 같은 달에 뚜렷한 정점이 오고, 정점이 전체 중앙값의 2배 이상
  * - 장기 상승·하락: 마지막 6개월 평균이 처음 6개월의 2배 이상이거나 절반 이하
  *   (기간 초반에 정점이 있고 계속 줄어든 경우를 급등으로 잘못 보지 않도록 급등보다 먼저 본다)
  * - 급등 이력: 정점이 중앙값의 4배 이상인데 반복되지 않음
@@ -58,10 +58,14 @@ export function summarizeTrend(points: TrendPoint[]): TrendSummary {
   const before = average(ratios.slice(-12, -3)) || 1;
   const recentChange = Math.round(((recent - before) / before) * 100);
 
-  // 해마다 가장 높은 달 (24개월이면 두 해)
+  // 해마다 가장 높은 달 (24개월이면 두 해). 그해 안에서 정점이 뚜렷해야(중앙값의 1.5배 이상) 정점으로 본다.
+  // 거의 평평한 해는 가장 높은 달이 우연히 정해지므로 시즌 판정에 쓰지 않는다.
   const yearly = [points.slice(-24, -12), points.slice(-12)].filter((y) => y.length === 12);
-  const yearlyPeaks = yearly.map((y) => y.reduce((a, b) => (b.ratio > a.ratio ? b : a)).month.slice(5, 7));
-  const recurring = yearlyPeaks.length === 2 && yearlyPeaks[0] === yearlyPeaks[1];
+  const yearlyPeaks = yearly.map((y) => {
+    const top = y.reduce((a, b) => (b.ratio > a.ratio ? b : a));
+    return top.ratio >= median(y.map((p) => p.ratio)) * 1.5 ? top.month.slice(5, 7) : null;
+  });
+  const recurring = yearlyPeaks.length === 2 && yearlyPeaks[0] !== null && yearlyPeaks[0] === yearlyPeaks[1];
 
   const mean = average(ratios);
   const cv = Math.sqrt(average(ratios.map((r) => (r - mean) ** 2))) / (mean || 1);

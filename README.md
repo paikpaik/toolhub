@@ -483,6 +483,20 @@ toolhub/
 | `npm run collect` | 터미널에서 수집 |
 | `npm run --silent brief -- "키워드" --platform tistory --type info` | 글쓰기 브리프 출력 (플랫폼 `tistory`·`blogger`·`naver`, 유형 `info`·`review`·`place`, 구성 `--structure A~D`는 생략하면 무작위) |
 | `npm run typecheck` | 전체 타입 검사 |
+| `npm test` | 자동 테스트 (Node 기본 `node:test`, 설치 불필요) |
+| `npm run check` | 타입 검사 + 테스트. **커밋 전에 실행** |
+
+### 테스트
+
+외부 API를 부르지 않는 핵심 로직을 테스트합니다. 테스트 파일은 대상 파일 옆에 `*.test.ts`로 둡니다.
+
+| 위치 | 테스트하는 것 |
+|---|---|
+| `packages/tasks` | 자연어 빠른 추가 해석, 날짜·반복 계산, 보기·그룹·정렬, 저장소(반복 완료·프로젝트 삭제·여러 프로세스 동시 쓰기) |
+| `packages/collector` | 검색 추이 해석·포화도, 글쓰기 브리프·글감 브리핑 형식, 초안 파싱·도입 문장·고치기(백업·경로 차단), 키워드 병합·기간 집계 |
+| `apps/web/lib` | 할 일 수정 요청 검증, 초안 미리보기 |
+
+기능을 고치거나 버그를 찾으면 그 경우를 테스트에 추가해 두세요. 같은 버그가 다시 생기지 않습니다.
 
 ## 알아둘 점
 
