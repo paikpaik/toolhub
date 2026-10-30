@@ -5,7 +5,7 @@
  * - 저장소 밖의 실행 폴더(git worktree)를 main 최신 커밋으로 맞추고, 의존성이 바뀌었으면 npm install
  * - 떠 있는 웹이 옛 커밋이면 재시작
  * - 포트는 개발용 npm run web(3000)과 겹치지 않게 3100
- * 데이터(data/)와 검색광고 키(apps/web/.env.local)는 원래 저장소의 것을 쓴다.
+ * 데이터(data/), 초안(drafts/), 검색광고 키(apps/web/.env.local)는 원래 저장소의 것을 쓴다.
  *
  * 웹 서버는 MCP 서버와 분리된 프로세스라 데스크톱 앱을 꺼도 계속 실행된다. stop_web으로 끈다.
  */
@@ -137,6 +137,7 @@ async function startWeb(commit: string) {
     ...parseEnv(envFile),
     PATH: ENV_PATH,
     TOOLHUB_DATA_DIR: process.env.TOOLHUB_DATA_DIR ?? path.join(ROOT, "data"),
+    TOOLHUB_DRAFTS_DIR: path.join(ROOT, "drafts"),
     TOOLHUB_COMMIT: commit,
   };
 

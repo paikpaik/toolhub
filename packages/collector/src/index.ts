@@ -5,3 +5,4 @@ export * from "./collect.ts";
 export * from "./naver-searchad.ts";
 export * from "./platforms.ts";
 export * from "./brief.ts";
+export * from "./drafts.ts";

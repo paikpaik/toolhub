@@ -269,7 +269,9 @@ server.registerTool(
       let file = path.join(DRAFTS_DIR, `${base}.md`);
       for (let n = 2; await exists(file); n++) file = path.join(DRAFTS_DIR, `${base}-${n}.md`);
       await writeFile(file, content.endsWith("\n") ? content : `${content}\n`);
-      return text(`저장했습니다: ${file}`);
+      return text(
+        `저장했습니다: ${file}\n웹에서 미리보기·복사하려면 open_web(page="drafts", draft="${path.basename(file)}")을 호출하세요.`,
+      );
     } catch (e) {
       return failure(e);
     }
@@ -284,17 +286,22 @@ server.registerTool(
       "toolhub 웹 대시보드를 브라우저로 연다. 웹은 항상 main 브랜치의 최신 커밋으로 실행되며, 꺼져 있거나 옛 커밋이면 (재)시작한 뒤 연다. 사용자가 웹·화면·대시보드를 열어 달라고 하면 쓴다. 준비 중이라는 응답을 받으면 잠시 후 다시 호출한다.",
     inputSchema: {
       page: z
-        .enum(["live", "history", "keyword"])
+        .enum(["live", "history", "keyword", "drafts"])
         .default("live")
-        .describe("live: 실시간, history: 키워드 기록, keyword: 키워드 분석"),
+        .describe("live: 실시간, history: 키워드 기록, keyword: 키워드 분석, drafts: 초안(발행 도우미)"),
       keyword: z.string().optional().describe("page=keyword일 때 분석할 키워드"),
       date: dateSchema.describe("page=history일 때 볼 날짜 (YYYY-MM-DD, 생략하면 오늘)"),
+      draft: z.string().optional().describe("page=drafts일 때 열 초안 파일 이름 (save_draft가 돌려준 이름). 생략하면 초안 목록"),
     },
     annotations: { readOnlyHint: false, destructiveHint: false, openWorldHint: false },
   },
-  async ({ page, keyword, date }) => {
+  async ({ page, keyword, date, draft }) => {
     const pagePath =
-      page === "history"
+      page === "drafts"
+        ? draft
+          ? `/drafts/view?file=${encodeURIComponent(path.basename(draft))}`
+          : "/drafts"
+        : page === "history"
         ? date
           ? `/history?date=${date}`
           : "/history"
