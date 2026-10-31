@@ -149,7 +149,13 @@ stdio 전송은 stdout을 프로토콜에 쓰므로 서버 코드에서 `console
 
 - main에 커밋하면 다음 `open_web` 때 실행 폴더를 새 커밋으로 맞추고, **커밋마다 한 번** 빌드한 뒤(지금 기준 약 6초) 재시작합니다. `package-lock.json`이 바뀌었으면 `npm install`을 다시 하고, 45초를 넘기면 "준비 중"으로 먼저 응답한 뒤 다음 호출에서 이어받습니다. 빌드한 커밋은 `.toolhub/web.built`, 떠 있는 커밋과 실행 방식은 `.toolhub/web.commit`에 남습니다.
 - 3100이 `next dev`가 아닌 이유: 사용용 웹은 코드가 바뀌지 않으므로 HMR·파일 감시가 필요 없습니다.
-- **무한 새로고침 주의**: `next dev`는 브라우저 콘솔 로그를 터미널로 전달하면서 `.next/dev/logs/`에도 기록하는데, 이 파일 변경을 소스 변경으로 감지해 다시 컴파일 → 브라우저 새로고침 → 로그 기록이 반복됐습니다 (3000·3100 모두). `next.config.ts`의 `logging.browserToTerminal: false`로 껐습니다. 브라우저 로그는 브라우저 개발자 도구에서 보세요.
+- **무한 새로고침 주의**: `next dev`의 내장 MCP 서버(AI 에이전트용, toolhub MCP와 무관)는 브라우저 콘솔 로그를 `.next/dev/logs/next-development.log`에 기록하는데, 이 파일 변경을 소스 변경으로 감지해 다시 컴파일 → 브라우저 새로고침 → 로그 기록이 반복됐습니다. 화면 전환이 끝나지 않아 개발 표시기(N 배지)에 **Rendering**이 계속 뜨고 모든 페이지가 느려집니다. `next.config.ts`의 `experimental.mcpServer: false`로 막았습니다. `logging.browserToTerminal: false`는 터미널 출력만 끄고 파일 기록은 막지 못해서 효과가 없었습니다.
+- 확인 방법: `next dev` 로그에 `✓ Compiled in 0ms`가 요청마다 반복되거나 `.next/dev/logs/`가 생기면 다시 생긴 것입니다.
+
+## 페이지 로딩
+
+- 클릭 후 화면이 바뀌는 데 0.1초 안쪽, 내용은 실시간 0.7~0.9초(외부 3곳 조회), 키워드 분석 검색 0.8초 안팎(검색광고·API HUB), 나머지 0.4초 안쪽입니다 (개발 서버, 2026-10-31 측정).
+- `app/blog/loading.tsx`가 외부 API를 기다리는 동안 "불러오는 중…"을 바로 보여줘서, 이전 화면에 멈춰 있는 것처럼 보이지 않게 합니다.
 
 ## 작성 가이드 (`/blog/guide`)
 
