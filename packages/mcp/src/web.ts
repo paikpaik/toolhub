@@ -5,6 +5,8 @@
  * - 저장소 밖의 실행 폴더(git worktree)를 main 최신 커밋으로 맞추고, 의존성이 바뀌었으면 npm install
  * - 떠 있는 웹이 옛 커밋이면 재시작
  * - 포트는 개발용 npm run web(3000)과 겹치지 않게 3100
+ * - next dev가 아니라 next build → next start로 띄운다. 코드가 바뀌지 않으니 HMR이 필요 없고,
+ *   next dev는 자기가 쓴 브라우저 로그 파일(.next/dev/logs)을 변경으로 감지해 무한 새로고침에 빠진 적이 있다
  * 데이터(data/), 초안(drafts/), 검색광고 키(apps/web/.env.local)는 원래 저장소의 것을 쓴다.
  *
  * 웹 서버는 MCP 서버와 분리된 프로세스라 데스크톱 앱을 꺼도 계속 실행된다. stop_web으로 끈다.
@@ -25,8 +27,10 @@ const RUNTIME_DIR = process.env.TOOLHUB_RUNTIME_DIR ?? path.join(os.homedir(), "
 
 const STATE_DIR = path.join(ROOT, ".toolhub");
 const PID_FILE = path.join(STATE_DIR, "web.pid");
-/** 지금 떠 있는 웹의 커밋 */
+/** 지금 떠 있는 웹의 커밋과 실행 방식 */
 const COMMIT_FILE = path.join(STATE_DIR, "web.commit");
+/** 실행 폴더에서 마지막으로 next build한 커밋 */
+const BUILT_FILE = path.join(STATE_DIR, "web.built");
 /** 실행 폴더에 마지막으로 설치한 package-lock.json의 해시 */
 const INSTALLED_LOCK_FILE = path.join(STATE_DIR, "runtime-lock.sha256");
 export const WEB_LOG_FILE = path.join(STATE_DIR, "web.log");
@@ -34,6 +38,10 @@ export const WEB_LOG_FILE = path.join(STATE_DIR, "web.log");
 export const WEB_PORT = Number(process.env.TOOLHUB_WEB_PORT ?? 3100);
 export const WEB_URL = `http://localhost:${WEB_PORT}`;
 const START_TIMEOUT_MS = 60_000;
+/** 실행 방식이 바뀌면(예: 예전의 next dev) 같은 커밋이어도 다시 띄우도록 커밋과 함께 기록한다 */
+const runKey = (commit: string) => `${commit} next-start`;
+const WEB_APP_DIR = path.join(RUNTIME_DIR, "apps/web");
+const NEXT_BIN = path.join(RUNTIME_DIR, "node_modules/next/dist/bin/next");
 
 // 데스크톱 앱이 실행한 프로세스는 PATH가 제한적이라 node·git이 있을 만한 경로를 덧붙인다
 const ENV_PATH = [path.dirname(process.execPath), process.env.PATH, "/usr/local/bin", "/opt/homebrew/bin", "/usr/bin", "/bin"]
@@ -61,12 +69,12 @@ async function mainCommit(): Promise<CommitInfo> {
 }
 
 /** 명령을 실행하고 출력은 로그 파일에 남긴다 */
-async function run(command: string, args: string[], cwd: string) {
+async function run(command: string, args: string[], cwd: string, env: NodeJS.ProcessEnv = { ...process.env, PATH: ENV_PATH }) {
   await log(`$ ${path.basename(command)} ${args.join(" ")} (cwd: ${cwd})`);
   const out = await open(WEB_LOG_FILE, "a");
   try {
     const code = await new Promise<number | null>((resolve, reject) => {
-      const child = spawn(command, args, { cwd, stdio: ["ignore", out.fd, out.fd], env: { ...process.env, PATH: ENV_PATH } });
+      const child = spawn(command, args, { cwd, stdio: ["ignore", out.fd, out.fd], env });
       child.once("error", reject);
       child.once("exit", resolve);
     });
@@ -96,6 +104,28 @@ async function syncRuntime(commit: string) {
     await run(npm[0]!, [...npm.slice(1), "install", "--no-audit", "--no-fund"], RUNTIME_DIR);
     await writeFile(INSTALLED_LOCK_FILE, lockHash);
   }
+}
+
+/** 웹 서버 환경변수. 실행 폴더에는 .env.local이 없으므로 원래 저장소의 키를 넘긴다 */
+async function webEnv(commit: string) {
+  const envFile = await readFile(path.join(ROOT, "apps/web/.env.local"), "utf-8").catch(() => "");
+  return {
+    ...process.env,
+    ...parseEnv(envFile),
+    PATH: ENV_PATH,
+    TOOLHUB_DATA_DIR: process.env.TOOLHUB_DATA_DIR ?? path.join(ROOT, "data"),
+    TOOLHUB_DRAFTS_DIR: path.join(ROOT, "drafts"),
+    TOOLHUB_COMMIT: commit,
+  };
+}
+
+/** 이 커밋으로 빌드한 적이 없으면 next build (커밋마다 한 번) */
+async function buildRuntime(commit: string, env: NodeJS.ProcessEnv) {
+  const built = (await readFile(BUILT_FILE, "utf-8").catch(() => "")).trim();
+  if (built === commit && existsSync(path.join(WEB_APP_DIR, ".next/BUILD_ID"))) return;
+  await rm(BUILT_FILE, { force: true });
+  await run(process.execPath, [NEXT_BIN, "build"], WEB_APP_DIR, { ...env, NODE_ENV: "production" });
+  await writeFile(BUILT_FILE, commit);
 }
 
 /** 포트에서 HTTP 응답이 오는지 (상태 코드는 상관없음) */
@@ -130,28 +160,20 @@ async function runningCommit() {
 }
 
 async function startWeb(commit: string) {
-  // 실행 폴더에는 .env.local이 없으므로 원래 저장소의 키를 환경변수로 넘긴다
-  const envFile = await readFile(path.join(ROOT, "apps/web/.env.local"), "utf-8").catch(() => "");
-  const env = {
-    ...process.env,
-    ...parseEnv(envFile),
-    PATH: ENV_PATH,
-    TOOLHUB_DATA_DIR: process.env.TOOLHUB_DATA_DIR ?? path.join(ROOT, "data"),
-    TOOLHUB_DRAFTS_DIR: path.join(ROOT, "drafts"),
-    TOOLHUB_COMMIT: commit,
-  };
+  const env = await webEnv(commit);
+  await buildRuntime(commit, env);
 
   const out = await open(WEB_LOG_FILE, "a");
-  const child = spawn(process.execPath, [path.join(RUNTIME_DIR, "node_modules/next/dist/bin/next"), "dev", "-p", String(WEB_PORT)], {
-    cwd: path.join(RUNTIME_DIR, "apps/web"),
+  const child = spawn(process.execPath, [NEXT_BIN, "start", "-p", String(WEB_PORT)], {
+    cwd: WEB_APP_DIR,
     detached: true,
     stdio: ["ignore", out.fd, out.fd],
-    env,
+    env: { ...env, NODE_ENV: "production" },
   });
   child.unref();
   await out.close();
   await writeFile(PID_FILE, String(child.pid));
-  await writeFile(COMMIT_FILE, commit);
+  await writeFile(COMMIT_FILE, runKey(commit));
 
   let exited = false;
   child.once("exit", () => (exited = true));
@@ -189,10 +211,10 @@ export function ensureLatestWeb() {
     await mkdir(STATE_DIR, { recursive: true });
     const commit = await mainCommit();
     const running = await runningCommit();
-    if (running === commit.hash) return { commit, action: "none" };
+    if (running === runKey(commit.hash)) return { commit, action: "none" };
 
     if (running) {
-      await log(`새 커밋 ${commit.short}로 재시작 (이전 ${running.slice(0, 7)})`);
+      await log(`${commit.short} (next start)로 재시작 (이전 ${running})`);
       await stopWeb();
     } else if (await portResponds()) {
       throw new Error(
@@ -222,7 +244,7 @@ export async function stopWeb() {
   await rm(COMMIT_FILE, { force: true });
   if (!pid || !isAlive(pid)) return { stopped: false };
   try {
-    // next dev는 자식 프로세스를 여러 개 띄우므로 프로세스 그룹 전체를 끈다
+    // next는 자식 프로세스를 띄울 수 있으므로 프로세스 그룹 전체를 끈다
     process.kill(-pid, "SIGTERM");
   } catch {
     // 이미 꺼진 경우

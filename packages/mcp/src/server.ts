@@ -587,7 +587,7 @@ server.registerTool(
       if (!result) {
         opening.catch(() => {});
         return text(
-          `main 최신 커밋으로 웹 실행 환경을 준비하고 있습니다 (의존성 설치 중일 수 있음). 30초~1분 뒤 다시 open_web을 호출하세요. 진행 로그: ${WEB_LOG_FILE}`,
+          `main 최신 커밋으로 웹을 준비하고 있습니다 (새 커밋이면 빌드, 의존성이 바뀌었으면 설치 중). 30초~1분 뒤 다시 open_web을 호출하세요. 진행 로그: ${WEB_LOG_FILE}`,
         );
       }
       const { url, commit, action } = result;

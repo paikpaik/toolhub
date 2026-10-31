@@ -143,9 +143,11 @@ stdio 전송은 stdout을 프로토콜에 쓰므로 서버 코드에서 `console
 | 주소 | http://localhost:3000 | http://localhost:3100 |
 | 코드 | 작업 중인 코드 | **로컬 main 브랜치의 최신 커밋** |
 | 실행 위치 | 이 저장소 | `~/.toolhub/runtime/toolhub` (git worktree) |
+| 실행 방식 | `next dev` (HMR) | `next build` → `next start` (파일 감시 없음) |
 | 데이터·키 | `data/`, `drafts/`, `.env.local` | 같은 파일을 공유 |
 
-- main에 커밋하면 다음 `open_web` 때 실행 폴더를 새 커밋으로 맞추고 재시작합니다. `package-lock.json`이 바뀌었으면 `npm install`을 다시 하고, 45초를 넘기면 "준비 중"으로 먼저 응답한 뒤 다음 호출에서 이어받습니다.
+- main에 커밋하면 다음 `open_web` 때 실행 폴더를 새 커밋으로 맞추고, **커밋마다 한 번** 빌드한 뒤(지금 기준 약 6초) 재시작합니다. `package-lock.json`이 바뀌었으면 `npm install`을 다시 하고, 45초를 넘기면 "준비 중"으로 먼저 응답한 뒤 다음 호출에서 이어받습니다. 빌드한 커밋은 `.toolhub/web.built`, 떠 있는 커밋과 실행 방식은 `.toolhub/web.commit`에 남습니다.
+- 3100이 `next dev`가 아닌 이유: `next dev`는 브라우저 콘솔 로그를 `.next/dev/logs/`에 기록하는데, 실행 폴더에서는 이 파일 변경을 소스 변경으로 감지해 다시 컴파일 → 브라우저 새로고침 → 로그 기록이 반복되는 **무한 새로고침**이 생겼습니다. 사용용 웹은 코드가 바뀌지 않으므로 HMR이 필요 없습니다.
 - 시작한 웹 서버는 데스크톱 앱을 꺼도 계속 돕니다 (`stop_web`으로 종료). PID·로그는 `.toolhub/`에 남습니다.
 - `git worktree list`에 실행 폴더가 보이는 것은 정상입니다. `git worktree remove --force ~/.toolhub/runtime/toolhub`로 지우면 다음 `open_web` 때 다시 만듭니다.
 
