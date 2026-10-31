@@ -182,5 +182,9 @@ function PasteGuide({ platform }: { platform: keyof typeof TARGET_CHARS }) {
     blogger: "Blogger 글쓰기 → 왼쪽 위 연필 아이콘에서 HTML 보기로 바꾼 뒤 붙여넣고, 메타 설명은 설정의 '검색 설명'에 넣으세요.",
     naver: "스마트에디터에 붙여넣은 뒤 ■ 줄은 '소제목' 서식으로, ★ 줄은 굵게 바꾸고 기호를 지우세요.",
   }[platform];
-  return <p className="notice">{guide}</p>;
+  return (
+    <p className="notice">
+      {guide} <Link href={`/blog/guide?p=${platform}`}>발행 순서 전체 보기 →</Link>
+    </p>
+  );
 }

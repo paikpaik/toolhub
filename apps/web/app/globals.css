@@ -1929,3 +1929,135 @@ td.related {
   text-overflow: ellipsis;
   color: var(--muted);
 }
+
+/* ── 작성 가이드 ─────────────────────────────────────────── */
+.guide {
+  max-width: 960px;
+}
+
+.guide-tabs {
+  display: flex;
+  gap: 4px;
+  margin-top: 16px;
+  border-bottom: 1px solid var(--border);
+  overflow-x: auto;
+}
+
+.guide-tabs a {
+  padding: 8px 14px;
+  color: var(--muted);
+  text-decoration: none;
+  border-bottom: 2px solid transparent;
+  margin-bottom: -1px;
+  white-space: nowrap;
+}
+
+.guide-tabs a:hover {
+  color: var(--text);
+}
+
+.guide-tabs a.active {
+  color: var(--accent);
+  border-bottom-color: var(--accent);
+  font-weight: 600;
+}
+
+.guide-intro {
+  margin: 16px 0 0;
+  font-size: 15px;
+  line-height: 1.7;
+}
+
+.guide-facts {
+  grid-template-columns: repeat(auto-fit, minmax(min(180px, 100%), 1fr));
+}
+
+.guide-fact {
+  font-size: 14px;
+  font-weight: 600;
+}
+
+.guide-section {
+  margin-top: 16px;
+}
+
+.guide-section h2 {
+  margin: 0 0 12px;
+}
+
+.guide-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(380px, 100%), 1fr));
+  gap: 0 16px;
+  align-items: start;
+}
+
+@media (max-width: 800px) {
+  .guide-grid {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
+.card .guide-list {
+  margin: 0;
+  padding-left: 20px;
+  list-style: revert;
+}
+
+.card .guide-list li {
+  display: list-item;
+  padding: 5px 0;
+  line-height: 1.7;
+}
+
+.guide-section.steps .guide-list li::marker {
+  color: var(--accent);
+  font-weight: 600;
+}
+
+.guide-section.warn {
+  border-color: color-mix(in srgb, var(--up) 35%, var(--border));
+}
+
+.guide-section.warn h2 {
+  color: var(--up);
+}
+
+.guide-list code {
+  font-size: 12.5px;
+  padding: 1px 5px;
+  border-radius: 4px;
+  background: var(--surface-2);
+}
+
+.guide-note {
+  margin: 0 0 8px;
+  font-size: 13px;
+}
+
+.card .guide-links {
+  display: flex;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.card .guide-links li {
+  padding: 0;
+}
+
+.guide-links a {
+  display: inline-block;
+  padding: 5px 10px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  text-decoration: none;
+  font-size: 13px;
+}
+
+.guide-links a:hover {
+  border-color: var(--accent);
+  color: var(--accent);
+}

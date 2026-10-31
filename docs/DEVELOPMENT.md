@@ -36,7 +36,8 @@ toolhub/
 │   │   ├── layout.tsx, sidebar.tsx, icons.tsx  # 사이드바 레이아웃
 │   │   ├── add-task-popover.tsx  # 블로그 화면의 "할 일로 추가"
 │   │   ├── tasks/             # 일정 관리 (목록·보드·캘린더·상세 패널·빠른 추가)
-│   │   ├── blog/              # 블로그 (page.tsx 실시간, history, keyword, drafts, thumbnail)
+│   │   ├── blog/              # 블로그 (page.tsx 실시간, history, keyword, drafts, thumbnail, guide)
+│   │   │   └── guide/content.ts   # 작성 가이드 내용 (플랫폼별 발행 순서·수익·품질)
 │   │   └── api/               # tasks, projects, brief, stats/enrich, health
 │   └── lib/                   # 데이터 경로, 입력 검증, 미리보기, 검색량 백그라운드 채우기
 ├── docs/prompts/         # 글감 선정·초안 작성 프롬프트 (claude.ai 프로젝트·MCP·/blog-draft 공용)
@@ -147,7 +148,12 @@ stdio 전송은 stdout을 프로토콜에 쓰므로 서버 코드에서 `console
 | 데이터·키 | `data/`, `drafts/`, `.env.local` | 같은 파일을 공유 |
 
 - main에 커밋하면 다음 `open_web` 때 실행 폴더를 새 커밋으로 맞추고, **커밋마다 한 번** 빌드한 뒤(지금 기준 약 6초) 재시작합니다. `package-lock.json`이 바뀌었으면 `npm install`을 다시 하고, 45초를 넘기면 "준비 중"으로 먼저 응답한 뒤 다음 호출에서 이어받습니다. 빌드한 커밋은 `.toolhub/web.built`, 떠 있는 커밋과 실행 방식은 `.toolhub/web.commit`에 남습니다.
-- 3100이 `next dev`가 아닌 이유: `next dev`는 브라우저 콘솔 로그를 `.next/dev/logs/`에 기록하는데, 실행 폴더에서는 이 파일 변경을 소스 변경으로 감지해 다시 컴파일 → 브라우저 새로고침 → 로그 기록이 반복되는 **무한 새로고침**이 생겼습니다. 사용용 웹은 코드가 바뀌지 않으므로 HMR이 필요 없습니다.
+- 3100이 `next dev`가 아닌 이유: 사용용 웹은 코드가 바뀌지 않으므로 HMR·파일 감시가 필요 없습니다.
+- **무한 새로고침 주의**: `next dev`는 브라우저 콘솔 로그를 터미널로 전달하면서 `.next/dev/logs/`에도 기록하는데, 이 파일 변경을 소스 변경으로 감지해 다시 컴파일 → 브라우저 새로고침 → 로그 기록이 반복됐습니다 (3000·3100 모두). `next.config.ts`의 `logging.browserToTerminal: false`로 껐습니다. 브라우저 로그는 브라우저 개발자 도구에서 보세요.
+
+## 작성 가이드 (`/blog/guide`)
+
+내용은 `apps/web/app/blog/guide/content.ts`에 데이터로 있습니다 (`**굵게**`, `` `코드` ``만 지원). 분량·제목 길이는 `docs/prompts/platforms/*.md`와 맞추고, 애드포스트 가입 기준처럼 자주 바뀌는 정책은 숫자로 단정하지 않고 공식 안내 링크로 보냅니다.
 - 시작한 웹 서버는 데스크톱 앱을 꺼도 계속 돕니다 (`stop_web`으로 종료). PID·로그는 `.toolhub/`에 남습니다.
 - `git worktree list`에 실행 폴더가 보이는 것은 정상입니다. `git worktree remove --force ~/.toolhub/runtime/toolhub`로 지우면 다음 `open_web` 때 다시 만듭니다.
 

@@ -4,6 +4,11 @@ import type { NextConfig } from "next";
 const nextConfig: NextConfig = {
   // 워크스페이스 패키지를 TypeScript 소스 그대로 가져다 쓴다
   transpilePackages: ["@toolhub/collector", "@toolhub/tasks"],
+  logging: {
+    // next dev는 브라우저 콘솔 로그를 .next/dev/logs/에 기록하는데, 이 파일 변경이 다시 컴파일 → 브라우저 새로고침 →
+    // 로그 기록으로 이어져 무한 새로고침이 생긴다. 브라우저 로그는 브라우저 개발자 도구에서 본다
+    browserToTerminal: false,
+  },
   turbopack: {
     root: path.resolve(import.meta.dirname, "../.."),
   },

@@ -63,6 +63,7 @@ export function Sidebar({ data }: { data: SidebarData }) {
     { href: "/blog/keyword", label: "키워드 분석", icon: "search" },
     { href: "/blog/drafts", label: "초안", icon: "file" },
     { href: "/blog/thumbnail", label: "썸네일", icon: "image" },
+    { href: "/blog/guide", label: "작성 가이드", icon: "book" },
   ];
 
   const addProject = async (e: React.FormEvent) => {
