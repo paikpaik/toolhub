@@ -9,3 +9,4 @@ export * from "./drafts.ts";
 export * from "./naver-hub.ts";
 export * from "./research.ts";
 export * from "./batch.ts";
+export * from "./discover.ts";

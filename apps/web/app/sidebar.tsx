@@ -59,6 +59,7 @@ export function Sidebar({ data }: { data: SidebarData }) {
   ];
   const blogItems: Item[] = [
     { href: "/blog", label: "실시간", icon: "live" },
+    { href: "/blog/discover", label: "키워드 찾기", icon: "compass" },
     { href: "/blog/history", label: "키워드 기록", icon: "history" },
     { href: "/blog/keyword", label: "키워드 분석", icon: "search" },
     { href: "/blog/drafts", label: "초안", icon: "file" },

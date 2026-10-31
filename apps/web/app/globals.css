@@ -287,6 +287,7 @@ main {
 }
 
 h1 small {
+  word-break: keep-all;
   font-size: 13px;
   font-weight: normal;
   color: var(--muted);
@@ -503,6 +504,39 @@ h1 small {
 
 .saturation.높음 {
   color: var(--up);
+}
+
+.recent-topics {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+  margin-top: 10px;
+  font-size: 12px;
+}
+
+.recent-topics .chip {
+  text-decoration: none;
+}
+
+.recent-topics .chip:hover {
+  color: var(--text);
+  border-color: var(--muted);
+}
+
+.pick {
+  margin-right: 6px;
+  padding: 1px 6px;
+  border-radius: 6px;
+  background: var(--accent);
+  color: #fff;
+  font-size: 11px;
+  font-weight: 600;
+}
+
+.discover-help {
+  margin-top: 10px;
+  font-size: 13px;
 }
 
 .saturation small {

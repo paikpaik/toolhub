@@ -18,6 +18,11 @@ import {
   indexDraftsByKeyword,
   MAX_BATCH_KEYWORDS,
   normalizeKeyword,
+  discoverKeywords,
+  formatDiscoverTable,
+  MAX_TOPICS,
+  parseTopics,
+  saveRecentTopic,
   collectKeywords,
   enrichDayWithStats,
   fetchKeywordInsight,
@@ -115,6 +120,7 @@ const server = new McpServer(
     instructions: [
       "toolhub는 블로그 글감을 찾기 위한 한국어 키워드 도구다.",
       "글감 고르기: get_daily_keywords(또는 get_live_keywords)로 키워드를 보고, get_writing_rules(task=planning)의 규칙으로 판단한다. 상위 후보는 research_keyword로 검색 추이·포화도를 확인한다.",
+      "주제로 글감 찾기: 사용자가 분야·주제(캠핑, 연말정산 등)로 쓸 글감을 찾으면 discover_keywords로 꾸준히 검색되는 정보형 키워드를 찾고, 추천 키워드 중 하나를 골라 research_keyword로 확인한다.",
       "키워드 목록·화면 캡처: 사용자가 네이버 크리에이터 어드바이저 트렌드 같은 캡처나 키워드 목록을 주면, 보이는 키워드를 모두 뽑아 analyze_keywords 한 번으로 분석하고 get_writing_rules(task=planning)의 기준으로 추천한다.",
       "초안 쓰기: 먼저 list_drafts(keyword)로 같은 키워드의 초안이 있는지 확인해 있으면 사용자에게 알린다. get_writing_rules(task=writing, platform, type)로 규칙을 읽고, get_writing_brief로 브리프를 받아, 규칙대로 웹 검색으로 사실을 확인하며 쓴다. 이때 list_drafts가 보여 준 최근 초안들의 제목·도입 문장과 같은 패턴을 피한다. 사용자가 원하면 save_draft로 저장하고 open_web(page=drafts)으로 보여준다.",
       "초안 고치기: read_draft로 읽고 고친 뒤 update_draft로 같은 파일에 저장한다 (이전 버전은 자동 보관). 새 초안은 save_draft로 만든다.",
@@ -313,6 +319,34 @@ server.registerTool(
         error && `검색량 조회 실패: ${error}`,
       ].filter(Boolean);
       return text([...notes, ...(notes.length ? [""] : []), formatBatchTable(rows)].join("\n"));
+    } catch (e) {
+      return failure(e);
+    }
+  },
+);
+
+server.registerTool(
+  "discover_keywords",
+  {
+    title: "주제로 키워드 찾기",
+    description:
+      "주제(캠핑, 연말정산 등 최대 3개)의 네이버 연관 키워드 중 주제가 들어가고 월 300~5만 회 검색되는 키워드를 골라, 검색 추이·블로그 문서 수·포화도를 조회해 추천(포화도 기회 + 하락세·반짝 이슈 아님) 순의 표로 돌려준다. 실시간 이슈가 아니라 꾸준히 검색되는 정보형 글감을 찾을 때 쓴다. 웹의 키워드 찾기 화면과 같은 결과이며 최근 주제에 남는다.",
+    inputSchema: {
+      topics: z.array(z.string()).min(1).max(10).describe(`찾을 주제. ${MAX_TOPICS}개를 넘으면 앞의 ${MAX_TOPICS}개만`),
+    },
+    annotations: { readOnlyHint: false, openWorldHint: true },
+  },
+  async ({ topics: input }) => {
+    const topics = parseTopics(input);
+    if (!topics.length) return failure("찾을 주제가 없습니다.");
+    const { searchAd, hub } = briefSources();
+    if (!searchAd) return failure("네이버 검색광고 키가 없습니다. apps/web/.env.local을 설정하세요.");
+    try {
+      const index = indexDraftsByKeyword(await listDrafts(DRAFTS_DIR));
+      const result = await discoverKeywords({ searchAd, hub }, topics, kstNow().date, (k) => (index.get(normalizeKeyword(k)) ?? []).map((d) => d.file));
+      await saveRecentTopic(DATA_DIR, topics.join(", ")).catch(() => {});
+      const notes = [!hub && `${HUB_MISSING} 그래서 검색 추이·포화도·추천은 비어 있습니다.`].filter(Boolean);
+      return text([...notes, ...(notes.length ? [""] : []), formatDiscoverTable(result)].join("\n"));
     } catch (e) {
       return failure(e);
     }
@@ -557,14 +591,14 @@ server.registerTool(
       "toolhub 웹 대시보드를 브라우저로 연다. 웹은 항상 main 브랜치의 최신 커밋으로 실행되며, 꺼져 있거나 옛 커밋이면 (재)시작한 뒤 연다. 사용자가 웹·화면·대시보드를 열어 달라고 하면 쓴다. 준비 중이라는 응답을 받으면 잠시 후 다시 호출한다.",
     inputSchema: {
       page: z
-        .enum(["tasks", "live", "history", "keyword", "drafts", "thumbnail"])
+        .enum(["tasks", "live", "discover", "history", "keyword", "drafts", "thumbnail"])
         .default("tasks")
         .describe(
-          "tasks: 일정 관리, live: 실시간 키워드, history: 키워드 기록, keyword: 키워드 분석, drafts: 초안(발행 도우미), thumbnail: 썸네일 만들기",
+          "tasks: 일정 관리, live: 실시간 키워드, discover: 주제로 키워드 찾기, history: 키워드 기록, keyword: 키워드 분석, drafts: 초안(발행 도우미), thumbnail: 썸네일 만들기",
         ),
       view: z.enum(VIEWS).optional().describe("page=tasks일 때 보기: today(오늘), week(다음 7일), inbox(날짜 없음), all, done, board, calendar"),
       title: z.string().optional().describe("page=thumbnail일 때 미리 채울 제목 (*강조* 구문 가능)"),
-      keyword: z.string().optional().describe("page=keyword일 때 분석할 키워드"),
+      keyword: z.string().optional().describe("page=keyword일 때 분석할 키워드, page=discover일 때 찾을 주제 (쉼표로 여러 개)"),
       date: dateSchema.describe("page=history일 때 볼 날짜 (YYYY-MM-DD, 생략하면 오늘)"),
       draft: z.string().optional().describe("page=drafts일 때 열 초안 파일 이름 (save_draft가 돌려준 이름). 생략하면 초안 목록"),
     },
@@ -575,6 +609,7 @@ server.registerTool(
     const pagePath = {
       tasks: `/tasks${q("view", view)}`,
       live: "/blog",
+      discover: `/blog/discover${q("q", keyword)}`,
       history: `/blog/history${q("date", date)}`,
       keyword: `/blog/keyword${q("q", keyword)}`,
       drafts: draft ? `/blog/drafts/view${q("file", path.basename(draft))}` : "/blog/drafts",

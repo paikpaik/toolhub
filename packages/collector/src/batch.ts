@@ -97,6 +97,12 @@ export function sortBatchRows(rows: BatchRow[]) {
   return [...rows].sort((a, b) => rank(a) - rank(b) || (b.stats?.totalSearches ?? -1) - (a.stats?.totalSearches ?? -1));
 }
 
+/** 표 칸용 추이 표시. 시즌이면 정점 달을 붙인다 */
+export function formatTrendCell(trend: TrendSummary | null) {
+  if (!trend) return "-";
+  return trend.label === "시즌" && trend.peakMonth ? `시즌(${Number(trend.peakMonth.slice(5))}월)` : trend.label;
+}
+
 /** 요약 한 줄 + 표 (마크다운) */
 export function formatBatchTable(rows: BatchRow[]) {
   const sorted = sortBatchRows(rows);
@@ -114,7 +120,7 @@ export function formatBatchTable(rows: BatchRow[]) {
         r.keyword.replace(/\|/g, "/"),
         r.stats === undefined ? "-" : r.stats === null ? "데이터 없음" : formatSearchCount(r.stats.totalSearches),
         r.stats?.competition ?? "-",
-        r.trend ? (r.trend.label === "시즌" && r.trend.peakMonth ? `시즌(${Number(r.trend.peakMonth.slice(5))}월)` : r.trend.label) : "-",
+        formatTrendCell(r.trend),
         r.blogTotal === null ? "-" : r.blogTotal.toLocaleString("ko-KR"),
         r.saturation ? `${r.saturation.level} (${r.saturation.ratio}배)` : "-",
         r.drafts.length ? `✓ ${r.drafts.length}개` : "",

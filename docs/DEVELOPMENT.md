@@ -17,6 +17,7 @@ toolhub/
 │       ├── naver-hub.ts       # NAVER API HUB (검색어 트렌드·쇼핑 인사이트·블로그/지식iN/뉴스/카페/지역 검색)
 │       ├── research.ts        # 추이 해석·포화도·시즌 알림 날짜·키워드 조사 묶음
 │       ├── batch.ts           # 키워드 여러 개 묶음 분석 (목록 정리·표) — MCP analyze_keywords
+│       ├── discover.ts        # 주제로 키워드 찾기 (후보 고르기·추천·최근 주제) — 웹 키워드 찾기, MCP discover_keywords
 │       ├── brief.ts           # 글쓰기 브리프·글감 브리핑 생성
 │       ├── platforms.ts       # 플랫폼·글 유형·구성 변형 (브라우저에서도 사용)
 │       ├── drafts.ts          # 초안 목록·파싱·고치기
@@ -36,7 +37,7 @@ toolhub/
 │   │   ├── layout.tsx, sidebar.tsx, icons.tsx  # 사이드바 레이아웃
 │   │   ├── add-task-popover.tsx  # 블로그 화면의 "할 일로 추가"
 │   │   ├── tasks/             # 일정 관리 (목록·보드·캘린더·상세 패널·빠른 추가)
-│   │   ├── blog/              # 블로그 (page.tsx 실시간, history, keyword, drafts, thumbnail, guide)
+│   │   ├── blog/              # 블로그 (page.tsx 실시간, discover, history, keyword, drafts, thumbnail, guide)
 │   │   │   └── guide/content.ts   # 작성 가이드 내용 (플랫폼별 발행 순서·수익·품질)
 │   │   └── api/               # tasks, projects, brief, stats/enrich, health
 │   └── lib/                   # 데이터 경로, 입력 검증, 미리보기, 검색량 백그라운드 채우기
@@ -94,6 +95,10 @@ toolhub/
 | `related`, `url` | 관련 뉴스 제목과 링크 |
 | `stats` | 네이버 검색광고 검색량·경쟁도. 아직 조회하지 않았으면 필드가 없고, 데이터가 없으면 `null` |
 
+### 최근 주제 `data/discover-topics.json`
+
+키워드 찾기에서 조회에 성공한 주제 입력(예: `"캠핑, 연말정산"`)을 최신순으로 최대 8개 담은 문자열 배열. 웹·MCP가 함께 씁니다.
+
 ### 일정 `data/tasks.json`
 
 `{ nextId, tasks, projects }`. 할 일은 `id`(번호), `title`, `notes`, `status`(todo·in_progress·done·canceled), `priority`(0 없음·1 긴급·2 높음·3 보통·4 낮음), `dueDate`, `dueTime`, `projectId`, `labels`, `repeat`(daily·weekly·monthly·yearly), `subtasks`, `link`, `createdAt`, `updatedAt`, `completedAt`.
@@ -110,6 +115,10 @@ toolhub/
 - **키워드 기록의 검색량**은 렌더링을 막지 않도록 브라우저가 `/api/stats/enrich`로 뒤에서 채우고, 실시간 화면에서 새 키워드가 기록되면 서버가 바로 백그라운드로 시작합니다. 같은 날짜는 한 번만 돌도록 진행 중인 작업을 공유합니다.
 - **API HUB** 조사는 병렬로 하고, 하나가 실패해도 나머지는 채웁니다.
 - **묶음 분석**(`analyze_keywords`)은 검색광고(5개씩·1초 간격)와 API HUB(검색 추이·블로그 문서 수, 키워드 5개씩 동시)를 함께 돌립니다. 20개 기준 3~4초, 50개 기준 10초 남짓입니다. 입력은 `cleanKeywordList`가 순위 번호(`1.` `2)` `3위`)·변동 표시(`▲3` `NEW`)·따옴표를 걷어내고 중복을 없애 최대 50개로 자릅니다. 숫자로 시작하는 키워드(`4대보험`, `2026 연말정산`)는 순위로 보지 않습니다.
+- **키워드 찾기**(`discoverKeywords`)는 주제마다 검색광고를 한 번 부르는데, 힌트에 주제와 `주제+신청·조건·방법·추천`을 함께 넣습니다. 주제만 넣으면 넓은 주제어 위주로 와서, 예를 들어 "국민연금"은 주제가 들어간 키워드가 1개뿐이었지만 의도 힌트를 넣으면 16개(수령나이·일시금 수령·추가납부 등)로 늘었습니다. 힌트가 400으로 거부되면 주제만으로 다시 부릅니다.
+  - `pickCandidates`: 주제가 들어가고 월 300~5만 회, 사이트 찾기 검색어(홈페이지·로그인·공단 등)가 아닌 것만 남기고, 정보형 단어(방법·신청·나이·비용…)가 든 키워드 → 검색량 순으로 정렬합니다. 주제가 여러 개면 주제별로 번갈아 놓아 한 주제가 분석 자리를 독차지하지 않게 합니다.
+  - 상위 50개만 API HUB로 추이·블로그 문서 수를 조회합니다 (검색량은 이미 있으니 `analyzeKeywords`를 검색광고 없이 부르고 포화도를 다시 계산). 주제 1개 기준 1~2초입니다.
+  - 추천(`pick`)은 포화도 기회이면서 추이가 하락세·급등 이력이 아닌 키워드, `곧 시즌`은 시즌 정점 달이 1~3달 뒤인 키워드입니다.
 
 ## 글쓰기 프롬프트 (`docs/prompts/`)
 
@@ -131,7 +140,7 @@ toolhub/
 
 **일정**: `list_tasks`, `add_task`(자연어 `text` 또는 필드 지정), `update_task`, `complete_task`, `delete_task`, `add_project`
 
-**블로그**: `get_live_keywords`, `get_daily_keywords`, `analyze_keyword`, `analyze_keywords`(목록·캡처 묶음 분석), `research_keyword`, `search_places`, `get_shopping_trend`, `get_writing_rules`, `get_writing_brief`, `save_draft`, `list_drafts`, `read_draft`, `update_draft`
+**블로그**: `get_live_keywords`, `get_daily_keywords`, `analyze_keyword`, `analyze_keywords`(목록·캡처 묶음 분석), `discover_keywords`(주제로 키워드 찾기), `research_keyword`, `search_places`, `get_shopping_trend`, `get_writing_rules`, `get_writing_brief`, `save_draft`, `list_drafts`, `read_draft`, `update_draft`
 
 **웹**: `open_web`, `stop_web` · **프롬프트**: `blog_draft`, `pick_topics`
 
@@ -165,7 +174,7 @@ stdio 전송은 stdout을 프로토콜에 쓰므로 서버 코드에서 `console
 
 ## 웹 주소
 
-일정 관리는 `/tasks?view=today|week|inbox|all|done|board|calendar[&project=ID|&label=태그][&task=번호]`, 블로그는 `/blog`, `/blog/history`, `/blog/keyword?q=`, `/blog/drafts`, `/blog/drafts/view?file=`, `/blog/thumbnail?title=`. 예전 주소(`/history`, `/keyword`, `/drafts`, `/thumbnail`)는 `next.config.ts`에서 새 주소로 보냅니다.
+일정 관리는 `/tasks?view=today|week|inbox|all|done|board|calendar[&project=ID|&label=태그][&task=번호]`, 블로그는 `/blog`, `/blog/discover?q=주제,주제`, `/blog/history`, `/blog/keyword?q=`, `/blog/drafts`, `/blog/drafts/view?file=`, `/blog/thumbnail?title=`. 예전 주소(`/history`, `/keyword`, `/drafts`, `/thumbnail`)는 `next.config.ts`에서 새 주소로 보냅니다.
 
 ## 브리프 형식 (직접 붙여넣을 때)
 
