@@ -11,7 +11,13 @@ import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
 import {
   ALL_SOURCES,
+  analyzeKeywords,
   buildWritingBrief,
+  cleanKeywordList,
+  formatBatchTable,
+  indexDraftsByKeyword,
+  MAX_BATCH_KEYWORDS,
+  normalizeKeyword,
   collectKeywords,
   enrichDayWithStats,
   fetchKeywordInsight,
@@ -109,6 +115,7 @@ const server = new McpServer(
     instructions: [
       "toolhub는 블로그 글감을 찾기 위한 한국어 키워드 도구다.",
       "글감 고르기: get_daily_keywords(또는 get_live_keywords)로 키워드를 보고, get_writing_rules(task=planning)의 규칙으로 판단한다. 상위 후보는 research_keyword로 검색 추이·포화도를 확인한다.",
+      "키워드 목록·화면 캡처: 사용자가 네이버 크리에이터 어드바이저 트렌드 같은 캡처나 키워드 목록을 주면, 보이는 키워드를 모두 뽑아 analyze_keywords 한 번으로 분석하고 get_writing_rules(task=planning)의 기준으로 추천한다.",
       "초안 쓰기: 먼저 list_drafts(keyword)로 같은 키워드의 초안이 있는지 확인해 있으면 사용자에게 알린다. get_writing_rules(task=writing, platform, type)로 규칙을 읽고, get_writing_brief로 브리프를 받아, 규칙대로 웹 검색으로 사실을 확인하며 쓴다. 이때 list_drafts가 보여 준 최근 초안들의 제목·도입 문장과 같은 패턴을 피한다. 사용자가 원하면 save_draft로 저장하고 open_web(page=drafts)으로 보여준다.",
       "초안 고치기: read_draft로 읽고 고친 뒤 update_draft로 같은 파일에 저장한다 (이전 버전은 자동 보관). 새 초안은 save_draft로 만든다.",
       "글 유형: 상품·서비스 사용기는 review, 맛집·여행지·시설 방문기는 place, 그 밖에는 info. 리뷰 상품의 쇼핑 트렌드는 get_shopping_trend, 장소 정보는 search_places로 확인한다.",
@@ -272,6 +279,40 @@ server.registerTool(
   async ({ keyword, platform, type, structure, note }) => {
     try {
       return text(await buildWritingBrief(briefSources(), keyword, platform, { type, structure, note }));
+    } catch (e) {
+      return failure(e);
+    }
+  },
+);
+
+server.registerTool(
+  "analyze_keywords",
+  {
+    title: "키워드 묶음 분석",
+    description:
+      "키워드 여러 개(최대 50개)의 네이버 월간 검색량·경쟁도·검색 추이·블로그 문서 수·포화도와 초안 작성 여부를 한 번에 조회해, 포화도 '기회' → 보통 → 높음 순의 표로 돌려준다. 사용자가 붙여넣은 네이버 크리에이터 어드바이저(검색 유입·주제별 트렌드) 같은 화면 캡처나 키워드 목록에서 쓸 만한 글감을 고를 때 쓴다. 캡처 속 키워드를 그대로 뽑아 넣으면 순위 번호·변동 표시·중복은 알아서 정리한다.",
+    inputSchema: {
+      keywords: z.array(z.string()).min(1).max(200).describe("분석할 키워드 목록. 50개를 넘으면 앞의 50개만 분석"),
+    },
+    annotations: { readOnlyHint: true, openWorldHint: true },
+  },
+  async ({ keywords: input }) => {
+    const keywords = cleanKeywordList(input);
+    if (!keywords.length) return failure("분석할 키워드가 없습니다.");
+    const sources = briefSources();
+    if (!sources.searchAd && !sources.hub) return failure("네이버 검색광고·API HUB 키가 모두 없습니다. apps/web/.env.local을 설정하세요.");
+    try {
+      const index = indexDraftsByKeyword(await listDrafts(DRAFTS_DIR));
+      const { rows, error } = await analyzeKeywords(sources, keywords, (k) =>
+        (index.get(normalizeKeyword(k)) ?? []).map((d) => d.file),
+      );
+      const notes = [
+        keywords.length === MAX_BATCH_KEYWORDS && `한 번에 ${MAX_BATCH_KEYWORDS}개까지라 앞의 ${MAX_BATCH_KEYWORDS}개만 분석했습니다. 나머지는 다시 호출하세요.`,
+        !sources.searchAd && "네이버 검색광고 키가 없어 검색량·경쟁도·포화도는 표시되지 않습니다.",
+        !sources.hub && HUB_MISSING,
+        error && `검색량 조회 실패: ${error}`,
+      ].filter(Boolean);
+      return text([...notes, ...(notes.length ? [""] : []), formatBatchTable(rows)].join("\n"));
     } catch (e) {
       return failure(e);
     }

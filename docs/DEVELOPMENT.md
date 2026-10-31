@@ -16,6 +16,7 @@ toolhub/
 │       ├── naver-searchad.ts  # 네이버 검색광고 API (검색량·경쟁도·연관 키워드)
 │       ├── naver-hub.ts       # NAVER API HUB (검색어 트렌드·쇼핑 인사이트·블로그/지식iN/뉴스/카페/지역 검색)
 │       ├── research.ts        # 추이 해석·포화도·시즌 알림 날짜·키워드 조사 묶음
+│       ├── batch.ts           # 키워드 여러 개 묶음 분석 (목록 정리·표) — MCP analyze_keywords
 │       ├── brief.ts           # 글쓰기 브리프·글감 브리핑 생성
 │       ├── platforms.ts       # 플랫폼·글 유형·구성 변형 (브라우저에서도 사용)
 │       ├── drafts.ts          # 초안 목록·파싱·고치기
@@ -60,7 +61,7 @@ toolhub/
 | 위치 | 테스트하는 것 |
 |---|---|
 | `packages/tasks` | 자연어 빠른 추가 해석, 날짜·반복 계산, 보기·그룹·정렬, 저장소(반복 완료·프로젝트 삭제·여러 프로세스 동시 쓰기) |
-| `packages/collector` | 추이 해석·포화도·시즌 알림 날짜, 브리프·글감 브리핑 형식, 초안 파싱·도입 문장·고치기(백업·경로 차단), 키워드 병합·기간 집계 |
+| `packages/collector` | 추이 해석·포화도·시즌 알림 날짜, 묶음 분석의 키워드 목록 정리·정렬·표, 브리프·글감 브리핑 형식, 초안 파싱·도입 문장·고치기(백업·경로 차단), 키워드 병합·기간 집계 |
 | `apps/web/lib` | 할 일 수정 요청 검증, 초안 미리보기 |
 
 ## 환경변수
@@ -107,6 +108,7 @@ toolhub/
 - **검색광고 API**는 호출 한도가 낮아(429) 요청 사이에 1초 간격을 두고, 429면 2초·4초 뒤 재시도합니다. 힌트 키워드는 한 번에 5개까지라, 롱테일 키워드는 각 단어도 함께 힌트로 넣어 연관 키워드를 넓게 받은 뒤 관련도 순으로 정렬합니다.
 - **키워드 기록의 검색량**은 렌더링을 막지 않도록 브라우저가 `/api/stats/enrich`로 뒤에서 채우고, 실시간 화면에서 새 키워드가 기록되면 서버가 바로 백그라운드로 시작합니다. 같은 날짜는 한 번만 돌도록 진행 중인 작업을 공유합니다.
 - **API HUB** 조사는 병렬로 하고, 하나가 실패해도 나머지는 채웁니다.
+- **묶음 분석**(`analyze_keywords`)은 검색광고(5개씩·1초 간격)와 API HUB(검색 추이·블로그 문서 수, 키워드 5개씩 동시)를 함께 돌립니다. 20개 기준 3~4초, 50개 기준 10초 남짓입니다. 입력은 `cleanKeywordList`가 순위 번호(`1.` `2)` `3위`)·변동 표시(`▲3` `NEW`)·따옴표를 걷어내고 중복을 없애 최대 50개로 자릅니다. 숫자로 시작하는 키워드(`4대보험`, `2026 연말정산`)는 순위로 보지 않습니다.
 
 ## 글쓰기 프롬프트 (`docs/prompts/`)
 
@@ -128,7 +130,7 @@ toolhub/
 
 **일정**: `list_tasks`, `add_task`(자연어 `text` 또는 필드 지정), `update_task`, `complete_task`, `delete_task`, `add_project`
 
-**블로그**: `get_live_keywords`, `get_daily_keywords`, `analyze_keyword`, `research_keyword`, `search_places`, `get_shopping_trend`, `get_writing_rules`, `get_writing_brief`, `save_draft`, `list_drafts`, `read_draft`, `update_draft`
+**블로그**: `get_live_keywords`, `get_daily_keywords`, `analyze_keyword`, `analyze_keywords`(목록·캡처 묶음 분석), `research_keyword`, `search_places`, `get_shopping_trend`, `get_writing_rules`, `get_writing_brief`, `save_draft`, `list_drafts`, `read_draft`, `update_draft`
 
 **웹**: `open_web`, `stop_web` · **프롬프트**: `blog_draft`, `pick_topics`
 
