@@ -1,19 +1,23 @@
 {
   "manifest_version": 3,
   "name": "toolhub 글쓰기 도우미",
-  "version": "0.1.0",
-  "description": "네이버 블로그 에디터에서 문장을 드래그하면 소제목·강조·형광펜을 한 번에 적용합니다.",
-  "permissions": ["storage"],
-  "action": {
-    "default_title": "toolhub 글쓰기 도우미",
-    "default_popup": "popup.html"
-  },
+  "version": "0.2.0",
+  "description": "네이버 블로그 에디터의 드래그 서식(소제목·강조·형광펜)과, AI로 만든 이미지를 모아 바로 붙여넣는 사이드 패널.",
+  "permissions": ["storage", "unlimitedStorage", "sidePanel", "contextMenus", "scripting", "clipboardWrite"],
+  "host_permissions": ["<all_urls>"],
+  "background": { "service_worker": "background.js" },
+  "action": { "default_title": "toolhub 이미지 모음" },
+  "side_panel": { "default_path": "sidepanel.html" },
   "options_page": "options.html",
   "content_scripts": [
     {
       "matches": ["https://blog.naver.com/*"],
       "all_frames": true,
       "js": ["lib.js", "naver-editor.js", "content.js"]
+    },
+    {
+      "matches": ["https://gemini.google.com/*", "https://aistudio.google.com/*", "https://chatgpt.com/*"],
+      "js": ["lib.js", "content-ai.js"]
     }
   ]
 }

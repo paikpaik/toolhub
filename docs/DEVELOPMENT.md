@@ -41,11 +41,14 @@ toolhub/
 │   │   │   └── guide/content.ts   # 작성 가이드 내용 (플랫폼별 발행 순서·수익·품질)
 │   │   └── api/               # tasks, projects, brief, stats/enrich, health
 │   └── lib/                   # 데이터 경로, 입력 검증, 미리보기, 검색량 백그라운드 채우기
-├── extension/            # 크롬 확장 (빌드 없음, 일반 JS). 네이버 에디터 드래그 서식
-│   ├── lib.js                 # 색 해석·가까운 색 고르기·설정 병합 (테스트 대상)
+├── extension/            # 크롬 확장 (빌드 없음, 일반 JS). 네이버 에디터 드래그 서식 + 이미지 모음 사이드 패널
+│   ├── lib.js                 # 색·설정·이미지 모음(data URL·중복·파일 이름) 순수 함수 (테스트 대상)
 │   ├── naver-editor.js        # 스마트에디터 ONE 버튼 위치(SELECTORS)와 조작·진단
 │   ├── content.js             # 드래그하면 뜨는 막대 (Shadow DOM)
-│   └── popup.*, options.*     # 진단 정보 복사, 서식 설정 (chrome.storage.sync)
+│   ├── content-ai.js          # Gemini·ChatGPT·AI Studio에서 새 생성 이미지를 패널로 자동 전송
+│   ├── sidepanel.*            # 이미지 모음 패널 (붙여넣기·끌어다 놓기·복사·저장) + 설정·진단 정보 복사 링크
+│   ├── background.js          # 아이콘 클릭 → 사이드 패널, 오른쪽 클릭 "toolhub 패널에 담기"
+│   └── options.*              # 서식 설정 (storage.sync)
 ├── docs/prompts/         # 글감 선정·초안 작성 프롬프트 (claude.ai 프로젝트·MCP·/blog-draft 공용)
 └── .claude/skills/       # Claude Code 스킬 (/blog-draft)
 ```
@@ -70,7 +73,7 @@ toolhub/
 | `packages/tasks` | 자연어 빠른 추가 해석, 날짜·반복 계산, 보기·그룹·정렬, 저장소(반복 완료·프로젝트 삭제·여러 프로세스 동시 쓰기) |
 | `packages/collector` | 추이 해석·포화도·시즌 알림 날짜, 묶음 분석의 키워드 목록 정리·정렬·표, 브리프·글감 브리핑 형식, 초안 파싱·도입 문장·고치기(백업·경로 차단), 키워드 병합·기간 집계 |
 | `apps/web/lib` | 할 일 수정 요청 검증, 초안 미리보기 |
-| `extension` | 색 해석, 팔레트에서 가장 가까운 색 고르기, 설정 병합 (`*.test.js`) |
+| `extension` | 색 해석, 팔레트에서 가장 가까운 색 고르기, 설정 병합, 이미지 모음의 data URL 변환·중복 제거(원래 주소 포함)·자동 담기 크기 기준·파일 이름 (`*.test.js`) |
 
 ## 환경변수
 
@@ -184,6 +187,18 @@ stdio 전송은 stdout을 프로토콜에 쓰므로 서버 코드에서 `console
 - 막대는 `mousedown`을 막아 눌러도 선택이 풀리지 않게 하고, 선택이 `.se-content` 안일 때만 띄웁니다. 에디터가 iframe 안에 있어서 `all_frames: true`로 넣습니다.
 - 에디터 클래스 이름은 로그인 없이 확인할 수 없어 공개 자료 기준으로 잡았습니다. **실제 에디터에서 처음 확인할 때나 네이버가 에디터를 바꿨을 때**는 팝업의 "진단 정보 복사" 결과(툴바 버튼 클래스, 드롭다운을 잠깐 열어 본 항목·팔레트 색)를 보고 `naver-editor.js`의 `SELECTORS`만 고치면 됩니다.
 - 같은 구조의 모의 페이지에서 드래그 → 막대 → 버튼 순서(크기 19 → 굵게, 팔레트 가까운 색), 선택 유지, 본문 밖 선택 무시, 버튼 없음 안내, 진단 수집을 헤드리스 크롬으로 확인했습니다 (2026-11-01).
+
+### 이미지 모음 (사이드 패널)
+
+이미지는 Gemini·ChatGPT 등에서 만들고, 이 패널은 캡처·저장 없이 모아서 에디터에 붙여넣는 용도입니다 (이미지 생성은 하지 않음).
+
+- 자동 담기: `content-ai.js`(Gemini·AI Studio·ChatGPT)가 이미지 `load` 이벤트를 캡처 단계에서 받아, 주소가 2.5초 동안 그대로이고(생성 중 흐린 미리보기 제외) 400×400 이상인 이미지만 페이지 안에서 data URL로 읽어 background에 보냅니다. background는 패널이 연결(`runtime.connect` 포트)돼 있고 `autoCollect`가 켜져 있을 때만 담습니다. 같은 이미지가 다시 그려지면 원래 주소(`source`)로 중복을 거릅니다.
+- 오른쪽 클릭 메뉴(`contextMenus`, 이미지에만)는 `background.js`가 받아 담습니다. 패널 열기(`sidePanel.open`)는 사용자가 누른 직후에만 허용돼서 이미지를 받기 전에 먼저 엽니다.
+- 받는 순서: 확장 권한(`<all_urls>`)으로 직접 `fetch` → 실패하거나 `blob:` 주소면 `scripting.executeScript`로 그 페이지(프레임을 모르면 모든 프레임) 안에서 읽습니다. Gemini 등은 생성 이미지를 페이지 안에서만 유효한 `blob:` 주소로 띄웁니다.
+- 패널에 붙여넣기·끌어다 놓기는 이미지 파일 → HTML 속 `<img>`의 src 속성 → uri-list → 텍스트 순으로 찾고, 패널이 직접 못 받는 주소(`blob:`, 로그인 필요)는 background가 지금 탭에서 읽습니다.
+- 담기(추가)는 background의 큐로 차례로 저장해 동시에 써서 빠지는 일을 막습니다. 패널·background 모두 `storage.local`의 `shelf`를 쓰고 패널은 `storage.onChanged`로 다시 그립니다.
+- 클립보드는 PNG만 받아서 복사할 때 `OffscreenCanvas`로 PNG로 바꿉니다. 최근 30장은 data URL로 두고 `unlimitedStorage`로 용량 제한을 풉니다.
+- 확인 (2026-11-01): Chrome for Testing에 확장을 실제로 설치(`--remote-debugging-pipe --enable-unsafe-extension-debugging` + CDP `Extensions.loadUnpacked`. 일반 크롬은 `--load-extension`을 막음)하고, `gemini.google.com` 요청을 가짜 페이지로 바꿔 자동 담기(작은 아이콘 제외), 다시 그려져도 중복 없음, `blob:` 이미지 끌어다 놓기, 자동 담기 끄기를 확인했습니다. 실제 Gemini·ChatGPT 화면 구조는 로그인이 필요해 설치 후 확인이 필요합니다.
 
 ## 웹 주소
 

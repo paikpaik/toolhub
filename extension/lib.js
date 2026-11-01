@@ -49,5 +49,43 @@ globalThis.ToolhubLib = (() => {
     return merged;
   }
 
-  return { FONT_SIZES, DEFAULT_SETTINGS, parseColor, nearestColor, mergeSettings };
+  /** 패널에 담아 두는 이미지 수. 많아지면 오래된 것부터 빠진다 */
+  const MAX_SHELF = 30;
+
+  const MIME_EXTENSIONS = { "image/png": "png", "image/jpeg": "jpg", "image/webp": "webp", "image/gif": "gif", "image/svg+xml": "svg", "image/avif": "avif" };
+
+  /** data:image/png;base64,... → "image/png". 이미지가 아니면 null */
+  function dataUrlMime(dataUrl) {
+    const mime = String(dataUrl).match(/^data:(image\/[\w.+-]+)[;,]/)?.[1];
+    return mime ?? null;
+  }
+
+  /** 바이트 → data URL (서비스 워커에는 FileReader가 없을 수 있어 직접 인코딩) */
+  function bytesToDataUrl(bytes, mime) {
+    let binary = "";
+    for (let i = 0; i < bytes.length; i += 0x8000) binary += String.fromCharCode(...bytes.subarray(i, i + 0x8000));
+    return `data:${mime};base64,${btoa(binary)}`;
+  }
+
+  /**
+   * 새 이미지를 맨 앞에 넣는다. 같은 이미지(내용이 같은 data URL, 또는 원래 주소 source가 같은 것)는 앞으로 옮기기만 한다.
+   * 자동 담기는 같은 이미지가 화면에 다시 그려질 때마다 들어오므로 원래 주소로도 중복을 거른다
+   */
+  function addToShelf(shelf, item, max = MAX_SHELF) {
+    const same = (s) => s.src === item.src || (!!item.source && s.source === item.source);
+    return [item, ...shelf.filter((s) => !same(s))].slice(0, max);
+  }
+
+  /** 자동으로 담을 만한 이미지인지 (생성 이미지는 크다. 아이콘·프로필 사진은 제외) */
+  const AUTO_MIN_SIZE = 400;
+  const isLargeImage = (width, height) => width >= AUTO_MIN_SIZE && height >= AUTO_MIN_SIZE;
+
+  /** toolhub-20261101-143005.png */
+  function imageFileName(date, mime) {
+    const pad = (n) => String(n).padStart(2, "0");
+    const stamp = `${date.getFullYear()}${pad(date.getMonth() + 1)}${pad(date.getDate())}-${pad(date.getHours())}${pad(date.getMinutes())}${pad(date.getSeconds())}`;
+    return `toolhub-${stamp}.${MIME_EXTENSIONS[mime] ?? "png"}`;
+  }
+
+  return { FONT_SIZES, DEFAULT_SETTINGS, parseColor, nearestColor, mergeSettings, MAX_SHELF, dataUrlMime, bytesToDataUrl, addToShelf, isLargeImage, imageFileName };
 })();

@@ -2,7 +2,49 @@ import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 import "./lib.js";
 
-const { parseColor, nearestColor, mergeSettings, DEFAULT_SETTINGS } = globalThis.ToolhubLib;
+const { parseColor, nearestColor, mergeSettings, DEFAULT_SETTINGS, dataUrlMime, bytesToDataUrl, addToShelf, isLargeImage, imageFileName } = globalThis.ToolhubLib;
+
+describe("이미지 모음", () => {
+  it("data URL의 이미지 형식, 이미지가 아니면 null", () => {
+    assert.equal(dataUrlMime("data:image/png;base64,AAAA"), "image/png");
+    assert.equal(dataUrlMime("data:image/svg+xml,<svg/>"), "image/svg+xml");
+    assert.equal(dataUrlMime("data:text/html;base64,AAAA"), null);
+    assert.equal(dataUrlMime("https://example.com/a.png"), null);
+  });
+
+  it("바이트를 data URL로 (큰 파일도 나눠서 인코딩)", () => {
+    assert.equal(bytesToDataUrl(new Uint8Array([137, 80, 78, 71]), "image/png"), "data:image/png;base64,iVBORw==");
+    const big = new Uint8Array(100_000).fill(65);
+    assert.equal(bytesToDataUrl(big, "image/png"), `data:image/png;base64,${Buffer.from(big).toString("base64")}`);
+  });
+
+  it("새 이미지는 맨 앞, 같은 이미지는 앞으로 옮기고, 최대 개수를 넘으면 오래된 것부터 뺀다", () => {
+    const shelf = [{ id: 2, src: "b" }, { id: 1, src: "a" }];
+    assert.deepEqual(addToShelf(shelf, { id: 3, src: "c" }).map((s) => s.id), [3, 2, 1]);
+    assert.deepEqual(addToShelf(shelf, { id: 3, src: "a" }).map((s) => s.id), [3, 2]);
+    assert.deepEqual(addToShelf(shelf, { id: 3, src: "c" }, 2).map((s) => s.id), [3, 2]);
+  });
+
+  it("자동 담기는 원래 주소가 같으면 내용이 조금 달라도 같은 이미지로 본다", () => {
+    const shelf = [{ id: 1, src: "data-v1", source: "blob:https://gemini.google.com/abc" }];
+    assert.deepEqual(addToShelf(shelf, { id: 2, src: "data-v2", source: "blob:https://gemini.google.com/abc" }).map((s) => s.id), [2]);
+    // 원래 주소가 없는 것(붙여넣기)끼리는 주소로 묶지 않는다
+    assert.deepEqual(addToShelf([{ id: 1, src: "x" }], { id: 2, src: "y" }).map((s) => s.id), [2, 1]);
+  });
+
+  it("생성 이미지처럼 큰 것만 자동으로 담는다 (아이콘·프로필 제외)", () => {
+    assert.equal(isLargeImage(1024, 1024), true);
+    assert.equal(isLargeImage(1536, 1024), true);
+    assert.equal(isLargeImage(48, 48), false);
+    assert.equal(isLargeImage(1200, 300), false);
+  });
+
+  it("저장 파일 이름은 담은 시각과 형식으로", () => {
+    assert.equal(imageFileName(new Date(2026, 10, 1, 14, 5, 9), "image/jpeg"), "toolhub-20261101-140509.jpg");
+    assert.equal(imageFileName(new Date(2026, 0, 2, 3, 4, 5), "image/webp"), "toolhub-20260102-030405.webp");
+    assert.equal(imageFileName(new Date(2026, 0, 2, 3, 4, 5), null), "toolhub-20260102-030405.png");
+  });
+});
 
 describe("parseColor", () => {
   it("#abc·#aabbcc·rgb()·rgba()를 읽는다", () => {

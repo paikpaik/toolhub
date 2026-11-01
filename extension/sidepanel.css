@@ -1,0 +1,161 @@
+:root {
+  color-scheme: light dark;
+  --bg: #fff;
+  --surface: #f9fafb;
+  --border: #e5e7eb;
+  --text: #111827;
+  --muted: #6b7280;
+  --accent: #5b5bd6;
+  --error: #b91c1c;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --bg: #18181b;
+    --surface: #27272a;
+    --border: #3f3f46;
+    --text: #f4f4f5;
+    --muted: #a1a1aa;
+    --accent: #7c7cf0;
+    --error: #f87171;
+  }
+}
+
+body {
+  margin: 0;
+  padding: 14px;
+  background: var(--bg);
+  color: var(--text);
+  font: 13px/1.5 -apple-system, "Apple SD Gothic Neo", sans-serif;
+}
+
+header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 10px;
+}
+
+h1 {
+  margin: 0;
+  font-size: 15px;
+}
+
+button {
+  font: inherit;
+  cursor: pointer;
+  color: inherit;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 3px 8px;
+}
+
+button.link {
+  background: none;
+  border: 0;
+  padding: 0;
+  color: var(--accent);
+}
+
+.auto {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-bottom: 10px;
+}
+
+.auto small {
+  color: var(--muted);
+}
+
+.drop {
+  display: grid;
+  gap: 2px;
+  padding: 14px 10px;
+  border: 1.5px dashed var(--border);
+  border-radius: 10px;
+  text-align: center;
+  color: var(--muted);
+  outline: none;
+}
+
+.drop b {
+  color: var(--text);
+  font-weight: 600;
+}
+
+.drop span b {
+  color: var(--muted);
+}
+
+.drop:focus,
+.drop.over {
+  border-color: var(--accent);
+  background: var(--surface);
+}
+
+.status {
+  min-height: 1.5em;
+  margin: 6px 0;
+  color: var(--muted);
+}
+
+.status.error {
+  color: var(--error);
+}
+
+.hint {
+  color: var(--muted);
+}
+
+.shelf {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
+  gap: 10px;
+}
+
+.shelf figure {
+  margin: 0;
+  min-width: 0;
+}
+
+.shelf .thumb {
+  display: block;
+  width: 100%;
+  padding: 0;
+  border-radius: 8px;
+  overflow: hidden;
+  background: var(--surface);
+}
+
+.shelf .thumb:hover {
+  border-color: var(--accent);
+}
+
+.shelf img {
+  display: block;
+  width: 100%;
+  aspect-ratio: 1;
+  object-fit: contain;
+}
+
+.shelf .actions {
+  display: flex;
+  gap: 4px;
+  margin-top: 4px;
+}
+
+.shelf .actions .remove {
+  margin-left: auto;
+  color: var(--muted);
+}
+
+footer {
+  display: flex;
+  gap: 14px;
+  margin-top: 20px;
+  padding-top: 10px;
+  border-top: 1px solid var(--border);
+}
