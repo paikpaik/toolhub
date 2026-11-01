@@ -183,12 +183,33 @@ document.getElementById("diagnose").addEventListener("click", async () => {
   setStatus("에디터를 살펴보는 중…");
   try {
     const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
-    const info = await chrome.tabs.sendMessage(tab.id, { type: "diagnose" });
-    if (!info) throw new Error("no editor");
-    await navigator.clipboard.writeText(JSON.stringify(info, null, 2));
+    // 에디터를 못 찾았을 때도 원인을 알 수 있게, 모든 프레임에서 확장이 들어갔는지와 편집 영역·선택 상태를 모은다 (글 내용은 담지 않음)
+    const frames = (
+      await chrome.scripting.executeScript({
+        target: { tabId: tab.id, allFrames: true },
+        func: () => {
+          const editable = [...document.querySelectorAll('[contenteditable="true"], [contenteditable=""]')];
+          const selection = getSelection();
+          const anchor = selection?.anchorNode?.nodeType === 1 ? selection.anchorNode : selection?.anchorNode?.parentElement;
+          const classOf = (el) => (typeof el?.className === "string" ? el.className.slice(0, 120) : "");
+          const parents = [];
+          for (let p = anchor?.parentElement; p && parents.length < 4; p = p.parentElement) parents.push(classOf(p));
+          return {
+            url: location.origin + location.pathname,
+            contentScript: document.documentElement.dataset.toolhubContent === "1",
+            seContent: !!document.querySelector(".se-content"),
+            seToolbar: !!document.querySelector(".se-toolbar"),
+            editable: editable.slice(0, 5).map((el) => ({ tag: el.tagName, class: classOf(el) })),
+            selection: selection ? { collapsed: selection.isCollapsed, length: selection.toString().length, anchorClass: classOf(anchor), anchorParents: parents } : null,
+          };
+        },
+      })
+    ).map((r) => r.result);
+    const editor = await chrome.tabs.sendMessage(tab.id, { type: "diagnose" }).catch(() => null);
+    await navigator.clipboard.writeText(JSON.stringify({ frames, editor }, null, 2));
     setStatus("진단 정보를 복사했어요. Claude에게 붙여넣어 주세요.");
-  } catch {
-    setStatus("네이버 블로그 글쓰기 화면에서 눌러 주세요. 확장 프로그램을 설치하기 전에 열어 둔 탭이면 새로고침이 필요해요.", true);
+  } catch (e) {
+    setStatus(`진단하지 못했어요 (${e.message}). 네이버 블로그 글쓰기 화면에서 눌러 주세요.`, true);
   }
 });
 

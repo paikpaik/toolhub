@@ -11,6 +11,12 @@ const MENU_ID = "toolhub-add-image";
 // 확장 아이콘을 누르면 사이드 패널(이미지 모음)을 연다. 패널 위치(왼쪽·오른쪽)는 크롬 설정 › 모양 › 사이드 패널에서 정한다
 chrome.sidePanel.setPanelBehavior({ openPanelOnActionClick: true }).catch(() => {});
 
+// 서식 단축키 → 지금 탭의 에디터 프레임(content.js)에 전달
+chrome.commands.onCommand.addListener((command, tab) => {
+  const kind = command.replace(/^format-/, "");
+  if (tab?.id && command.startsWith("format-")) chrome.tabs.sendMessage(tab.id, { type: "format", kind }).catch(() => {});
+});
+
 chrome.runtime.onInstalled.addListener(() => {
   chrome.contextMenus.create({ id: MENU_ID, title: "toolhub 패널에 담기", contexts: ["image"] });
 });

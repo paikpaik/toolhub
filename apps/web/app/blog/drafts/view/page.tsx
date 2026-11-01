@@ -1,4 +1,4 @@
-import { listDrafts, parseDraft, PLATFORM_LABELS, readDraftFile } from "@toolhub/collector";
+import { buildImagePrompt, IMAGE_PROMPT_STYLES, listDrafts, parseDraft, PLATFORM_LABELS, readDraftFile, type ImagePromptStyle } from "@toolhub/collector";
 import { isOpen, readStore } from "@toolhub/tasks";
 import Link from "next/link";
 import { DATA_DIR, DRAFTS_DIR } from "../../../../lib/data";
@@ -6,6 +6,7 @@ import { AddTaskPopover } from "../../../add-task-popover";
 import { countBodyChars, previewDocument } from "../../../../lib/preview";
 import { CopyButton } from "../../copy-button";
 import { DraftChecklist } from "../checklist";
+import { ImagePromptCard } from "./image-prompt";
 
 export const dynamic = "force-dynamic";
 
@@ -34,6 +35,12 @@ export default async function DraftViewPage({ searchParams }: { searchParams: Pr
   const platform = summary.platform;
   const recommendedTitle = draft.titles.find((t) => t.recommended)?.text ?? draft.titles[0]?.text ?? summary.keyword;
   const thumbnailHref = `/blog/thumbnail?title=${encodeURIComponent(recommendedTitle)}`;
+  const imagePrompts = Object.fromEntries(
+    (Object.keys(IMAGE_PROMPT_STYLES) as ImagePromptStyle[]).map((style) => [
+      style,
+      { label: IMAGE_PROMPT_STYLES[style].label, text: buildImagePrompt({ title: recommendedTitle, keyword: summary.keyword, body: draft.body, style }) },
+    ]),
+  );
 
   // 이 초안으로 만든 발행 할 일 (링크로 찾는다). 있으면 새로 만들지 않고 그 할 일로 안내한다
   const draftHref = `/blog/drafts/view?file=${encodeURIComponent(file)}`;
@@ -165,6 +172,8 @@ export default async function DraftViewPage({ searchParams }: { searchParams: Pr
               <CopyButton text={draft.tags.join(", ")} label="쉼표로 복사" />
             </section>
           )}
+
+          <ImagePromptCard prompts={imagePrompts} />
 
           <section className="card">
             <h3>발행 전 체크리스트</h3>

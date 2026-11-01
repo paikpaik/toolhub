@@ -343,6 +343,51 @@ h1 small {
   margin-top: 32px;
   position: sticky;
   top: 64px;
+  /* 카드가 많아져 화면보다 길어지면 옆 패널만 따로 스크롤 (아래 체크리스트가 가려지지 않게) */
+  max-height: calc(100vh - 80px);
+  overflow-y: auto;
+}
+
+@media (max-width: 900px) {
+  .draft-side {
+    position: static;
+    max-height: none;
+    overflow: visible;
+  }
+}
+
+.draft-side .hint-text {
+  color: var(--muted);
+  font-size: 12.5px;
+}
+
+.image-prompt-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+}
+
+.image-prompt-actions select {
+  font: inherit;
+  font-size: 13px;
+  padding: 3px 6px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: var(--surface);
+  color: var(--text);
+}
+
+.image-prompt-preview {
+  margin-top: 8px;
+  font-size: 12.5px;
+}
+
+.image-prompt-preview pre {
+  max-height: 240px;
+  overflow: auto;
+  white-space: pre-wrap;
+  font-size: 12px;
 }
 
 .draft-side h3 small,

@@ -9,10 +9,16 @@
   "action": { "default_title": "toolhub 이미지 모음" },
   "side_panel": { "default_path": "sidepanel.html" },
   "options_page": "options.html",
+  "commands": {
+    "format-heading": { "suggested_key": { "default": "Alt+Shift+1" }, "description": "선택한 문장을 소제목으로" },
+    "format-emphasis": { "suggested_key": { "default": "Alt+Shift+2" }, "description": "선택한 문장을 강조로" },
+    "format-highlight": { "suggested_key": { "default": "Alt+Shift+3" }, "description": "선택한 문장에 형광펜" }
+  },
   "content_scripts": [
     {
       "matches": ["https://blog.naver.com/*"],
       "all_frames": true,
+      "match_origin_as_fallback": true,
       "js": ["lib.js", "naver-editor.js", "content.js"]
     },
     {

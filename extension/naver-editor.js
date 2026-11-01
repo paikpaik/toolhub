@@ -42,10 +42,10 @@ globalThis.ToolhubNaver = (() => {
 
   const hasEditor = () => !!document.querySelector(SELECTORS.content);
 
-  /** 선택 영역이 글 본문 안인지 (제목 칸·다른 입력창은 제외) */
+  /** 선택 영역이 글 본문 안인지. 본문 클래스 이름이 바뀌었을 때를 대비해 편집 가능한 영역이면 본문으로 본다 */
   function isInEditor(node) {
     const el = node?.nodeType === Node.ELEMENT_NODE ? node : node?.parentElement;
-    return !!el?.closest(SELECTORS.content);
+    return !!el?.closest(`${SELECTORS.content}, [contenteditable="true"], [contenteditable=""]`);
   }
 
   async function setBold(on) {
