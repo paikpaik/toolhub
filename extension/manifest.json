@@ -1,0 +1,19 @@
+{
+  "manifest_version": 3,
+  "name": "toolhub 글쓰기 도우미",
+  "version": "0.1.0",
+  "description": "네이버 블로그 에디터에서 문장을 드래그하면 소제목·강조·형광펜을 한 번에 적용합니다.",
+  "permissions": ["storage"],
+  "action": {
+    "default_title": "toolhub 글쓰기 도우미",
+    "default_popup": "popup.html"
+  },
+  "options_page": "options.html",
+  "content_scripts": [
+    {
+      "matches": ["https://blog.naver.com/*"],
+      "all_frames": true,
+      "js": ["lib.js", "naver-editor.js", "content.js"]
+    }
+  ]
+}

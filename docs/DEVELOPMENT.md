@@ -41,6 +41,11 @@ toolhub/
 │   │   │   └── guide/content.ts   # 작성 가이드 내용 (플랫폼별 발행 순서·수익·품질)
 │   │   └── api/               # tasks, projects, brief, stats/enrich, health
 │   └── lib/                   # 데이터 경로, 입력 검증, 미리보기, 검색량 백그라운드 채우기
+├── extension/            # 크롬 확장 (빌드 없음, 일반 JS). 네이버 에디터 드래그 서식
+│   ├── lib.js                 # 색 해석·가까운 색 고르기·설정 병합 (테스트 대상)
+│   ├── naver-editor.js        # 스마트에디터 ONE 버튼 위치(SELECTORS)와 조작·진단
+│   ├── content.js             # 드래그하면 뜨는 막대 (Shadow DOM)
+│   └── popup.*, options.*     # 진단 정보 복사, 서식 설정 (chrome.storage.sync)
 ├── docs/prompts/         # 글감 선정·초안 작성 프롬프트 (claude.ai 프로젝트·MCP·/blog-draft 공용)
 └── .claude/skills/       # Claude Code 스킬 (/blog-draft)
 ```
@@ -65,6 +70,7 @@ toolhub/
 | `packages/tasks` | 자연어 빠른 추가 해석, 날짜·반복 계산, 보기·그룹·정렬, 저장소(반복 완료·프로젝트 삭제·여러 프로세스 동시 쓰기) |
 | `packages/collector` | 추이 해석·포화도·시즌 알림 날짜, 묶음 분석의 키워드 목록 정리·정렬·표, 브리프·글감 브리핑 형식, 초안 파싱·도입 문장·고치기(백업·경로 차단), 키워드 병합·기간 집계 |
 | `apps/web/lib` | 할 일 수정 요청 검증, 초안 미리보기 |
+| `extension` | 색 해석, 팔레트에서 가장 가까운 색 고르기, 설정 병합 (`*.test.js`) |
 
 ## 환경변수
 
@@ -171,6 +177,13 @@ stdio 전송은 stdout을 프로토콜에 쓰므로 서버 코드에서 `console
 내용은 `apps/web/app/blog/guide/content.ts`에 데이터로 있습니다 (`**굵게**`, `` `코드` ``만 지원). 분량·제목 길이는 `docs/prompts/platforms/*.md`와 맞추고, 애드포스트 가입 기준처럼 자주 바뀌는 정책은 숫자로 단정하지 않고 공식 안내 링크로 보냅니다.
 - 시작한 웹 서버는 데스크톱 앱을 꺼도 계속 돕니다 (`stop_web`으로 종료). PID·로그는 `.toolhub/`에 남습니다.
 - `git worktree list`에 실행 폴더가 보이는 것은 정상입니다. `git worktree remove --force ~/.toolhub/runtime/toolhub`로 지우면 다음 `open_web` 때 다시 만듭니다.
+
+## 크롬 확장 (`extension/`)
+
+- 스마트에디터 ONE은 글 내용을 내부 모델로 관리해서 DOM을 직접 고치면 저장 때 사라질 수 있습니다. 그래서 툴바 버튼(굵게·글자 크기·글자색·배경색)을 `click()`으로 대신 누릅니다. 굵게는 이미 눌려 있으면(`se-is-selected`) 다시 누르지 않습니다.
+- 막대는 `mousedown`을 막아 눌러도 선택이 풀리지 않게 하고, 선택이 `.se-content` 안일 때만 띄웁니다. 에디터가 iframe 안에 있어서 `all_frames: true`로 넣습니다.
+- 에디터 클래스 이름은 로그인 없이 확인할 수 없어 공개 자료 기준으로 잡았습니다. **실제 에디터에서 처음 확인할 때나 네이버가 에디터를 바꿨을 때**는 팝업의 "진단 정보 복사" 결과(툴바 버튼 클래스, 드롭다운을 잠깐 열어 본 항목·팔레트 색)를 보고 `naver-editor.js`의 `SELECTORS`만 고치면 됩니다.
+- 같은 구조의 모의 페이지에서 드래그 → 막대 → 버튼 순서(크기 19 → 굵게, 팔레트 가까운 색), 선택 유지, 본문 밖 선택 무시, 버튼 없음 안내, 진단 수집을 헤드리스 크롬으로 확인했습니다 (2026-11-01).
 
 ## 웹 주소
 

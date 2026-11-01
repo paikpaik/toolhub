@@ -1,0 +1,44 @@
+<!doctype html>
+<html lang="ko">
+  <head>
+    <meta charset="utf-8" />
+    <title>서식 설정 - toolhub 글쓰기 도우미</title>
+    <style>
+      body { max-width: 520px; margin: 32px auto; padding: 0 16px; font: 14px/1.6 -apple-system, "Apple SD Gothic Neo", sans-serif; color: #111827; }
+      h1 { font-size: 20px; }
+      fieldset { margin: 0 0 16px; padding: 12px 16px; border: 1px solid #e5e7eb; border-radius: 10px; }
+      legend { padding: 0 6px; font-weight: 600; }
+      label { display: flex; align-items: center; gap: 8px; margin: 6px 0; }
+      .hint { color: #6b7280; font-size: 13px; }
+      #saved { color: #059669; font-size: 13px; min-height: 1.6em; }
+    </style>
+  </head>
+  <body>
+    <h1>서식 설정</h1>
+    <p class="hint">네이버 에디터의 색 팔레트에 같은 색이 없으면 가장 가까운 색이 적용돼요. 바꾸면 바로 저장됩니다.</p>
+
+    <form id="form">
+      <fieldset>
+        <legend>소제목</legend>
+        <label>글자 크기 <select name="heading.size"></select></label>
+        <label><input type="checkbox" name="heading.bold" /> 굵게</label>
+        <label><input type="checkbox" name="heading.useColor" /> 글자색 <input type="color" name="heading.color" /></label>
+      </fieldset>
+
+      <fieldset>
+        <legend>강조</legend>
+        <label><input type="checkbox" name="emphasis.bold" /> 굵게</label>
+        <label><input type="checkbox" name="emphasis.useColor" /> 글자색 <input type="color" name="emphasis.color" /></label>
+      </fieldset>
+
+      <fieldset>
+        <legend>형광펜</legend>
+        <label>배경색 <input type="color" name="highlight.color" /></label>
+      </fieldset>
+    </form>
+    <p id="saved"></p>
+
+    <script src="lib.js"></script>
+    <script src="options.js"></script>
+  </body>
+</html>

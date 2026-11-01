@@ -14,7 +14,7 @@
     "brief": "npm run --silent brief -w @toolhub/collector --",
     "web": "npm run dev -w @toolhub/web",
     "typecheck": "npm run typecheck --workspaces --if-present",
-    "test": "node --test \"packages/*/src/**/*.test.ts\" \"apps/web/lib/**/*.test.ts\"",
+    "test": "node --test \"packages/*/src/**/*.test.ts\" \"apps/web/lib/**/*.test.ts\" \"extension/**/*.test.js\"",
     "check": "npm run typecheck && npm test"
   },
   "devDependencies": {
