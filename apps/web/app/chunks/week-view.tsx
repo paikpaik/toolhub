@@ -7,10 +7,12 @@ import {
   GOAL_MAX,
   GROUP_COLORS,
   GROUP_NAME_MAX,
+  goalsInGroup,
   mondayOf,
   moveGoalToNextWeek,
   parseGoalInput,
   removeGoal,
+  removeGroup,
   shiftDay,
   updateGoal,
   updateGroup,
@@ -29,6 +31,13 @@ const DRAG_TYPE = "text/chunk-goal";
 type Zone = { group: string } | { day: number };
 const zoneKey = (zone: Zone) => ("group" in zone ? `g:${zone.group}` : `d:${zone.day}`);
 
+/** 그룹 삭제 확인 문구: 목표가 어디로 가는지 알려 준다 */
+function deleteConfirmText(state: ChunkState, groupId: string) {
+  const moving = goalsInGroup(state, groupId);
+  const fallback = state.groups.find((g) => g.id !== groupId)!.name;
+  return moving ? `정말 삭제 (목표 ${moving}개는 ${fallback}으로)` : "정말 삭제";
+}
+
 function weekLabel(monday: string) {
   const end = shiftDay(monday, 6);
   const [y, m, d] = monday.split("-").map(Number);
@@ -45,6 +54,7 @@ export function WeekView({ state, today, actions }: { state: ChunkState; today: 
   const [openId, setOpenId] = useState<string | null>(null);
   const [confirmDelete, setConfirmDelete] = useState<string | null>(null);
   const [colorOpen, setColorOpen] = useState<string | null>(null);
+  const [confirmGroupDelete, setConfirmGroupDelete] = useState<string | null>(null);
   const [over, setOver] = useState<string | null>(null);
 
   const goals = state.weeks[monday] ?? [];
@@ -197,7 +207,10 @@ export function WeekView({ state, today, actions }: { state: ChunkState; today: 
                     className="chunk-dot"
                     aria-label="그룹 색 바꾸기"
                     aria-expanded={colorOpen === group.id}
-                    onClick={() => setColorOpen(colorOpen === group.id ? null : group.id)}
+                    onClick={() => {
+                      setColorOpen(colorOpen === group.id ? null : group.id);
+                      setConfirmGroupDelete(null);
+                    }}
                   />
                   <input
                     // 다른 곳에서 이름이 바뀌면 입력칸도 새로 그린다
@@ -232,6 +245,21 @@ export function WeekView({ state, today, actions }: { state: ChunkState; today: 
                         }}
                       />
                     ))}
+                    {state.groups.length > 1 && (
+                      <button
+                        type="button"
+                        className="chunk-group-delete"
+                        onClick={() => {
+                          if (confirmGroupDelete !== group.id) return setConfirmGroupDelete(group.id);
+                          setColorOpen(null);
+                          setConfirmGroupDelete(null);
+                          if (addGroupId === group.id) setAddGroupId(state.groups.find((g) => g.id !== group.id)!.id);
+                          actions.commit((s) => removeGroup(s, group.id));
+                        }}
+                      >
+                        {confirmGroupDelete === group.id ? deleteConfirmText(state, group.id) : "그룹 삭제"}
+                      </button>
+                    )}
                   </div>
                 )}
                 <div className="chunk-cards" role="list">
