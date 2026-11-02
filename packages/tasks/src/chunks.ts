@@ -82,6 +82,11 @@ export const isChunkDocId = (id: string) => /^(?:w-)?\d{4}-\d{2}-\d{2}$/.test(id
 export const weekDocId = (monday: string) => `w-${monday}`;
 /** 덩어리에서 자동으로 생긴 카드 id. 날짜·칸마다 고정이라 겹치지 않는다 */
 export const autoGoalId = (day: string, slot: ChunkSlot) => `c-${day}-${slot}`;
+/** 덩어리에서 생긴 카드면 그 날짜와 칸 번호 */
+export function parseAutoGoalId(id: string): { day: string; slot: ChunkSlot } | null {
+  const m = /^c-(\d{4}-\d{2}-\d{2})-(\d+)$/.exec(id);
+  return m ? { day: m[1]!, slot: Number(m[2]) } : null;
+}
 
 export const emptyChunk = (): ChunkEntry => ({ done: false, note: "", group: "", link: "" });
 export const emptyDay = (): ChunkDay => ({ chunks: Array.from({ length: BASE_CHUNKS }, emptyChunk) });
@@ -305,18 +310,38 @@ export function addGoal(state: ChunkState, monday: string, goal: Omit<WeekGoal, 
   return setWeek(state, monday, [...(state.weeks[monday] ?? []), { ...goal, id: newId(), done: false }]);
 }
 
+/**
+ * 목표를 고친다.
+ * 덩어리에서 생긴 카드는 그날 덩어리 기록과 짝이라, 이름·그룹·완료는 덩어리 쪽을 고쳐서 카드가 따라오게 한다
+ * (카드만 고치면 그날을 다시 고칠 때 되돌아간다). 그날 한 일이므로 요일은 바꾸지 않는다.
+ */
 export function updateGoal(state: ChunkState, monday: string, id: string, patch: Partial<Omit<WeekGoal, "id">>): ChunkChange {
-  return setWeek(state, monday, (state.weeks[monday] ?? []).map((g) => (g.id === id ? { ...g, ...patch } : g)));
+  const auto = parseAutoGoalId(id);
+  if (!auto) {
+    if (patch.t !== undefined) patch = { ...patch, t: patch.t.trim().slice(0, GOAL_MAX) };
+    if (patch.t === "") return { state, changed: [] };
+    return setWeek(state, monday, (state.weeks[monday] ?? []).map((g) => (g.id === id ? { ...g, ...patch } : g)));
+  }
+  const chunk: Partial<ChunkEntry> = {};
+  if (patch.t !== undefined && patch.t.trim()) chunk.note = patch.t.trim().slice(0, NOTE_MAX);
+  if (patch.g !== undefined) chunk.group = patch.g;
+  if (patch.done !== undefined) chunk.done = patch.done;
+  if (!Object.keys(chunk).length) return { state, changed: [] };
+  return updateChunk(state, auto.day, auto.slot, chunk, patch.done !== undefined);
 }
 
+/** 목표를 지운다. 덩어리에서 생긴 카드는 그날 덩어리의 그룹을 비워서 지운다 (메모·완료는 남고 카드가 다시 생기지 않게) */
 export function removeGoal(state: ChunkState, monday: string, id: string): ChunkChange {
+  const auto = parseAutoGoalId(id);
+  if (auto) return updateChunk(state, auto.day, auto.slot, { group: "" });
   return setWeek(state, monday, (state.weeks[monday] ?? []).filter((g) => g.id !== id));
 }
 
 /** 못 끝낸 목표를 다음 주로 (요일은 미배정, 완료는 풀림) */
 export function moveGoalToNextWeek(state: ChunkState, monday: string, id: string): ChunkChange {
   const goal = state.weeks[monday]?.find((g) => g.id === id);
-  if (!goal) return { state, changed: [] };
+  // 덩어리에서 생긴 카드는 이미 한 일이라 옮기지 않는다
+  if (!goal || parseAutoGoalId(id)) return { state, changed: [] };
   const nextMonday = shiftDay(monday, 7);
   const removed = removeGoal(state, monday, id);
   const added = setWeek(removed.state, nextMonday, [...(removed.state.weeks[nextMonday] ?? []), { ...goal, d: -1, done: false }]);

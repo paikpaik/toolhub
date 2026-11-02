@@ -7,6 +7,8 @@ import {
   GOAL_MAX,
   GROUP_COLORS,
   GROUP_NAME_MAX,
+  NOTE_MAX,
+  parseAutoGoalId,
   goalsInGroup,
   mondayOf,
   moveGoalToNextWeek,
@@ -27,7 +29,7 @@ import { CheckMark } from "./today-view";
 
 const DRAG_TYPE = "text/chunk-goal";
 
-/** 끌어다 놓는 곳: 그룹 칸(요일 미배정으로) 또는 요일 칸 */
+/** 끌어다 놓는 곳: 그룹 칸(그룹만 바꾸고 요일은 그대로) 또는 요일 칸 */
 type Zone = { group: string } | { day: number };
 const zoneKey = (zone: Zone) => ("group" in zone ? `g:${zone.group}` : `d:${zone.day}`);
 
@@ -83,7 +85,7 @@ export function WeekView({ state, today, actions }: { state: ChunkState; today: 
   };
 
   const drop = (zone: Zone, id: string) =>
-    actions.commit((s) => updateGoal(s, monday, id, "group" in zone ? { d: -1, g: zone.group } : { d: zone.day }));
+    actions.commit((s) => updateGoal(s, monday, id, "group" in zone ? { g: zone.group } : { d: zone.day }));
 
   const dropProps = (zone: Zone) => ({
     onDragOver: (e: React.DragEvent) => {
@@ -119,6 +121,7 @@ export function WeekView({ state, today, actions }: { state: ChunkState; today: 
         setConfirmDelete(null);
         actions.commit((s) => updateGoal(s, monday, g.id, { d }));
       }}
+      onRename={(t) => actions.commit((s) => updateGoal(s, monday, g.id, { t }))}
       onNextWeek={() => {
         setOpenId(null);
         actions.commit((s) => moveGoalToNextWeek(s, monday, g.id));
@@ -310,6 +313,7 @@ function GoalCard({
   onToggleOpen,
   onDone,
   onDay,
+  onRename,
   onNextWeek,
   onDelete,
 }: {
@@ -322,11 +326,14 @@ function GoalCard({
   onToggleOpen: () => void;
   onDone: () => void;
   onDay: (d: number) => void;
+  onRename: (title: string) => void;
   onNextWeek: () => void;
   onDelete: () => void;
 }) {
   const group = chunkGroupOf(state, goal.g);
   const scheduled = showDay && goal.d >= 0;
+  // 덩어리에서 생긴 카드: 그날 한 일이라 요일·다음 주로는 바꾸지 않는다
+  const fromChunk = parseAutoGoalId(goal.id);
   return (
     <article
       className={`board-card chunk-card${goal.done ? " done" : ""}${open ? " selected" : ""}${scheduled ? " scheduled" : ""}`}
@@ -365,17 +372,44 @@ function GoalCard({
       </div>
       {open && (
         <div className="chunk-card-menu" onClick={(e) => e.stopPropagation()}>
-          <div className="chunk-day-chips" role="group" aria-label="요일 배정">
-            {[-1, 0, 1, 2, 3, 4, 5, 6].map((d) => (
-              <button key={d} type="button" className={`chip${goal.d === d ? " on" : ""}`} aria-pressed={goal.d === d} onClick={() => onDay(d)}>
-                {d < 0 ? "미배정" : WEEKDAYS[d]}
-              </button>
-            ))}
-          </div>
+          <input
+            // 다른 곳에서 이름이 바뀌면 입력칸도 새로 그린다
+            key={goal.t}
+            className="chunk-rename"
+            type="text"
+            maxLength={fromChunk ? NOTE_MAX : GOAL_MAX}
+            defaultValue={goal.t}
+            aria-label="목표 이름"
+            onKeyDown={(e) => {
+              if (e.key === "Enter") e.currentTarget.blur();
+              if (e.key === "Escape") {
+                e.currentTarget.value = goal.t;
+                e.currentTarget.blur();
+              }
+            }}
+            onBlur={(e) => {
+              const title = e.currentTarget.value.trim();
+              if (!title) e.currentTarget.value = goal.t;
+              else if (title !== goal.t) onRename(title);
+            }}
+          />
+          {fromChunk ? (
+            <p className="chunk-hint">덩어리에서 생긴 카드라 요일은 그날로 고정이에요. 이름·그룹·완료는 그날 덩어리에도 같이 반영돼요.</p>
+          ) : (
+            <div className="chunk-day-chips" role="group" aria-label="요일 배정">
+              {[-1, 0, 1, 2, 3, 4, 5, 6].map((d) => (
+                <button key={d} type="button" className={`chip${goal.d === d ? " on" : ""}`} aria-pressed={goal.d === d} onClick={() => onDay(d)}>
+                  {d < 0 ? "미배정" : WEEKDAYS[d]}
+                </button>
+              ))}
+            </div>
+          )}
           <div className="chunk-card-actions">
-            <button type="button" onClick={onNextWeek}>
-              다음 주로
-            </button>
+            {!fromChunk && (
+              <button type="button" onClick={onNextWeek}>
+                다음 주로
+              </button>
+            )}
             <button type="button" className="danger" onClick={onDelete}>
               {confirmDelete ? "정말 삭제" : "삭제"}
             </button>

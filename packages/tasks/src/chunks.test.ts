@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 import {
+  addGoal,
   addGroup,
   chunkToday,
   docOf,
@@ -15,6 +16,8 @@ import {
   setDayEnd,
   shiftDay,
   updateChunk,
+  updateGoal,
+  removeGoal,
   addChunk,
   dayChunks,
   weekdayOf,
@@ -120,6 +123,42 @@ describe("덩어리와 주간 보드 맞추기", () => {
 });
 
 describe("주간 목표", () => {
+  it("월요일 덩어리 카드의 그룹을 바꿔도 월요일 표시는 남고, 덩어리 기록도 같이 바뀐다", () => {
+    // 월요일에 끝낸 덩어리 2개: A-공방, B-집
+    let state = updateChunk(empty(), "2026-11-02", 1, { note: "A", group: "g1", done: true }).state;
+    state = updateChunk(state, "2026-11-02", 2, { note: "B", group: "g2", done: true }).state;
+
+    // 화요일에 A를 집 그룹으로 (그룹 칸에 끌어 놓기)
+    const c = updateGoal(state, "2026-11-02", "c-2026-11-02-1", { g: "g2" });
+    assert.deepEqual(c.state.weeks["2026-11-02"]!.find((g) => g.id === "c-2026-11-02-1"), { id: "c-2026-11-02-1", t: "A", g: "g2", d: 0, done: true });
+    assert.deepEqual(c.state.days["2026-11-02"]!.chunks[0], { done: true, note: "A", group: "g2", link: "" });
+    assert.ok(c.changed.includes("2026-11-02") && c.changed.includes("w-2026-11-02"));
+  });
+
+  it("덩어리 카드는 이름·완료를 고치면 덩어리 기록이 따라가고, 요일은 바뀌지 않으며 다음 주로 보내지 않는다", () => {
+    let state = updateChunk(empty(), "2026-11-02", 1, { note: "A", group: "g1" }).state;
+    state = updateGoal(state, "2026-11-02", "c-2026-11-02-1", { t: "  A 고침 ", done: true }).state;
+    assert.deepEqual(state.days["2026-11-02"]!.chunks[0], { done: true, note: "A 고침", group: "g1", link: "" });
+    assert.equal(state.weeks["2026-11-02"]![0]!.t, "A 고침");
+    assert.deepEqual(updateGoal(state, "2026-11-02", "c-2026-11-02-1", { d: 3 }).changed, []);
+    assert.deepEqual(moveGoalToNextWeek(state, "2026-11-02", "c-2026-11-02-1").changed, []);
+  });
+
+  it("덩어리 카드를 지우면 그날 덩어리의 그룹만 비워 카드가 다시 생기지 않는다", () => {
+    let state = updateChunk(empty(), "2026-11-02", 1, { note: "A", group: "g1", done: true }).state;
+    state = removeGoal(state, "2026-11-02", "c-2026-11-02-1").state;
+    assert.deepEqual(state.weeks["2026-11-02"], []);
+    assert.deepEqual(state.days["2026-11-02"]!.chunks[0], { done: true, note: "A", group: "", link: "" });
+  });
+
+  it("일반 목표는 이름을 고칠 수 있고, 빈 이름은 무시한다", () => {
+    let state = addGoal(empty(), "2026-11-02", { t: "재료 주문", g: "g2", d: 1 }).state;
+    const id = state.weeks["2026-11-02"]![0]!.id;
+    state = updateGoal(state, "2026-11-02", id, { t: " 재료 주문 (실·바늘) " }).state;
+    assert.equal(state.weeks["2026-11-02"]![0]!.t, "재료 주문 (실·바늘)");
+    assert.deepEqual(updateGoal(state, "2026-11-02", id, { t: "  " }).changed, []);
+  });
+
   it("#그룹(앞부분만 써도 됨)과 @요일을 읽고, 못 찾은 #는 글자로 남긴다", () => {
     const groups = empty().groups;
     assert.deepEqual(parseGoalInput("릴스 3개 올리기 #SN @수", groups, "g1"), { t: "릴스 3개 올리기", g: "g3", d: 2 });

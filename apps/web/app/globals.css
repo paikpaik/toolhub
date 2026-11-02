@@ -3192,6 +3192,22 @@ td.related {
   cursor: default;
 }
 
+.chunk-rename {
+  width: 100%;
+  font: inherit;
+  font-size: 13px;
+  padding: 5px 8px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: var(--bg);
+  color: var(--text);
+}
+
+.chunk-rename:focus {
+  outline: none;
+  border-color: var(--accent);
+}
+
 .chunk-day-chips {
   display: flex;
   flex-wrap: wrap;
