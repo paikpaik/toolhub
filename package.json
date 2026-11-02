@@ -1,6 +1,7 @@
 {
   "name": "toolhub",
-  "version": "0.3.0",
+  "version": "1.0.0",
+  "license": "MIT",
   "private": true,
   "type": "module",
   "workspaces": [

@@ -1,6 +1,6 @@
 {
   "name": "@toolhub/web",
-  "version": "0.3.0",
+  "version": "1.0.0",
   "private": true,
   "type": "module",
   "scripts": {
@@ -11,6 +11,7 @@
   },
   "dependencies": {
     "@toolhub/collector": "*",
+    "@toolhub/insta": "*",
     "@toolhub/tasks": "*",
     "next": "^16.4.3",
     "react": "^19.3.1",

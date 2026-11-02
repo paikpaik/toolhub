@@ -1,6 +1,6 @@
 {
   "name": "@toolhub/mcp",
-  "version": "0.3.0",
+  "version": "1.0.0",
   "private": true,
   "type": "module",
   "scripts": {
@@ -10,6 +10,7 @@
   "dependencies": {
     "@modelcontextprotocol/sdk": "^1.32.2",
     "@toolhub/collector": "*",
+    "@toolhub/insta": "*",
     "@toolhub/tasks": "*",
     "zod": "^4.6.7"
   }

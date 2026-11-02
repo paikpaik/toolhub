@@ -14,6 +14,8 @@ const paths = {
   compass: <><circle cx="8" cy="8" r="5.5" /><path d="m10.3 5.7-1.4 3.2-3.2 1.4 1.4-3.2z" /></>,
   file: <><path d="M4 2.5h5l3 3v8a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1v-10a1 1 0 0 1 1-1z" /><path d="M9 2.5v3h3M5.5 8.5h5M5.5 11h3.5" /></>,
   image: <><rect x="2.5" y="3" width="11" height="10" rx="1.5" /><circle cx="6" cy="6.5" r="1.2" /><path d="m2.5 11.5 3.5-3 3 2.5 2-1.5 2.5 2" /></>,
+  film: <><rect x="2.5" y="3" width="11" height="10" rx="1.5" /><path d="M5 3v10M11 3v10M2.5 6h2.5M2.5 10h2.5M11 6h2.5M11 10h2.5" /></>,
+  text: <path d="M3 4h10M3 7.5h10M3 11h6" />,
   book: <><path d="M8 4.5C6.8 3.5 5 3 2.5 3v9.5c2.5 0 4.3.5 5.5 1.5 1.2-1 3-1.5 5.5-1.5V3C11 3 9.2 3.5 8 4.5z" /><path d="M8 4.5V14" /></>,
   plus: <path d="M8 3v10M3 8h10" />,
   hash: <path d="M6 2.5 5 13.5M11 2.5l-1 11M3 6h10.5M2.5 10H13" />,

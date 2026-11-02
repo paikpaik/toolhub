@@ -21,6 +21,21 @@ interface Item {
   alert?: boolean;
 }
 
+/** 사이드바 큰 묶음. 접은 묶음은 브라우저에 기억한다 (지금 보고 있는 묶음은 늘 펼침) */
+const GROUPS = { tasks: "일정 관리", blog: "블로그 자동화", insta: "인스타 자동화" } as const;
+type GroupKey = keyof typeof GROUPS;
+const CLOSED_KEY = "toolhub.sidebar.closed";
+
+function GroupHeader({ group, open, onToggle, badge }: { group: GroupKey; open: boolean; onToggle: () => void; badge?: number }) {
+  return (
+    <button type="button" className={`side-group${open ? " open" : ""}`} onClick={onToggle} aria-expanded={open}>
+      <Icon name="chevronRight" size={12} className="side-group-chevron" />
+      <span>{GROUPS[group]}</span>
+      {!open && badge ? <span className="side-count">{badge}</span> : null}
+    </button>
+  );
+}
+
 function NavItem({ item, active }: { item: Item; active: boolean }) {
   return (
     <Link href={item.href} className={`side-item${active ? " active" : ""}`}>
@@ -41,6 +56,30 @@ export function Sidebar({ data, version, commit }: { data: SidebarData; version:
 
   // 다른 페이지로 이동하면 모바일 메뉴를 닫는다
   useEffect(() => setOpen(false), [pathname, params]);
+
+  const currentGroup: GroupKey = pathname.startsWith("/blog") ? "blog" : pathname.startsWith("/insta") ? "insta" : "tasks";
+  // 처음에는 모두 펼친 채 그리고(서버와 같게), 브라우저에 기억한 접힘 상태를 읽어 온다
+  const [closed, setClosed] = useState<GroupKey[]>([]);
+  useEffect(() => {
+    try {
+      const saved: GroupKey[] = JSON.parse(localStorage.getItem(CLOSED_KEY) ?? "[]");
+      setClosed(saved.filter((g) => g !== currentGroup));
+    } catch {
+      // 저장소를 못 쓰면 모두 펼친 채로 둔다
+    }
+    // 지금 보고 있는 묶음으로 옮기면 그 묶음은 펼친다
+  }, [currentGroup]);
+  const toggle = (group: GroupKey) =>
+    setClosed((prev) => {
+      const next = prev.includes(group) ? prev.filter((g) => g !== group) : [...prev, group];
+      try {
+        localStorage.setItem(CLOSED_KEY, JSON.stringify(next));
+      } catch {
+        // 기억하지 못해도 이번 화면에서는 접힌다
+      }
+      return next;
+    });
+  const isOpen = (group: GroupKey) => !closed.includes(group);
 
   const view = params.get("view") ?? "today";
   const project = params.get("project");
@@ -65,6 +104,10 @@ export function Sidebar({ data, version, commit }: { data: SidebarData; version:
     { href: "/blog/drafts", label: "초안", icon: "file" },
     { href: "/blog/thumbnail", label: "썸네일", icon: "image" },
     { href: "/blog/guide", label: "작성 가이드", icon: "book" },
+  ];
+  const instaItems: Item[] = [
+    { href: "/insta/reel", label: "릴스 대본", icon: "film" },
+    { href: "/insta/caption", label: "캡션 점검", icon: "text" },
   ];
 
   const addProject = async (e: React.FormEvent) => {
@@ -99,61 +142,71 @@ export function Sidebar({ data, version, commit }: { data: SidebarData; version:
         </Link>
 
         <nav aria-label="일정 관리">
-          <div className="side-section">일정 관리</div>
-          {taskItems.map((item) => (
-            <NavItem key={item.href} item={item} active={isTaskView(new URL(item.href, "http://x").searchParams.get("view")!)} />
-          ))}
-
-          <div className="side-section with-action">
-            프로젝트
-            <button type="button" className="side-action" onClick={() => setAdding(true)} aria-label="프로젝트 추가" title="프로젝트 추가">
-              <Icon name="plus" size={14} />
-            </button>
-          </div>
-          {data.projects.map((p) => (
-            <Link key={p.id} href={`/tasks?project=${p.id}`} className={`side-item${onTasks && project === p.id ? " active" : ""}`}>
-              <span className="project-dot" style={{ background: p.color }} />
-              <span className="side-label">{p.name}</span>
-              {p.count ? <span className="side-count">{p.count}</span> : null}
-            </Link>
-          ))}
-          {adding && (
-            <form onSubmit={addProject} className="side-add">
-              <input
-                autoFocus
-                value={projectName}
-                onChange={(e) => setProjectName(e.target.value)}
-                onBlur={addProject}
-                onKeyDown={(e) => e.key === "Escape" && setAdding(false)}
-                placeholder="프로젝트 이름"
-              />
-            </form>
-          )}
-          {!data.projects.length && !adding && <p className="side-empty">빠른 추가에서 @이름 으로도 만들 수 있어요</p>}
-
-          {data.labels.length > 0 && (
+          <GroupHeader group="tasks" open={isOpen("tasks")} onToggle={() => toggle("tasks")} badge={data.counts.today} />
+          {isOpen("tasks") && (
             <>
-              <div className="side-section">태그</div>
-              {data.labels.map((l) => (
-                <Link key={l.name} href={`/tasks?label=${encodeURIComponent(l.name)}`} className={`side-item${onTasks && label === l.name ? " active" : ""}`}>
-                  <Icon name="hash" />
-                  <span className="side-label">{l.name}</span>
-                  <span className="side-count">{l.count}</span>
+              {taskItems.map((item) => (
+                <NavItem key={item.href} item={item} active={isTaskView(new URL(item.href, "http://x").searchParams.get("view")!)} />
+              ))}
+
+              <div className="side-section with-action">
+                프로젝트
+                <button type="button" className="side-action" onClick={() => setAdding(true)} aria-label="프로젝트 추가" title="프로젝트 추가">
+                  <Icon name="plus" size={14} />
+                </button>
+              </div>
+              {data.projects.map((p) => (
+                <Link key={p.id} href={`/tasks?project=${p.id}`} className={`side-item${onTasks && project === p.id ? " active" : ""}`}>
+                  <span className="project-dot" style={{ background: p.color }} />
+                  <span className="side-label">{p.name}</span>
+                  {p.count ? <span className="side-count">{p.count}</span> : null}
                 </Link>
               ))}
+              {adding && (
+                <form onSubmit={addProject} className="side-add">
+                  <input
+                    autoFocus
+                    value={projectName}
+                    onChange={(e) => setProjectName(e.target.value)}
+                    onBlur={addProject}
+                    onKeyDown={(e) => e.key === "Escape" && setAdding(false)}
+                    placeholder="프로젝트 이름"
+                  />
+                </form>
+              )}
+              {!data.projects.length && !adding && <p className="side-empty">빠른 추가에서 @이름 으로도 만들 수 있어요</p>}
+
+              {data.labels.length > 0 && (
+                <>
+                  <div className="side-section">태그</div>
+                  {data.labels.map((l) => (
+                    <Link key={l.name} href={`/tasks?label=${encodeURIComponent(l.name)}`} className={`side-item${onTasks && label === l.name ? " active" : ""}`}>
+                      <Icon name="hash" />
+                      <span className="side-label">{l.name}</span>
+                      <span className="side-count">{l.count}</span>
+                    </Link>
+                  ))}
+                </>
+              )}
             </>
           )}
         </nav>
 
         <nav aria-label="블로그 자동화">
-          <div className="side-section">블로그 자동화</div>
-          {blogItems.map((item) => (
-            <NavItem
-              key={item.href}
-              item={item}
-              active={item.href === "/blog" ? pathname === "/blog" : pathname.startsWith(item.href)}
-            />
-          ))}
+          <GroupHeader group="blog" open={isOpen("blog")} onToggle={() => toggle("blog")} />
+          {isOpen("blog") &&
+            blogItems.map((item) => (
+              <NavItem
+                key={item.href}
+                item={item}
+                active={item.href === "/blog" ? pathname === "/blog" : pathname.startsWith(item.href)}
+              />
+            ))}
+        </nav>
+
+        <nav aria-label="인스타 자동화">
+          <GroupHeader group="insta" open={isOpen("insta")} onToggle={() => toggle("insta")} />
+          {isOpen("insta") && instaItems.map((item) => <NavItem key={item.href} item={item} active={pathname.startsWith(item.href)} />)}
         </nav>
       </aside>
       {open && <div className="sidebar-backdrop" onClick={() => setOpen(false)} />}

@@ -24,6 +24,11 @@ toolhub/
 │       ├── image-prompt.ts    # 초안 → Gemini용 이미지 5장 요청문
 │       ├── cli.ts             # npm run collect
 │       └── brief-cli.ts       # npm run brief
+├── packages/insta/       # 인스타그램 (웹·MCP 공용, 브라우저에서도 사용)
+│   └── src/
+│       ├── hooks.ts           # 릴스 훅 공식 26가지
+│       ├── reel.ts            # 대본 → 초 단위 구성표(한국어 음절 기준), 훅 점검
+│       └── caption.ts         # 캡션 점검 (해시태그 5개·링크·요청·쿠팡 대가성 문구·검색어)
 ├── packages/tasks/       # 일정 관리 (웹·MCP 공용)
 │   └── src/
 │       ├── model.ts           # 할 일 모델, 날짜·반복 계산, 자연어 빠른 추가 해석 (브라우저에서도 사용)
@@ -52,6 +57,7 @@ toolhub/
 │   ├── options.*              # 서식 설정 (storage.sync)
 │   └── icons/                 # 확장 아이콘 (apps/web/app/icon.svg를 PNG로 뽑은 것)
 ├── docs/prompts/         # 글감 선정·초안 작성 프롬프트 (claude.ai 프로젝트·MCP·/blog-draft 공용)
+│   └── instagram/             # 인스타 규칙: account(내 계정) · reel · caption · carousel · story · comment · repurpose
 └── .claude/skills/       # Claude Code 스킬 (/blog-draft)
 ```
 
@@ -68,12 +74,13 @@ toolhub/
 
 ## 버전
 
-toolhub 전체가 하나의 버전(`0.3.0` 형식)을 씁니다. 올릴 때는 루트 `package.json`과 각 패키지(`packages/*`, `apps/web`)의 `package.json`, `extension/manifest.json`을 같은 번호로 고칩니다. 하나라도 다르면 `packages/mcp/src/version.test.ts`가 실패합니다.
+toolhub 전체가 하나의 버전(`1.0.0` 형식)을 씁니다. 올릴 때는 루트 `package.json`과 각 패키지(`packages/*`, `apps/web`)의 `package.json`, `extension/manifest.json`을 같은 번호로 고칩니다. 하나라도 다르면 `packages/mcp/src/version.test.ts`가 실패합니다.
 
 - 웹 사이드바에 `v버전`이 보이고, `open_web`으로 띄운 웹은 실행 중인 커밋(`· abc1234`)도 함께 보입니다. `/api/health`도 버전을 돌려줍니다.
 - MCP 서버는 루트 `package.json`의 버전으로 자신을 알립니다.
 - 크롬 확장은 `chrome://extensions`에 같은 번호가 보입니다.
-- 기능이 늘면 가운데 자리, 고치기만 하면 끝자리를 올립니다.
+- 기능이 늘면 가운데 자리, 고치기만 하면 끝자리를 올립니다. 쓰는 방법이 크게 바뀌면(데이터 형식·설정이 바뀌어 옮겨야 할 때) 앞자리를 올립니다.
+- toolhub는 MIT 라이선스입니다 (`LICENSE`).
 
 ## 테스트
 
@@ -84,6 +91,7 @@ toolhub 전체가 하나의 버전(`0.3.0` 형식)을 씁니다. 올릴 때는 �
 | `packages/tasks` | 자연어 빠른 추가 해석, 날짜·반복 계산, 보기·그룹·정렬, 저장소(반복 완료·프로젝트 삭제·여러 프로세스 동시 쓰기) |
 | `packages/collector` | 추이 해석·포화도·시즌 알림 날짜, 묶음 분석의 키워드 목록 정리·정렬·표, 브리프·글감 브리핑 형식, 초안 파싱·도입 문장·고치기(백업·경로 차단), 키워드 병합·기간 집계 |
 | `apps/web/lib` | 할 일 수정 요청 검증, 초안 미리보기 |
+| `packages/insta` | 훅 공식 26개 형식, 음절 어림, 구성표(긴 줄 나누기·훅 3초·장면 4초·구체성·되감기·목표 길이), 훅 점검, 캡션 점검(한글 해시태그·링크·요청·대가성 문구·검색어) |
 | `extension` | 색 해석, 팔레트에서 가장 가까운 색 고르기, 설정 병합, 이미지 모음의 data URL 변환·중복 제거(원래 주소 포함)·자동 담기 크기 기준·파일 이름 (`*.test.js`) |
 
 ## 환경변수
@@ -162,7 +170,9 @@ toolhub 전체가 하나의 버전(`0.3.0` 형식)을 씁니다. 올릴 때는 �
 
 **블로그**: `get_live_keywords`, `get_daily_keywords`, `analyze_keyword`, `analyze_keywords`(목록·캡처 묶음 분석), `discover_keywords`(주제로 키워드 찾기), `research_keyword`, `search_places`, `get_shopping_trend`, `get_writing_rules`, `get_writing_brief`, `save_draft`, `list_drafts`, `read_draft`, `update_draft`
 
-**웹**: `open_web`, `stop_web` · **프롬프트**: `blog_draft`, `pick_topics`
+**인스타**: `get_insta_rules`(task: reel·caption·carousel·story·comment·repurpose, 내 계정 정보 포함), `check_reel_script`(훅 후보·대본 점검), `check_caption` — `insta-tools.ts`. 게시·댓글·DM은 사람이 직접 합니다 (자동화는 약관 위반이라 만들지 않음).
+
+**웹**: `open_web`(page: … `reel`, `caption` 포함), `stop_web` · **프롬프트**: `blog_draft`, `pick_topics`
 
 stdio 전송은 stdout을 프로토콜에 쓰므로 서버 코드에서 `console.log`를 쓰면 안 됩니다 (로그는 `console.error`).
 
@@ -225,9 +235,17 @@ stdio 전송은 stdout을 프로토콜에 쓰므로 서버 코드에서 `console
 - **AI 티 줄이기(사진)**: 스마트폰으로 찍은 듯한 자연광 사진, 과한 보정·번들거림 금지, 얼굴 정면·손가락 클로즈업 피하기, 노트북·휴대폰 화면은 흐리게.
 - **한 번에 5장**: "다음"을 매번 치지 않도록 한 답변에서 1~5번을 모두 생성하라고 요청합니다. 실제로 한 번에 나오는지는 Gemini 쪽 동작이라 확인이 필요합니다.
 
+## 인스타 자동화
+
+- 점검 로직(`@toolhub/insta`)은 Node API를 쓰지 않아 웹에서는 클라이언트 컴포넌트가 입력할 때마다 바로 계산하고, MCP는 같은 함수의 텍스트 형식을 돌려줍니다.
+- 말하는 시간은 한국어 음절 수로 어림합니다: 한글은 글자 수, 숫자는 읽는 소리(0이 아닌 자릿수 × 1.5), 영어 단어 2음절, % 3음절. 기본 초당 6.5음절(빠른 릴스 내레이션 기준, 화면·MCP에서 바꿀 수 있음).
+- 훅 점검은 약한 훅(인사·서론·주목 부탁, 3초 초과, 숫자 없음)을 거르는 용도라고 화면·MCP에 밝힙니다. 글자만으로 좋은 훅 둘 중 어느 쪽이 잘될지는 알 수 없습니다.
+- 캡션의 "피드에 보이는 부분"은 첫 두 줄 또는 125자 중 먼저 닿는 곳까지로 어림합니다 (기기·글꼴마다 다름). 해시태그 5개 제한은 2025년 12월 변경 기준입니다.
+- 사이드바는 세 묶음(`GROUPS`)이고 접힌 묶음은 `localStorage`의 `toolhub.sidebar.closed`에 기억합니다. 서버와 같은 화면으로 먼저 그린 뒤 읽어 오므로 처음 한 번은 모두 펼친 채로 보였다가 접힙니다. 지금 보고 있는 묶음은 늘 펼칩니다.
+
 ## 웹 주소
 
-일정 관리는 `/tasks?view=today|week|inbox|all|done|board|calendar[&project=ID|&label=태그][&task=번호]`, 블로그는 `/blog`, `/blog/discover?q=주제,주제`, `/blog/history`, `/blog/keyword?q=`, `/blog/drafts`, `/blog/drafts/view?file=`, `/blog/thumbnail?title=`. 예전 주소(`/history`, `/keyword`, `/drafts`, `/thumbnail`)는 `next.config.ts`에서 새 주소로 보냅니다.
+일정 관리는 `/tasks?view=today|week|inbox|all|done|board|calendar[&project=ID|&label=태그][&task=번호]`, 인스타는 `/insta/reel`, `/insta/caption`(`/insta`는 릴스 대본으로), 블로그는 `/blog`, `/blog/discover?q=주제,주제`, `/blog/history`, `/blog/keyword?q=`, `/blog/drafts`, `/blog/drafts/view?file=`, `/blog/thumbnail?title=`. 예전 주소(`/history`, `/keyword`, `/drafts`, `/thumbnail`)는 `next.config.ts`에서 새 주소로 보냅니다.
 
 ## 브리프 형식 (직접 붙여넣을 때)
 

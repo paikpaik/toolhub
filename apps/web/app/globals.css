@@ -144,6 +144,46 @@ a {
   letter-spacing: 0.02em;
 }
 
+/* 사이드바 큰 묶음(일정 관리·블로그 자동화·인스타 자동화) 머리 — 눌러서 접고 편다 */
+.side-group {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  width: 100%;
+  margin-top: 10px;
+  padding: 6px 8px;
+  border: none;
+  border-radius: 6px;
+  background: none;
+  color: var(--text);
+  font: inherit;
+  font-size: 12.5px;
+  font-weight: 700;
+  text-align: left;
+  cursor: pointer;
+}
+
+nav:first-of-type > .side-group {
+  margin-top: 0;
+}
+
+.side-group:hover {
+  background: var(--hover);
+}
+
+.side-group .side-count {
+  margin-left: auto;
+}
+
+.side-group-chevron {
+  color: var(--muted);
+  transition: transform 0.15s;
+}
+
+.side-group.open .side-group-chevron {
+  transform: rotate(90deg);
+}
+
 .side-action {
   display: grid;
   place-items: center;
@@ -2146,4 +2186,286 @@ td.related {
 .guide-links a:hover {
   border-color: var(--accent);
   color: var(--accent);
+}
+
+/* ── 인스타 자동화 (릴스 대본·캡션 점검) ── */
+.insta-layout {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(380px, 100%), 1fr));
+  gap: 16px;
+  align-items: start;
+  margin-top: 16px;
+}
+
+.insta-inputs {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.insta-inputs > label {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.insta-inputs small {
+  font-weight: normal;
+  color: var(--muted);
+  margin-left: 4px;
+}
+
+.insta-inputs textarea,
+.insta-inputs input,
+.insta-options input {
+  font: inherit;
+  font-weight: normal;
+  padding: 8px 10px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--surface);
+  color: var(--text);
+  line-height: 1.6;
+}
+
+.insta-inputs textarea {
+  resize: vertical;
+}
+
+.insta-options {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 12px;
+  font-size: 13px;
+  color: var(--muted);
+}
+
+.insta-options input {
+  width: 70px;
+  padding: 4px 8px;
+}
+
+.insta-results {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  min-width: 0;
+}
+
+.insta-results h3 small {
+  font-weight: normal;
+  font-size: 12px;
+  color: var(--muted);
+  margin-left: 6px;
+}
+
+.verdict {
+  display: inline-block;
+  padding: 1px 8px;
+  border-radius: 6px;
+  font-size: 12px;
+  font-weight: 700;
+  vertical-align: 1px;
+}
+
+.verdict.pass {
+  color: var(--low);
+  background: color-mix(in srgb, var(--low) 14%, transparent);
+}
+
+.verdict.warn {
+  color: var(--new);
+  background: color-mix(in srgb, var(--new) 14%, transparent);
+}
+
+.verdict.fail {
+  color: var(--up);
+  background: color-mix(in srgb, var(--up) 14%, transparent);
+}
+
+.card .check-list {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin: 8px 0 0;
+  padding: 0;
+  list-style: none;
+  font-size: 13px;
+}
+
+.card .check-list li {
+  display: block;
+  line-height: 1.55;
+  padding-left: 18px;
+  position: relative;
+  color: var(--muted);
+}
+
+.card .check-list li strong {
+  color: var(--text);
+  margin-right: 4px;
+}
+
+.card .check-list li::before {
+  position: absolute;
+  left: 0;
+  font-weight: 700;
+}
+
+.card .check-list li.pass::before {
+  content: "✓";
+  color: var(--low);
+}
+
+.card .check-list li.warn::before {
+  content: "!";
+  color: var(--new);
+}
+
+.card .check-list li.fail::before {
+  content: "✗";
+  color: var(--up);
+}
+
+.check-mark {
+  display: none;
+}
+
+.hook-result + .hook-result {
+  margin-top: 14px;
+  padding-top: 12px;
+  border-top: 1px solid var(--border);
+}
+
+.hook-result p {
+  margin: 0;
+  font-size: 14px;
+}
+
+.hook-result p small {
+  color: var(--muted);
+}
+
+.card .beat-list {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  margin: 8px 0 12px;
+  padding: 0;
+  list-style: none;
+}
+
+.card .beat-list li {
+  display: grid;
+  grid-template-columns: 78px 44px 1fr;
+  gap: 8px;
+  align-items: baseline;
+  padding: 6px 8px;
+  border-radius: 6px;
+  font-size: 13.5px;
+}
+
+.card .beat-list li:nth-child(odd) {
+  background: var(--bg);
+}
+
+.card .beat-list li.long {
+  background: color-mix(in srgb, var(--up) 10%, transparent);
+}
+
+.beat-time {
+  font-variant-numeric: tabular-nums;
+  color: var(--muted);
+  font-size: 12.5px;
+}
+
+.beat-time small {
+  margin-left: 4px;
+}
+
+.beat-role {
+  font-size: 11.5px;
+  font-weight: 700;
+  color: var(--accent);
+}
+
+.feed-preview {
+  margin-top: 8px;
+  padding: 12px 14px;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: var(--bg);
+  font-size: 14px;
+  line-height: 1.6;
+}
+
+.feed-preview p {
+  margin: 0;
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
+.feed-more {
+  color: var(--muted);
+}
+
+.hook-rules {
+  margin: 0 0 12px;
+  padding-left: 18px;
+  font-size: 13px;
+  color: var(--muted);
+  line-height: 1.7;
+}
+
+.hook-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(min(300px, 100%), 1fr));
+  gap: 10px;
+  align-items: start;
+}
+
+.hook-card {
+  padding: 12px 14px;
+}
+
+.hook-card summary {
+  cursor: pointer;
+  font-weight: 600;
+  font-size: 14px;
+}
+
+.hook-card summary small {
+  font-weight: normal;
+  color: var(--muted);
+  margin-left: 4px;
+}
+
+.hook-id {
+  display: inline-grid;
+  place-items: center;
+  min-width: 22px;
+  height: 20px;
+  margin-right: 4px;
+  border-radius: 5px;
+  background: var(--hover);
+  font-size: 11.5px;
+}
+
+.hook-card dl {
+  display: grid;
+  grid-template-columns: 64px 1fr;
+  gap: 6px 10px;
+  margin: 10px 0 0;
+  font-size: 13px;
+}
+
+.hook-card dt {
+  color: var(--muted);
+}
+
+.hook-card dd {
+  margin: 0;
 }

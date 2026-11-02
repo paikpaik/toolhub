@@ -59,6 +59,7 @@ import {
 } from "@toolhub/collector";
 import { VIEWS } from "@toolhub/tasks";
 import { z } from "zod";
+import { registerInstaTools } from "./insta-tools.ts";
 import { registerTaskTools } from "./tasks-tools.ts";
 import { openWeb, stopWeb, WEB_LOG_FILE, WEB_URL } from "./web.ts";
 
@@ -126,6 +127,7 @@ const server = new McpServer(
       "초안 고치기: read_draft로 읽고 고친 뒤 update_draft로 같은 파일에 저장한다 (이전 버전은 자동 보관). 새 초안은 save_draft로 만든다.",
       "글 유형: 상품·서비스 사용기는 review, 맛집·여행지·시설 방문기는 place, 그 밖에는 info. 리뷰 상품의 쇼핑 트렌드는 get_shopping_trend, 장소 정보는 search_places로 확인한다.",
       "사용자가 플랫폼을 말하지 않으면 티스토리(tistory)로 쓴다.",
+      "인스타그램: 릴스 대본·캡션·카드뉴스·스토리·댓글/답글·블로그 글을 인스타 게시물로 바꾸기는 먼저 get_insta_rules(task)로 규칙과 계정 말투를 읽고 쓴다. 릴스 대본은 훅 후보 3개와 대본을 check_reel_script로, 캡션은 check_caption으로 점검해 고친 뒤 보여 준다. 게시·댓글·DM은 사람이 직접 한다 (자동으로 올리지 않음).",
       "일정 관리: 할 일·일정·스케줄 이야기는 list_tasks / add_task / update_task / complete_task를 쓴다. 사용자가 한 말을 add_task의 text에 그대로 넣으면 날짜·시간·태그·프로젝트를 해석한다. 블로그 글감을 일정으로 잡아 달라고 하면 add_task에 link로 키워드 분석·초안 주소를 함께 넣는다.",
     ].join("\n"),
   },
@@ -591,10 +593,10 @@ server.registerTool(
       "toolhub 웹 대시보드를 브라우저로 연다. 웹은 항상 main 브랜치의 최신 커밋으로 실행되며, 꺼져 있거나 옛 커밋이면 (재)시작한 뒤 연다. 사용자가 웹·화면·대시보드를 열어 달라고 하면 쓴다. 준비 중이라는 응답을 받으면 잠시 후 다시 호출한다.",
     inputSchema: {
       page: z
-        .enum(["tasks", "live", "discover", "history", "keyword", "drafts", "thumbnail"])
+        .enum(["tasks", "live", "discover", "history", "keyword", "drafts", "thumbnail", "reel", "caption"])
         .default("tasks")
         .describe(
-          "tasks: 일정 관리, live: 실시간 키워드, discover: 주제로 키워드 찾기, history: 키워드 기록, keyword: 키워드 분석, drafts: 초안(발행 도우미), thumbnail: 썸네일 만들기",
+          "tasks: 일정 관리, live: 실시간 키워드, discover: 주제로 키워드 찾기, history: 키워드 기록, keyword: 키워드 분석, drafts: 초안(발행 도우미), thumbnail: 썸네일 만들기, reel: 인스타 릴스 대본 점검, caption: 인스타 캡션 점검",
         ),
       view: z.enum(VIEWS).optional().describe("page=tasks일 때 보기: today(오늘), week(다음 7일), inbox(날짜 없음), all, done, board, calendar"),
       title: z.string().optional().describe("page=thumbnail일 때 미리 채울 제목 (*강조* 구문 가능)"),
@@ -614,6 +616,8 @@ server.registerTool(
       keyword: `/blog/keyword${q("q", keyword)}`,
       drafts: draft ? `/blog/drafts/view${q("file", path.basename(draft))}` : "/blog/drafts",
       thumbnail: `/blog/thumbnail${q("title", title)}`,
+      reel: "/insta/reel",
+      caption: "/insta/caption",
     }[page];
     try {
       // 처음 실행이나 의존성이 바뀐 커밋은 npm install 때문에 오래 걸린다. 준비는 뒤에서 계속되고, 다시 호출하면 이어받는다
@@ -707,6 +711,7 @@ server.registerPrompt(
 );
 
 registerTaskTools(server, DATA_DIR);
+registerInstaTools(server, PROMPTS_DIR);
 
 await server.connect(new StdioServerTransport());
 console.error(`toolhub MCP 서버 시작 (data: ${DATA_DIR})`);
