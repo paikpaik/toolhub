@@ -5,7 +5,8 @@
   "type": "module",
   "exports": {
     ".": "./src/index.ts",
-    "./model": "./src/model.ts"
+    "./model": "./src/model.ts",
+    "./chunks": "./src/chunks.ts"
   },
   "scripts": {
     "typecheck": "tsc -p ."

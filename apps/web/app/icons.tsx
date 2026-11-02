@@ -26,6 +26,7 @@ const paths = {
   chevronLeft: <path d="m10 3.5-4.5 4.5 4.5 4.5" />,
   chevronRight: <path d="m6 3.5 4.5 4.5L6 12.5" />,
   menu: <path d="M2.5 4.5h11M2.5 8h11M2.5 11.5h11" />,
+  blocks: <><rect x="2.5" y="2.5" width="11" height="4.5" rx="1.5" /><rect x="2.5" y="9" width="11" height="4.5" rx="1.5" /></>,
   checklist: <><path d="m2.5 4.5 1 1 2-2M2.5 10.5l1 1 2-2" /><path d="M7.5 4.5h6M7.5 10.5h6" /></>,
 } as const;
 

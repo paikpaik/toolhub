@@ -32,7 +32,10 @@ toolhub/
 ├── packages/tasks/       # 일정 관리 (웹·MCP 공용)
 │   └── src/
 │       ├── model.ts           # 할 일 모델, 날짜·반복 계산, 자연어 빠른 추가 해석 (브라우저에서도 사용)
-│       └── store.ts           # data/tasks.json 읽기·쓰기 (잠금 파일로 웹·MCP 동시 쓰기 보호)
+│       ├── store.ts           # data/tasks.json 읽기·쓰기
+│       ├── chunks.ts          # 덩어리 기록 모델: 하루 2덩어리·주간 목표·그룹, 덩어리 → 주간 카드 맞추기 (브라우저에서도 사용)
+│       ├── chunks-store.ts    # data/chunks.json 읽기·쓰기 (문서 단위)
+│       └── lock.ts            # 잠금 파일로 웹·MCP 동시 쓰기 보호, 임시 파일 후 바꿔치기 저장
 ├── packages/mcp/         # MCP 서버 (Claude 데스크톱 앱·Claude Code)
 │   └── src/
 │       ├── server.ts          # 블로그 도구·프롬프트
@@ -88,7 +91,7 @@ toolhub 전체가 하나의 버전(`1.0.0` 형식)을 씁니다. 올릴 때는 �
 
 | 위치 | 테스트하는 것 |
 |---|---|
-| `packages/tasks` | 자연어 빠른 추가 해석, 날짜·반복 계산, 보기·그룹·정렬, 저장소(반복 완료·프로젝트 삭제·여러 프로세스 동시 쓰기) |
+| `packages/tasks` | 자연어 빠른 추가 해석, 날짜·반복 계산, 보기·그룹·정렬, 저장소(반복 완료·프로젝트 삭제·여러 프로세스 동시 쓰기), 덩어리 기록(새벽 5시 하루·월요일 주, 덩어리 → 주간 카드·연결된 목표 완료, `#그룹 @요일` 해석, 다음 주로, 문서 정리·id 검증) |
 | `packages/collector` | 추이 해석·포화도·시즌 알림 날짜, 묶음 분석의 키워드 목록 정리·정렬·표, 브리프·글감 브리핑 형식, 초안 파싱·도입 문장·고치기(백업·경로 차단), 키워드 병합·기간 집계 |
 | `apps/web/lib` | 할 일 수정 요청 검증, 초안 미리보기 |
 | `packages/insta` | 훅 공식 26개 형식, 음절 어림, 구성표(긴 줄 나누기·훅 3초·장면 4초·구체성·되감기·목표 길이), 훅 점검, 캡션 점검(한글 해시태그·링크·요청·대가성 문구·검색어) |
@@ -131,7 +134,16 @@ toolhub 전체가 하나의 버전(`1.0.0` 형식)을 씁니다. 올릴 때는 �
 
 `{ nextId, tasks, projects }`. 할 일은 `id`(번호), `title`, `notes`, `status`(todo·in_progress·done·canceled), `priority`(0 없음·1 긴급·2 높음·3 보통·4 낮음), `dueDate`, `dueTime`, `projectId`, `labels`, `repeat`(daily·weekly·monthly·yearly), `subtasks`, `link`, `createdAt`, `updatedAt`, `completedAt`.
 
-웹과 MCP는 서로 다른 프로세스에서 이 파일을 고치므로 `tasks.json.lock` 잠금 파일로 읽기-수정-쓰기를 순서대로 처리합니다. 10초 넘은 잠금은 비정상 종료로 보고 풉니다.
+웹과 MCP는 서로 다른 프로세스에서 이 파일을 고치므로 `tasks.json.lock` 잠금 파일로 읽기-수정-쓰기를 순서대로 처리합니다(`lock.ts`). 10초 넘은 잠금은 비정상 종료로 보고 풉니다.
+
+### 덩어리 기록 `data/chunks.json`
+
+"문서 id → 데이터" 객체입니다. 문서는 세 종류이고 자세한 필드는 `packages/tasks/src/chunks.ts` 맨 위 주석에 있습니다.
+- `YYYY-MM-DD`: 그날의 덩어리 2칸 `{ b1, b2, n1, n2, g1, g2, l1, l2 }` (완료·메모·그룹 id·연결된 목표 id). 하루는 새벽 5시에 바뀝니다.
+- `w-<월요일 날짜>`: 그 주 목표 `{ goals: [{ id, t, g, d, done }] }`. `d`는 0~6(월~일), -1은 요일 미배정입니다.
+- `cfg`: 그룹 `{ groups: [{ id, name, c }] }`. `c`는 `GROUP_COLORS` 번호이고, 이 문서가 없으면 공방·집·SNS 기본값을 씁니다.
+
+화면은 바뀐 문서만 `PUT /api/chunks/<id>`로 통째로 저장합니다(메모는 입력이 0.7초 멈추면 저장). 덩어리에 메모와 그룹이 모두 있으면 그 주 요일 칸에 `c-<날짜>-<1|2>` 카드가 자동으로 생깁니다. 제안서(Claude 아티팩트) 시절에 쓰던 기록도 문서 모양이 같아서 이 파일에 그대로 넣으면 됩니다.
 
 ### 초안 `drafts/YYYY-MM-DD-<키워드>-<플랫폼>[-n].md`
 
@@ -245,7 +257,7 @@ stdio 전송은 stdout을 프로토콜에 쓰므로 서버 코드에서 `console
 
 ## 웹 주소
 
-일정 관리는 `/tasks?view=today|week|inbox|all|done|board|calendar[&project=ID|&label=태그][&task=번호]`, 인스타는 `/insta/reel`, `/insta/caption`(`/insta`는 릴스 대본으로), 블로그는 `/blog`, `/blog/discover?q=주제,주제`, `/blog/history`, `/blog/keyword?q=`, `/blog/drafts`, `/blog/drafts/view?file=`, `/blog/thumbnail?title=`. 예전 주소(`/history`, `/keyword`, `/drafts`, `/thumbnail`)는 `next.config.ts`에서 새 주소로 보냅니다.
+일정 관리는 `/tasks?view=today|week|inbox|all|done|board|calendar[&project=ID|&label=태그][&task=번호]`와 `/chunks[?view=week|help]`(덩어리 기록, 화면 전환은 서버를 다시 부르지 않고 주소만 바꿈), 인스타는 `/insta/reel`, `/insta/caption`(`/insta`는 릴스 대본으로), 블로그는 `/blog`, `/blog/discover?q=주제,주제`, `/blog/history`, `/blog/keyword?q=`, `/blog/drafts`, `/blog/drafts/view?file=`, `/blog/thumbnail?title=`. 예전 주소(`/history`, `/keyword`, `/drafts`, `/thumbnail`)는 `next.config.ts`에서 새 주소로 보냅니다.
 
 ## 브리프 형식 (직접 붙여넣을 때)
 

@@ -4,8 +4,9 @@
  * 읽기-수정-쓰기를 한 번에 하나씩만 하게 한다.
  */
 import { randomUUID } from "node:crypto";
-import { mkdir, open, readFile, rename, rm, stat, writeFile } from "node:fs/promises";
+import { readFile } from "node:fs/promises";
 import path from "node:path";
+import { withFileLock, writeJsonAtomic } from "./lock.ts";
 import {
   isOpen,
   nextRepeatDate,
@@ -20,10 +21,8 @@ import {
 } from "./model.ts";
 
 const EMPTY: TaskStore = { nextId: 1, tasks: [], projects: [] };
-const LOCK_STALE_MS = 10_000;
 
 const storeFile = (dataDir: string) => path.join(dataDir, "tasks.json");
-const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
 
 export async function readStore(dataDir: string): Promise<TaskStore> {
   try {
@@ -33,36 +32,14 @@ export async function readStore(dataDir: string): Promise<TaskStore> {
   }
 }
 
-async function writeStore(dataDir: string, store: TaskStore) {
-  const file = storeFile(dataDir);
-  await writeFile(`${file}.tmp`, JSON.stringify(store, null, 2));
-  await rename(`${file}.tmp`, file);
-}
-
-/** 잠금을 잡고 저장소를 고친다. 다른 프로세스가 잡고 있으면 기다리고, 오래된 잠금(비정상 종료)은 푼다 */
-async function mutate<T>(dataDir: string, fn: (store: TaskStore) => T): Promise<T> {
-  await mkdir(dataDir, { recursive: true });
-  const lock = `${storeFile(dataDir)}.lock`;
-  for (let attempt = 0; ; attempt++) {
-    try {
-      const handle = await open(lock, "wx");
-      await handle.close();
-      break;
-    } catch {
-      const age = await stat(lock).then((s) => Date.now() - s.mtimeMs, () => 0);
-      if (age > LOCK_STALE_MS) await rm(lock, { force: true });
-      else if (attempt > 200) throw new Error("일정 파일 잠금을 얻지 못했습니다. 잠시 후 다시 시도하세요.");
-      else await sleep(25);
-    }
-  }
-  try {
+/** 잠금을 잡고 저장소를 고친다 */
+function mutate<T>(dataDir: string, fn: (store: TaskStore) => T): Promise<T> {
+  return withFileLock(storeFile(dataDir), async () => {
     const store = await readStore(dataDir);
     const result = fn(store);
-    await writeStore(dataDir, store);
+    await writeJsonAtomic(storeFile(dataDir), store);
     return result;
-  } finally {
-    await rm(lock, { force: true });
-  }
+  });
 }
 
 const now = () => new Date().toISOString();

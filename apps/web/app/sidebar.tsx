@@ -130,6 +130,7 @@ export function Sidebar({ data, version, commit }: { data: SidebarData; version:
               {taskItems.map((item) => (
                 <NavItem key={item.href} item={item} active={isTaskView(new URL(item.href, "http://x").searchParams.get("view")!)} />
               ))}
+              <NavItem item={{ href: "/chunks", label: "덩어리 기록", icon: "blocks" }} active={pathname === "/chunks"} />
 
               <div className="side-section with-action">
                 프로젝트
