@@ -188,7 +188,7 @@ stdio 전송은 stdout을 프로토콜에 쓰므로 서버 코드에서 `console
 
 ## 작성 가이드 (`/blog/guide`)
 
-내용은 `apps/web/app/blog/guide/content.ts`에 데이터로 있습니다 (`**굵게**`, `` `코드` ``만 지원). 분량·제목 길이는 `docs/prompts/platforms/*.md`와 맞추고, 애드포스트 가입 기준처럼 자주 바뀌는 정책은 숫자로 단정하지 않고 공식 안내 링크로 보냅니다.
+내용은 `apps/web/app/blog/guide/content.ts`에 데이터로 있습니다 (`**굵게**`, `` `코드` ``만 지원). 분량·제목 길이는 `docs/prompts/platforms/*.md`와 맞추고, 애드포스트 가입 기준처럼 자주 바뀌는 정책은 숫자로 단정하지 않고 공식 안내 링크로 보냅니다. 수익 승인 탭(`APPROVAL_GUIDE`)은 2026-11 조사 기준이며, 공식 확인된 것(애드센스 만 18세·글 수 기준 없음 등)만 단정하고 운영자들이 전하는 기준(쿠팡 누적 15만원, 애드포스트 90일·50개·100명)은 출처 성격을 함께 적습니다.
 - 시작한 웹 서버는 데스크톱 앱을 꺼도 계속 돕니다 (`stop_web`으로 종료). PID·로그는 `.toolhub/`에 남습니다.
 - `git worktree list`에 실행 폴더가 보이는 것은 정상입니다. `git worktree remove --force ~/.toolhub/runtime/toolhub`로 지우면 다음 `open_web` 때 다시 만듭니다.
 
