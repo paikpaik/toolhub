@@ -21,10 +21,9 @@ interface Item {
   alert?: boolean;
 }
 
-/** 사이드바 큰 묶음. 접은 묶음은 브라우저에 기억한다 (지금 보고 있는 묶음은 늘 펼침) */
+/** 사이드바 큰 묶음. 지금 보고 있는 페이지의 묶음만 펼치고 나머지는 접는다 */
 const GROUPS = { tasks: "일정 관리", blog: "블로그 자동화", insta: "인스타 자동화" } as const;
 type GroupKey = keyof typeof GROUPS;
-const CLOSED_KEY = "toolhub.sidebar.closed";
 
 function GroupHeader({ group, open, onToggle, badge }: { group: GroupKey; open: boolean; onToggle: () => void; badge?: number }) {
   return (
@@ -58,28 +57,11 @@ export function Sidebar({ data, version, commit }: { data: SidebarData; version:
   useEffect(() => setOpen(false), [pathname, params]);
 
   const currentGroup: GroupKey = pathname.startsWith("/blog") ? "blog" : pathname.startsWith("/insta") ? "insta" : "tasks";
-  // 처음에는 모두 펼친 채 그리고(서버와 같게), 브라우저에 기억한 접힘 상태를 읽어 온다
-  const [closed, setClosed] = useState<GroupKey[]>([]);
-  useEffect(() => {
-    try {
-      const saved: GroupKey[] = JSON.parse(localStorage.getItem(CLOSED_KEY) ?? "[]");
-      setClosed(saved.filter((g) => g !== currentGroup));
-    } catch {
-      // 저장소를 못 쓰면 모두 펼친 채로 둔다
-    }
-    // 지금 보고 있는 묶음으로 옮기면 그 묶음은 펼친다
-  }, [currentGroup]);
-  const toggle = (group: GroupKey) =>
-    setClosed((prev) => {
-      const next = prev.includes(group) ? prev.filter((g) => g !== group) : [...prev, group];
-      try {
-        localStorage.setItem(CLOSED_KEY, JSON.stringify(next));
-      } catch {
-        // 기억하지 못해도 이번 화면에서는 접힌다
-      }
-      return next;
-    });
-  const isOpen = (group: GroupKey) => !closed.includes(group);
+  // 지금 묶음만 펼친다. 머리글로 잠깐 열고 닫은 것은 다른 묶음 페이지로 옮기면 다시 지금 묶음만 펼친 상태로 돌아간다
+  const [opened, setOpened] = useState<GroupKey[]>([currentGroup]);
+  useEffect(() => setOpened([currentGroup]), [currentGroup]);
+  const toggle = (group: GroupKey) => setOpened((prev) => (prev.includes(group) ? prev.filter((g) => g !== group) : [...prev, group]));
+  const isOpen = (group: GroupKey) => opened.includes(group);
 
   const view = params.get("view") ?? "today";
   const project = params.get("project");
