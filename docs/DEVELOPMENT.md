@@ -35,7 +35,7 @@ toolhub/
 │       └── web.ts             # open_web / stop_web (main 커밋으로 웹 실행)
 ├── apps/web/             # Next.js 16 로컬 웹
 │   ├── app/
-│   │   ├── layout.tsx, sidebar.tsx, icons.tsx  # 사이드바 레이아웃
+│   │   ├── layout.tsx, sidebar.tsx, icons.tsx  # 사이드바 레이아웃 (icon.svg: 브라우저 탭 아이콘)
 │   │   ├── add-task-popover.tsx  # 블로그 화면의 "할 일로 추가"
 │   │   ├── tasks/             # 일정 관리 (목록·보드·캘린더·상세 패널·빠른 추가)
 │   │   ├── blog/              # 블로그 (page.tsx 실시간, discover, history, keyword, drafts, thumbnail, guide)
@@ -49,7 +49,8 @@ toolhub/
 │   ├── content-ai.js          # Gemini·ChatGPT·AI Studio에서 새 생성 이미지를 패널로 자동 전송
 │   ├── sidepanel.*            # 이미지 모음 패널 (붙여넣기·끌어다 놓기·복사·저장) + 설정·진단 정보 복사 링크
 │   ├── background.js          # 아이콘 클릭 → 사이드 패널, 오른쪽 클릭 "toolhub 패널에 담기"
-│   └── options.*              # 서식 설정 (storage.sync)
+│   ├── options.*              # 서식 설정 (storage.sync)
+│   └── icons/                 # 확장 아이콘 (apps/web/app/icon.svg를 PNG로 뽑은 것)
 ├── docs/prompts/         # 글감 선정·초안 작성 프롬프트 (claude.ai 프로젝트·MCP·/blog-draft 공용)
 └── .claude/skills/       # Claude Code 스킬 (/blog-draft)
 ```
@@ -64,6 +65,15 @@ toolhub/
 | `npm run typecheck` | 전체 타입 검사 |
 | `npm test` | 자동 테스트 (Node 기본 `node:test`) |
 | `npm run check` | 타입 검사 + 테스트. **커밋 전에 실행** |
+
+## 버전
+
+toolhub 전체가 하나의 버전(`0.3.0` 형식)을 씁니다. 올릴 때는 루트 `package.json`과 각 패키지(`packages/*`, `apps/web`)의 `package.json`, `extension/manifest.json`을 같은 번호로 고칩니다. 하나라도 다르면 `packages/mcp/src/version.test.ts`가 실패합니다.
+
+- 웹 사이드바에 `v버전`이 보이고, `open_web`으로 띄운 웹은 실행 중인 커밋(`· abc1234`)도 함께 보입니다. `/api/health`도 버전을 돌려줍니다.
+- MCP 서버는 루트 `package.json`의 버전으로 자신을 알립니다.
+- 크롬 확장은 `chrome://extensions`에 같은 번호가 보입니다.
+- 기능이 늘면 가운데 자리, 고치기만 하면 끝자리를 올립니다.
 
 ## 테스트
 

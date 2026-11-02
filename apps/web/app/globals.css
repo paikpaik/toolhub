@@ -115,6 +115,13 @@ a {
   font-size: 15px;
 }
 
+.side-version {
+  margin-left: auto;
+  font-size: 11px;
+  font-weight: normal;
+  color: var(--muted);
+}
+
 .brand-mark {
   display: inline-grid;
   place-items: center;

@@ -31,7 +31,7 @@ function NavItem({ item, active }: { item: Item; active: boolean }) {
   );
 }
 
-export function Sidebar({ data }: { data: SidebarData }) {
+export function Sidebar({ data, version, commit }: { data: SidebarData; version: string; commit: string | null }) {
   const pathname = usePathname();
   const params = useSearchParams();
   const router = useRouter();
@@ -92,6 +92,10 @@ export function Sidebar({ data }: { data: SidebarData }) {
       <aside className={`sidebar${open ? " open" : ""}`}>
         <Link href="/tasks" className="brand side-brand">
           <span className="brand-mark">t</span> toolhub
+          <span className="side-version" title={commit ? `main ${commit}에서 실행 중` : "개발 서버(npm run web)"}>
+            v{version}
+            {commit && ` · ${commit}`}
+          </span>
         </Link>
 
         <nav aria-label="일정 관리">

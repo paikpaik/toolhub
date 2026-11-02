@@ -115,7 +115,7 @@ async function planningRules() {
 }
 
 const server = new McpServer(
-  { name: "toolhub", version: "0.1.0" },
+  { name: "toolhub", version: JSON.parse(await readFile(path.join(ROOT, "package.json"), "utf-8")).version },
   {
     instructions: [
       "toolhub는 블로그 글감을 찾기 위한 한국어 키워드 도구다.",

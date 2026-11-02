@@ -1,6 +1,7 @@
 import { filterTasks, isOpen, readStore, todayKst } from "@toolhub/tasks";
 import type { Metadata } from "next";
 import { DATA_DIR } from "../lib/data";
+import { COMMIT, VERSION } from "../lib/version";
 import "./globals.css";
 import { Sidebar, type SidebarData } from "./sidebar";
 
@@ -35,7 +36,7 @@ export default async function RootLayout({ children }: { children: React.ReactNo
       <body>
         <div className="app">
           {/* 모든 페이지가 요청마다 렌더링되므로 Suspense 없이 본문과 함께 그린다 (메뉴가 늦게 나타나 화면이 밀리지 않게) */}
-          <Sidebar data={await sidebarData()} />
+          <Sidebar data={await sidebarData()} version={VERSION} commit={COMMIT} />
           <div className="app-main">{children}</div>
         </div>
       </body>
