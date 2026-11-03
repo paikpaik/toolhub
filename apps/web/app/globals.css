@@ -3276,3 +3276,117 @@ td.related {
     flex-basis: 62%;
   }
 }
+
+/* ── 초안 › 예약 발행 시간 ── */
+.schedule-picker {
+  margin-top: 16px;
+  border-top: 3px solid var(--accent);
+}
+
+.schedule-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 12px;
+}
+
+.schedule-head h3 {
+  margin: 0 auto 0 0;
+}
+
+.schedule-controls {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px 20px;
+  padding-bottom: 12px;
+  border-bottom: 1px solid var(--border);
+}
+
+.schedule-controls label {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 13px;
+  color: var(--muted);
+}
+
+/* 날짜·시각·선택 칸을 같은 높이로 */
+.schedule-controls input,
+.schedule-controls select {
+  box-sizing: border-box;
+  height: 32px;
+  padding: 0 8px;
+  font: inherit;
+  font-size: 13px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--surface);
+  color: var(--text);
+}
+
+.schedule-times {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  padding-top: 12px;
+}
+
+/* 시간 칩: 포인트 색 바탕에 시각을 포인트 색으로 */
+.schedule-times .button.small {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 5px 12px 5px 6px;
+  font-size: 13px;
+  font-variant-numeric: tabular-nums;
+  background: var(--active);
+  border-color: transparent;
+  border-radius: 999px;
+}
+
+.schedule-times .button.small:hover {
+  border-color: var(--accent);
+}
+
+.schedule-times i {
+  display: inline-grid;
+  place-items: center;
+  width: 20px;
+  height: 20px;
+  border-radius: 50%;
+  background: var(--accent);
+  color: var(--accent-text);
+  font-size: 11px;
+  font-style: normal;
+  font-weight: 600;
+}
+
+.schedule-times .schedule-day {
+  color: var(--muted);
+}
+
+.schedule-times b {
+  color: var(--accent);
+}
+
+.schedule-badge {
+  display: inline-grid;
+  place-items: center;
+  width: 26px;
+  height: 26px;
+  border-radius: 8px;
+  background: var(--active);
+  color: var(--accent);
+  flex-shrink: 0;
+}
+
+@media (max-width: 520px) {
+  .schedule-head {
+    flex-wrap: wrap;
+  }
+
+  .schedule-head h3 {
+    flex-basis: calc(100% - 34px);
+  }
+}

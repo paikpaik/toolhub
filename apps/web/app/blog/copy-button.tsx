@@ -3,7 +3,19 @@
 import { useState } from "react";
 
 /** html을 주면 서식째 복사한다 (서식을 못 받는 곳에는 text가 붙는다) */
-export function CopyButton({ text, html, label = "복사", primary = false }: { text: string; html?: string; label?: string; primary?: boolean }) {
+export function CopyButton({
+  text,
+  html,
+  label = "복사",
+  primary = false,
+  title,
+}: {
+  text: string;
+  html?: string;
+  label?: React.ReactNode;
+  primary?: boolean;
+  title?: string;
+}) {
   const [state, setState] = useState<"idle" | "done" | "error">("idle");
 
   const copy = async () => {
@@ -26,7 +38,7 @@ export function CopyButton({ text, html, label = "복사", primary = false }: { 
   };
 
   return (
-    <button type="button" className={primary ? "button primary" : "button small"} onClick={copy}>
+    <button type="button" className={primary ? "button primary" : "button small"} title={title} onClick={copy}>
       {state === "done" ? "복사됨 ✓" : state === "error" ? "복사 실패" : label}
     </button>
   );

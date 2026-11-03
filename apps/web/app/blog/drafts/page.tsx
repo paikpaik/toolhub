@@ -1,6 +1,7 @@
 import { listDrafts, PLATFORM_LABELS } from "@toolhub/collector";
 import Link from "next/link";
 import { DRAFTS_DIR } from "../../../lib/data";
+import { SchedulePicker } from "./schedule-picker";
 
 export const dynamic = "force-dynamic";
 
@@ -14,6 +15,8 @@ export default async function DraftsPage() {
           초안 <small>{drafts.length}개</small>
         </h1>
       </header>
+
+      <SchedulePicker />
 
       {drafts.length === 0 ? (
         <p className="notice">
