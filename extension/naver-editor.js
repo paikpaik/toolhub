@@ -18,7 +18,16 @@ globalThis.ToolhubNaver = (() => {
     activeClass: "se-is-selected",
     /** 색 팔레트의 색 버튼 */
     colorOption: "[data-color]",
+    /** 문단 서식(본문·소제목·인용구) 드롭다운과 그 안의 "소제목" */
+    textFormat: ".se-text-format-toolbar-button",
+    sectionTitleOption: ".se-toolbar-option-text-format-sectionTitle-button",
+    /** 본문 덩어리와 그 안의 한 문단. 소제목으로 바꾸면 se-sectionTitle 덩어리로 따로 빠진다 */
+    textComponent: ".se-component.se-text",
+    paragraph: ".se-text-paragraph",
   };
+
+  /** toolhub "서식 포함 복사"가 소제목에 넣는 글자 크기 (apps/web/lib/preview.ts와 맞춘다) */
+  const PASTED_HEADING_SIZE = 19;
 
   const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
   const visible = (el) => el.getClientRects().length > 0;
@@ -97,6 +106,85 @@ globalThis.ToolhubNaver = (() => {
     }
   }
 
+  function textNodes(el) {
+    const texts = [];
+    const walker = document.createTreeWalker(el, NodeFilter.SHOW_TEXT);
+    while (walker.nextNode()) if (walker.currentNode.textContent.trim()) texts.push(walker.currentNode);
+    return texts;
+  }
+
+  /** 본문 문단 중 글자가 모두 굵고 소제목 크기인 줄 = 붙여넣은 소제목 */
+  function isPastedHeading(paragraph) {
+    const texts = textNodes(paragraph);
+    const size = new RegExp(`se-fs${PASTED_HEADING_SIZE}(?!\\d)`);
+    return (
+      texts.length > 0 &&
+      texts.every((node) => {
+        const el = node.parentElement;
+        const sized = !!el.closest(`[class*="se-fs"]`)?.className.match(size) || el.closest("[style*='font-size']")?.style.fontSize === `${PASTED_HEADING_SIZE}px`;
+        return sized && Number(getComputedStyle(el).fontWeight) >= 600;
+      })
+    );
+  }
+
+  const pastedHeadings = () =>
+    [...document.querySelectorAll(`${SELECTORS.textComponent} ${SELECTORS.paragraph}`)].filter(isPastedHeading);
+
+  /**
+   * 그 줄 끝을 클릭한 것처럼 커서를 둔다.
+   * 에디터는 프로그램으로 바꾼 선택만으로는 커서를 옮기지 않아서(2026-11-03 실제 에디터에서 글 끝 줄이 대신 바뀜)
+   * 마우스 누르기·떼기를 함께 보낸다
+   */
+  async function clickInto(paragraph) {
+    paragraph.scrollIntoView({ block: "center" });
+    await sleep(80);
+    const last = textNodes(paragraph).at(-1);
+    const target = last.parentElement;
+    const rect = target.getBoundingClientRect();
+    const at = { bubbles: true, cancelable: true, composed: true, view: window, button: 0, clientX: rect.right - 2, clientY: rect.top + rect.height / 2 };
+    target.dispatchEvent(new PointerEvent("pointerdown", { ...at, buttons: 1, pointerType: "mouse", isPrimary: true }));
+    target.dispatchEvent(new MouseEvent("mousedown", { ...at, buttons: 1 }));
+    const range = document.createRange();
+    range.setStart(last, last.length);
+    const selection = getSelection();
+    selection.removeAllRanges();
+    selection.addRange(range);
+    target.dispatchEvent(new PointerEvent("pointerup", { ...at, pointerType: "mouse", isPrimary: true }));
+    target.dispatchEvent(new MouseEvent("mouseup", at));
+    target.dispatchEvent(new MouseEvent("click", at));
+    await sleep(150);
+  }
+
+  /** 에디터 툴바가 커서 줄을 "본문 · 소제목 크기"로 보고 있는지 (= 에디터가 그 줄을 잡았는지) */
+  const toolbarOnPastedHeading = () =>
+    find(SELECTORS.textFormat, "문단 서식").textContent.trim().startsWith("본문") &&
+    find(SELECTORS.fontSize, "글자 크기").textContent.trim().startsWith(String(PASTED_HEADING_SIZE));
+
+  /** 붙여넣은 소제목 줄을 하나씩 클릭해 문단 서식을 "소제목"으로 바꾼다. 바꾼 줄 수를 돌려준다 */
+  async function convertPastedHeadings() {
+    let count = 0;
+    // 바꿀 때마다 에디터가 문단을 다시 그리므로 매번 처음부터 다시 찾는다 (끝없이 돌지 않게 상한을 둔다)
+    for (let guard = 0; guard < 50; guard++) {
+      const paragraph = pastedHeadings()[0];
+      if (!paragraph) return count;
+      await clickInto(paragraph);
+      // 에디터가 다른 줄을 잡고 있으면 엉뚱한 줄이 소제목이 되므로 누르지 않고 멈춘다
+      if (!toolbarOnPastedHeading()) {
+        throw new EditorError(`${count ? `소제목 ${count}개를 바꾼 뒤 ` : ""}에디터가 다음 소제목 줄을 잡지 못해 멈췄어요 (다른 줄은 바꾸지 않았어요)`);
+      }
+      find(SELECTORS.textFormat, "문단 서식").click();
+      const option = await waitFor(() => [...document.querySelectorAll(SELECTORS.sectionTitleOption)].find(visible));
+      if (!option) throw new EditorError("문단 서식에서 소제목을 찾지 못했어요");
+      option.click();
+      await sleep(200);
+      if (paragraph.isConnected && paragraph.closest(SELECTORS.textComponent)) {
+        throw new EditorError(count ? `소제목 ${count}개를 바꾸고 멈췄어요` : "소제목으로 바꾸지 못했어요");
+      }
+      count++;
+    }
+    return count;
+  }
+
   const describe = (el) => ({
     class: typeof el.className === "string" ? el.className : "",
     text: el.textContent.trim().slice(0, 20),
@@ -104,9 +192,9 @@ globalThis.ToolhubNaver = (() => {
     color: el.getAttribute("data-color") || undefined,
   });
 
-  /** 드롭다운을 잠깐 열어 그 안의 버튼을 기록하고 닫는다 */
+  /** 드롭다운을 잠깐 열어 그 안의 버튼을 기록하고 닫는다 (selector 대신 버튼을 바로 줄 수도 있다) */
   async function peek(selector) {
-    const opener = [...document.querySelectorAll(selector)].find(visible);
+    const opener = typeof selector === "string" ? [...document.querySelectorAll(selector)].find(visible) : selector;
     if (!opener) return { found: false };
     const shown = () => [...document.querySelectorAll("button, li, [data-color]")].filter(visible);
     const before = new Set(shown());
@@ -123,6 +211,10 @@ globalThis.ToolhubNaver = (() => {
   async function diagnose() {
     const toolbarButtons = [...document.querySelectorAll(`${SELECTORS.toolbar} button`)];
     const buttons = toolbarButtons.length ? toolbarButtons : [...document.querySelectorAll("button[class*='se-']")];
+    // 네이버 "소제목"은 글자 서식이 아니라 문단 서식(본문·소제목·인용구 드롭다운)이라 그 버튼을 따로 찾아 열어 본다
+    const textFormat = buttons.find(
+      (el) => visible(el) && (/text-format|paragraph|text-style/i.test(el.className) || /^(본문|소제목)/.test(el.textContent.trim())),
+    );
     return {
       url: location.origin + location.pathname,
       userAgent: navigator.userAgent,
@@ -132,8 +224,11 @@ globalThis.ToolhubNaver = (() => {
       fontSize: await peek(SELECTORS.fontSize),
       fontColor: await peek(SELECTORS.fontColor),
       backgroundColor: await peek(SELECTORS.backgroundColor),
+      textFormat: textFormat ? { button: describe(textFormat), ...(await peek(textFormat)) } : { found: false },
+      // 본문 문단들의 클래스 (소제목 문단을 알아보는 단서). 글자는 담지 않는다
+      paragraphs: [...document.querySelectorAll(`${SELECTORS.content} .se-component`)].slice(0, 40).map((el) => el.className),
     };
   }
 
-  return { SELECTORS, EditorError, hasEditor, isInEditor, apply, diagnose };
+  return { SELECTORS, EditorError, hasEditor, isInEditor, apply, convertPastedHeadings, diagnose };
 })();

@@ -47,6 +47,7 @@
       <div class="bar">
         ${withTitle ? `<span class="title">toolhub 서식</span>` : ""}
         ${ACTIONS.map((a) => `<button type="button" data-kind="${a.kind}" title="${a.label} (${a.key})">${a.label}${withKeys ? `<small>${a.key}</small>` : ""}</button>`).join("")}
+        ${withTitle ? `<button type="button" data-headings title="toolhub '서식 포함 복사'로 붙여넣은 소제목(굵은 19 크기 줄)을 네이버 문단 서식 '소제목'으로 모두 바꿔요">소제목 정리</button>` : ""}
         ${withTitle ? `<button type="button" data-fold title="접기/펴기">–</button>` : ""}
       </div>
       <div class="toast" hidden></div>`;
@@ -55,6 +56,7 @@
     bar.el.addEventListener("click", (e) => {
       const button = e.target.closest("button");
       if (button?.dataset.kind) run(button.dataset.kind, bar);
+      if (button?.hasAttribute("data-headings")) convertHeadings(bar);
     });
     document.documentElement.appendChild(host);
     bars.push(bar);
@@ -74,15 +76,13 @@
     return !!selection && !selection.isCollapsed && naver.isInEditor(selection.anchorNode);
   };
 
-  async function run(kind, bar) {
+  /** 막대 버튼 동작을 하나씩만 돌리고, 실패하면 진단 안내를 띄운다 */
+  async function exclusive(bar, task) {
     if (busy) return;
-    if (!hasSelection()) return showToast(bar, "본문에서 바꿀 문장을 먼저 드래그해서 선택해 주세요.");
     busy = true;
     bars.forEach((b) => b.el.classList.add("busy"));
     try {
-      await naver.apply(kind, settings);
-      if (bar === dragBar) dragBar.host.style.display = "none";
-      else showToast(bar, `${ACTIONS.find((a) => a.kind === kind).label} 적용`, false);
+      await task();
     } catch (e) {
       const message = e instanceof naver.EditorError ? e.message : `적용하지 못했어요 (${e?.message ?? e})`;
       showToast(bar, `${message}. 확장 아이콘 → 패널 아래 "진단 정보 복사"로 알려 주세요.`);
@@ -90,6 +90,23 @@
       busy = false;
       bars.forEach((b) => b.el.classList.remove("busy"));
     }
+  }
+
+  function run(kind, bar) {
+    if (busy) return;
+    if (!hasSelection()) return showToast(bar, "본문에서 바꿀 문장을 먼저 드래그해서 선택해 주세요.");
+    return exclusive(bar, async () => {
+      await naver.apply(kind, settings);
+      if (bar === dragBar) dragBar.host.style.display = "none";
+      else showToast(bar, `${ACTIONS.find((a) => a.kind === kind).label} 적용`, false);
+    });
+  }
+
+  function convertHeadings(bar) {
+    return exclusive(bar, async () => {
+      const count = await naver.convertPastedHeadings();
+      showToast(bar, count ? `소제목 ${count}개를 바꿨어요` : "바꿀 소제목이 없어요. toolhub '서식 포함 복사'로 붙여넣은 글에서 눌러 주세요.", false);
+    });
   }
 
   // ── 서식 도구: 에디터가 있는 프레임에만, 오른쪽 아래에 항상 띄운다 (에디터는 늦게 뜨므로 나타날 때까지 확인) ──
@@ -106,7 +123,7 @@
     // 접으면 제목만 남긴다
     dock.el.querySelector("[data-fold]").addEventListener("click", () => {
       const folded = dock.el.classList.toggle("folded");
-      dock.el.querySelectorAll("[data-kind]").forEach((b) => (b.style.display = folded ? "none" : ""));
+      dock.el.querySelectorAll("[data-kind], [data-headings]").forEach((b) => (b.style.display = folded ? "none" : ""));
       dock.el.querySelector("[data-fold]").textContent = folded ? "+" : "–";
     });
   }, 1000);

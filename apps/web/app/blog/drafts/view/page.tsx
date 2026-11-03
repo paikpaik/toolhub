@@ -3,7 +3,7 @@ import { isOpen, readStore } from "@toolhub/tasks";
 import Link from "next/link";
 import { DATA_DIR, DRAFTS_DIR } from "../../../../lib/data";
 import { AddTaskPopover } from "../../../add-task-popover";
-import { countBodyChars, previewDocument } from "../../../../lib/preview";
+import { countBodyChars, naverPasteHtml, previewDocument } from "../../../../lib/preview";
 import { CopyButton } from "../../copy-button";
 import { DraftChecklist } from "../checklist";
 import { ImagePromptCard } from "./image-prompt";
@@ -33,6 +33,8 @@ export default async function DraftViewPage({ searchParams }: { searchParams: Pr
 
   const draft = parseDraft(markdown);
   const platform = summary.platform;
+  // 네이버 텍스트 본문은 ■·★·표를 서식으로 바꿔 복사할 수 있다
+  const naverText = platform === "naver" && draft.bodyLang !== "html";
   const recommendedTitle = draft.titles.find((t) => t.recommended)?.text ?? draft.titles[0]?.text ?? summary.keyword;
   const thumbnailHref = `/blog/thumbnail?title=${encodeURIComponent(recommendedTitle)}`;
   const imagePrompts = Object.fromEntries(
@@ -95,7 +97,14 @@ export default async function DraftViewPage({ searchParams }: { searchParams: Pr
                   약 {countBodyChars(draft.body).toLocaleString()}자{platform && ` · 권장 ${TARGET_CHARS[platform]}`}
                 </small>
                 <span className="sort">
-                  <CopyButton text={draft.body} label={draft.bodyLang === "html" ? "본문 HTML 복사" : "본문 복사"} primary />
+                  {naverText ? (
+                    <>
+                      <CopyButton text={draft.body} label="텍스트로 복사" />
+                      <CopyButton text={draft.body} html={naverPasteHtml(draft.body)} label="서식 포함 복사" primary />
+                    </>
+                  ) : (
+                    <CopyButton text={draft.body} label={draft.bodyLang === "html" ? "본문 HTML 복사" : "본문 복사"} primary />
+                  )}
                 </span>
               </h2>
               <iframe
@@ -189,7 +198,8 @@ function PasteGuide({ platform }: { platform: keyof typeof TARGET_CHARS }) {
   const guide = {
     tistory: "티스토리 글쓰기 → 오른쪽 위 기본모드를 HTML로 바꾼 뒤 본문을 붙여넣으세요.",
     blogger: "Blogger 글쓰기 → 왼쪽 위 연필 아이콘에서 HTML 보기로 바꾼 뒤 붙여넣고, 메타 설명은 설정의 '검색 설명'에 넣으세요.",
-    naver: "스마트에디터에 붙여넣은 뒤 ■ 줄은 '소제목' 서식으로, ★ 줄은 굵게 바꾸고 기호를 지우세요.",
+    naver:
+      "'서식 포함 복사'로 붙여넣으면 굵게·표가 입혀진 채 들어가요. 소제목은 크롬 확장의 '소제목 정리'를 누르면 네이버 소제목으로 바뀌어요. 서식이 빠지면 '텍스트로 복사'로 붙여넣고 ■ 줄은 소제목, ★ 줄은 굵게 바꾼 뒤 기호를 지우세요.",
   }[platform];
   return (
     <p className="notice">
