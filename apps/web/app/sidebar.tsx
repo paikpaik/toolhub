@@ -4,6 +4,7 @@ import type { Project } from "@toolhub/tasks/model";
 import Link from "next/link";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { useEffect, useState } from "react";
+import { ScheduleWidget } from "./blog/schedule/schedule-widget";
 import { Icon, type IconName } from "./icons";
 
 export interface SidebarData {
@@ -84,6 +85,7 @@ export function Sidebar({ data, version, commit }: { data: SidebarData; version:
     { href: "/blog/history", label: "키워드 기록", icon: "history" },
     { href: "/blog/keyword", label: "키워드 분석", icon: "search" },
     { href: "/blog/drafts", label: "초안", icon: "file" },
+    { href: "/blog/schedule", label: "예약 발행", icon: "clock" },
     { href: "/blog/thumbnail", label: "썸네일", icon: "image" },
     { href: "/blog/guide", label: "작성 가이드", icon: "book" },
   ];
@@ -191,6 +193,9 @@ export function Sidebar({ data, version, commit }: { data: SidebarData; version:
           <GroupHeader group="insta" open={isOpen("insta")} onToggle={() => toggle("insta")} />
           {isOpen("insta") && instaItems.map((item) => <NavItem key={item.href} item={item} active={pathname.startsWith(item.href)} />)}
         </nav>
+
+        {/* 초안을 쓰다가도 볼 수 있게 메뉴 아래에 늘 띄운다 */}
+        <ScheduleWidget />
       </aside>
       {open && <div className="sidebar-backdrop" onClick={() => setOpen(false)} />}
     </>

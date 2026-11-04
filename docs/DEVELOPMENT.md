@@ -46,7 +46,7 @@ toolhub/
 │   │   ├── layout.tsx, sidebar.tsx, icons.tsx  # 사이드바 레이아웃 (icon.svg: 브라우저 탭 아이콘)
 │   │   ├── add-task-popover.tsx  # 블로그 화면의 "할 일로 추가"
 │   │   ├── tasks/             # 일정 관리 (목록·보드·캘린더·상세 패널·빠른 추가)
-│   │   ├── blog/              # 블로그 (page.tsx 실시간, discover, history, keyword, drafts, thumbnail, guide)
+│   │   ├── blog/              # 블로그 (page.tsx 실시간, discover, history, keyword, drafts, schedule, thumbnail, guide)
 │   │   │   └── guide/content.ts   # 작성 가이드 내용 (플랫폼별 발행 순서·수익·품질)
 │   │   └── api/               # tasks, projects, brief, stats/enrich, health
 │   └── lib/                   # 데이터 경로, 입력 검증, 미리보기, 예약 발행 시간, 검색량 백그라운드 채우기
@@ -151,6 +151,8 @@ toolhub 전체가 하나의 버전(`1.0.0` 형식)을 씁니다. 올릴 때는 �
 
 네이버 본문은 일반 텍스트(`■` 소제목, `★` 강조, `[표: 열 | 열]` + `값 | 값` 줄)입니다. 초안 화면의 **서식 포함 복사**는 `apps/web/lib/preview.ts`의 `naverPasteHtml`로 HTML을 만들어 `text/html`과 원래 텍스트(`text/plain`)를 함께 클립보드에 넣습니다. 붙여넣을 때 클래스·스타일시트는 따라가지 않으므로 서식은 태그(`<b>`, `font-size:19px` 인라인 스타일, 선을 인라인으로 넣은 `<table>`)에 직접 넣고, 소제목은 `<p>` 안의 굵고 큰 글씨로 넣습니다. 2026-11-03에 실제로 붙여넣어 보니 굵게·크기·표는 살아 있었지만, `<h3>`로 감싸도 네이버 "소제목" 문단 서식으로는 바뀌지 않았습니다. 진짜 소제목은 크롬 확장이 붙여넣은 뒤에 입힙니다. 텍스트의 빈 줄처럼 블록 사이에 빈 문단(`<p><br></p>`)을 둡니다. 사람이 채울 자리는 형광펜 없이 글자 그대로 둡니다.
 
+예약 발행 시간은 `apps/web/app/blog/schedule/`에 있습니다. 뽑은 시간과 조건은 `saved.ts`가 `localStorage`의 `toolhub:schedule-times`에 두고, 저장할 때 같은 탭에 `toolhub:schedule-times` 창 이벤트를 보냅니다 (`storage` 이벤트는 다른 탭에만 오므로). 사이드 메뉴 맨 아래의 `schedule-widget.tsx`가 이 값을 늘 보여 주고(1분마다 지남·다음 표시 갱신, `scheduleDate`로 실제 시각 계산), 같은 조건으로 다시 뽑아 저장합니다. 예약 발행 화면(`schedule-picker.tsx`)은 열 때 기준 날짜가 오늘 이후면 저장된 값을 그대로 보여 주고, 이벤트를 받아 사이드 메뉴에서 다시 뽑은 시간으로 맞춥니다. 조건(바로 올린 시각·개수·간격)이 마지막으로 뽑거나 복원한 조건과 다를 때만 다시 뽑아서, 복원할 때 시간이 바뀌지 않습니다.
+
 초안 화면의 썸네일은 `/blog/thumbnail`의 `ThumbnailMaker`를 그대로 씁니다 (`apps/web/app/blog/drafts/view/thumbnail-panel.tsx`). 헤더의 버튼과 본문 열의 `<details>` 패널은 떨어져 있어서 창 이벤트(`toolhub:open-thumbnail`)로 열고 스크롤합니다. 캔버스와 글꼴은 처음 펼칠 때 그리기 시작하고, 접어도 언마운트하지 않아 고친 제목이 남습니다. 태그 **전체 복사**는 네이버면 화면에 보이는 `#태그 #태그`, 티스토리·Blogger면 쉼표로 잇습니다.
 
 ## 네이버 API 호출 방식
@@ -239,7 +241,7 @@ stdio 전송은 stdout을 프로토콜에 쓰므로 서버 코드에서 `console
 
 이미지는 Gemini·ChatGPT 등에서 만들고, 이 패널은 캡처·저장 없이 모아서 에디터에 붙여넣는 용도입니다 (이미지 생성은 하지 않음).
 
-- 자동 담기: `content-ai.js`(Gemini·AI Studio·ChatGPT)가 이미지 `load` 이벤트를 캡처 단계에서 받아, 주소가 2.5초 동안 그대로이고(생성 중 흐린 미리보기 제외) 400×400 이상인 이미지만 페이지 안에서 data URL로 읽어 background에 보냅니다. background는 패널이 연결(`runtime.connect` 포트)돼 있고 `autoCollect`가 켜져 있을 때만 담습니다. 같은 이미지가 다시 그려지면 원래 주소(`source`)로 중복을 거릅니다.
+- 자동 담기: `content-ai.js`(Gemini·AI Studio·ChatGPT)가 이미지 `load` 이벤트를 캡처 단계에서 받아, 주소가 2.5초 동안 그대로이고(생성 중 흐린 미리보기 제외) 400×400 이상인 이미지만 페이지 안에서 data URL로 읽어 background에 보냅니다. background는 패널이 열려 있고 `autoCollect`가 켜져 있을 때만 담습니다. 패널이 열려 있는지는 `chrome.runtime.getContexts({ documentUrls: [sidepanel.html] })`로 크롬에 직접 묻습니다 (사이드 패널·탭 모두 잡힘). 예전에는 메모리의 포트 연결 수만 봤는데, MV3 background는 30초쯤 쉬면 꺼졌다가 메시지가 오면 다시 켜지므로 Gemini가 이미지를 만드는 사이 0이 되어 열린 패널에서도 버렸습니다 (2026-11-04 Chrome for Testing에서 background를 끈 뒤 생성해 재현·수정 확인). 패널은 연결이 끊기면 다시 이어 `getContexts`가 없는 크롬에서도 연결 수가 맞게 합니다. 같은 이미지가 다시 그려지면 원래 주소(`source`)로 중복을 거릅니다.
 - 오른쪽 클릭 메뉴(`contextMenus`, 이미지에만)는 `background.js`가 받아 담습니다. 패널 열기(`sidePanel.open`)는 사용자가 누른 직후에만 허용돼서 이미지를 받기 전에 먼저 엽니다.
 - 받는 순서: 확장 권한(`<all_urls>`)으로 직접 `fetch` → 실패하거나 `blob:` 주소면 `scripting.executeScript`로 그 페이지(프레임을 모르면 모든 프레임) 안에서 읽습니다. Gemini 등은 생성 이미지를 페이지 안에서만 유효한 `blob:` 주소로 띄웁니다.
 - 패널에 붙여넣기·끌어다 놓기는 이미지 파일 → HTML 속 `<img>`의 src 속성 → uri-list → 텍스트 순으로 찾고, 패널이 직접 못 받는 주소(`blob:`, 로그인 필요)는 background가 지금 탭에서 읽습니다.
@@ -267,7 +269,7 @@ stdio 전송은 stdout을 프로토콜에 쓰므로 서버 코드에서 `console
 
 ## 웹 주소
 
-일정 관리는 `/tasks?view=today|week|inbox|all|done|board|calendar[&project=ID|&label=태그][&task=번호]`와 `/chunks[?view=week]`(덩어리 기록, 화면 전환은 서버를 다시 부르지 않고 주소만 바꿈), 인스타는 `/insta/reel`, `/insta/caption`(`/insta`는 릴스 대본으로), 블로그는 `/blog`, `/blog/discover?q=주제,주제`, `/blog/history`, `/blog/keyword?q=`, `/blog/drafts`, `/blog/drafts/view?file=`, `/blog/thumbnail?title=`. 예전 주소(`/history`, `/keyword`, `/drafts`, `/thumbnail`)는 `next.config.ts`에서 새 주소로 보냅니다.
+일정 관리는 `/tasks?view=today|week|inbox|all|done|board|calendar[&project=ID|&label=태그][&task=번호]`와 `/chunks[?view=week]`(덩어리 기록, 화면 전환은 서버를 다시 부르지 않고 주소만 바꿈), 인스타는 `/insta/reel`, `/insta/caption`(`/insta`는 릴스 대본으로), 블로그는 `/blog`, `/blog/discover?q=주제,주제`, `/blog/history`, `/blog/keyword?q=`, `/blog/drafts`, `/blog/drafts/view?file=`, `/blog/schedule`(예약 발행 시간), `/blog/thumbnail?title=`. 예전 주소(`/history`, `/keyword`, `/drafts`, `/thumbnail`)는 `next.config.ts`에서 새 주소로 보냅니다.
 
 ## 브리프 형식 (직접 붙여넣을 때)
 

@@ -24,8 +24,12 @@ async function load() {
   render();
 }
 
-// background가 패널이 열려 있는 동안에만 자동으로 담도록 연결을 유지한다 (패널을 닫으면 끊긴다)
-chrome.runtime.connect({ name: "shelf-panel" });
+// background가 패널이 열려 있는 동안에만 자동으로 담도록 연결을 유지한다 (패널을 닫으면 끊긴다).
+// background가 쉬다 꺼지면 연결도 끊기므로 다시 잇는다 (getContexts가 없는 크롬을 위한 대비)
+function connectPanel() {
+  chrome.runtime.connect({ name: "shelf-panel" }).onDisconnect.addListener(() => setTimeout(connectPanel, 1000));
+}
+connectPanel();
 autoToggle.addEventListener("change", () => chrome.storage.local.set({ autoCollect: autoToggle.checked }));
 
 // 자동 담기·오른쪽 클릭으로 담은 이미지(background.js)도 바로 보이게 한다

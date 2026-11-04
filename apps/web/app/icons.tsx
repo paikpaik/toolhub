@@ -9,6 +9,7 @@ const paths = {
   board: <><rect x="2.5" y="2.5" width="3.2" height="11" rx="1" /><rect x="6.4" y="2.5" width="3.2" height="7" rx="1" /><rect x="10.3" y="2.5" width="3.2" height="9" rx="1" /></>,
   calendar: <><rect x="2.5" y="3.5" width="11" height="10" rx="2" /><path d="M2.5 6.5h11M5.5 2v3M10.5 2v3M6 6.5v7M10 6.5v7M2.5 10h11" /></>,
   live: <path d="M2 8.5h2.5L6 4.5l3 8 1.5-4H14" />,
+  clock: <><path d="M13.5 8A5.5 5.5 0 1 1 8 2.5" /><path d="M8 5v3.2l2 1.3M10.5 2.5H13.5V5.5" /></>,
   history: <><circle cx="8" cy="8" r="5.5" /><path d="M8 5v3.2l2 1.3" /></>,
   search: <><circle cx="7" cy="7" r="4" /><path d="m10 10 3.5 3.5" /></>,
   compass: <><circle cx="8" cy="8" r="5.5" /><path d="m10.3 5.7-1.4 3.2-3.2 1.4 1.4-3.2z" /></>,

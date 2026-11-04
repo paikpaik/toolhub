@@ -21,13 +21,29 @@ chrome.runtime.onInstalled.addListener(() => {
   chrome.contextMenus.create({ id: MENU_ID, title: "toolhub 패널에 담기", contexts: ["image"] });
 });
 
-/** 열려 있는 패널 수. 패널이 닫혀 있을 때는 자동 담기를 하지 않는다 (예전 대화를 넘겨 볼 때 쌓이지 않게) */
+/**
+ * 패널이 닫혀 있을 때는 자동 담기를 하지 않는다 (예전 대화를 넘겨 볼 때 쌓이지 않게).
+ * background는 30초쯤 쉬면 꺼졌다가 메시지가 오면 다시 켜지므로, 메모리의 연결 수만 믿으면
+ * 이미지 생성을 기다리는 사이 0이 되어 패널이 열려 있어도 버린다. 그래서 크롬에 열린 패널을 직접 묻는다
+ */
 let openPanels = 0;
 chrome.runtime.onConnect.addListener((port) => {
   if (port.name !== "shelf-panel") return;
   openPanels++;
   port.onDisconnect.addListener(() => openPanels--);
 });
+
+async function panelOpen() {
+  if (chrome.runtime.getContexts) {
+    try {
+      // 사이드 패널이든 탭으로 연 패널이든 패널 주소로 찾는다
+      return (await chrome.runtime.getContexts({ documentUrls: [chrome.runtime.getURL("sidepanel.html")] })).length > 0;
+    } catch {
+      // 아래 연결 수로
+    }
+  }
+  return openPanels > 0;
+}
 
 /** 확장 권한으로 바로 받는다 (다른 사이트 이미지도 CORS 제한 없이) */
 async function fetchAsDataUrl(src) {
@@ -121,9 +137,8 @@ chrome.contextMenus.onClicked.addListener((info, tab) => {
 chrome.runtime.onMessage.addListener((message, sender) => {
   if (message?.type === "shelf-auto") {
     // 자동 담기는 패널이 열려 있고 켜져 있을 때만
-    if (!openPanels) return;
-    chrome.storage.local.get("autoCollect").then(async ({ autoCollect }) => {
-      if (autoCollect === false) return;
+    Promise.all([panelOpen(), chrome.storage.local.get("autoCollect")]).then(async ([open, { autoCollect }]) => {
+      if (!open || autoCollect === false) return;
       if (message.dataUrl && ToolhubLib.dataUrlMime(message.dataUrl)) {
         await addToShelf(message.dataUrl, message.from, message.src);
         notify({ text: `${message.from}에서 새 이미지를 담았어요.` });

@@ -3439,3 +3439,99 @@ td.related {
   padding: 0;
   box-shadow: none;
 }
+
+/* 사이드 메뉴 아래에 늘 보이는 예약 발행 시간 */
+.side-schedule {
+  margin-top: auto;
+  padding: 10px 8px 4px;
+  border-top: 1px solid var(--border);
+}
+
+.side-schedule-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--muted);
+  margin-bottom: 6px;
+}
+
+.side-schedule .side-schedule-redraw {
+  width: auto;
+  padding: 2px 6px;
+  font-size: 12px;
+  font-weight: normal;
+  color: var(--accent);
+}
+
+.side-schedule ol {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.side-schedule button {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  padding: 5px 8px;
+  border: 0;
+  border-radius: 6px;
+  background: none;
+  color: inherit;
+  font: inherit;
+  font-size: 13px;
+  cursor: pointer;
+  text-align: left;
+}
+
+.side-schedule button:hover {
+  background: var(--active);
+}
+
+.side-schedule i {
+  display: inline-grid;
+  place-items: center;
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  background: var(--active);
+  color: var(--muted);
+  font-size: 11px;
+  font-style: normal;
+}
+
+.side-schedule span {
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.side-schedule b {
+  margin-left: auto;
+  font-variant-numeric: tabular-nums;
+}
+
+.side-schedule .next {
+  background: var(--active);
+}
+
+.side-schedule .next i {
+  background: var(--accent);
+  color: var(--accent-text);
+}
+
+.side-schedule .next b {
+  color: var(--accent);
+}
+
+.side-schedule .past b,
+.side-schedule .past span {
+  color: var(--muted);
+  text-decoration: line-through;
+  font-weight: normal;
+}

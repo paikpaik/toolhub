@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
-import { formatScheduleTime, pickScheduleTimes } from "./schedule-times.ts";
+import { formatScheduleTime, pickScheduleTimes, scheduleDate } from "./schedule-times.ts";
 
 describe("예약 발행 시간 뽑기", () => {
   it("개수만큼, 10분 단위로, 첫 예약부터 기준 시각(10분 올림) 뒤로 간격 3~4시간", () => {
@@ -33,5 +33,11 @@ describe("예약 발행 시간 뽑기", () => {
     assert.equal(formatScheduleTime("2026-11-03", 14 * 60 + 30), "11월 3일(화) 14:30");
     assert.equal(formatScheduleTime("2026-11-03", 1440 + 70), "11월 4일(수) 01:10");
     assert.equal(formatScheduleTime("2026-12-31", 1440 + 5), "1월 1일(금) 00:05");
+  });
+
+  it("실제 시각으로 바꾸면 자정·연말을 넘겨도 맞다", () => {
+    const at = scheduleDate("2026-12-31", 1440 + 70);
+    assert.deepEqual([at.getFullYear(), at.getMonth() + 1, at.getDate(), at.getHours(), at.getMinutes()], [2027, 1, 1, 1, 10]);
+    assert.ok(scheduleDate("2026-11-04", 600) < scheduleDate("2026-11-04", 610));
   });
 });

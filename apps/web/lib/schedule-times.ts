@@ -41,3 +41,9 @@ export function formatScheduleTime(date: string, minutes: number) {
   const mm = String(rest % 60).padStart(2, "0");
   return `${day.getUTCMonth() + 1}월 ${day.getUTCDate()}일(${WEEKDAYS[day.getUTCDay()]}) ${hh}:${mm}`;
 }
+
+/** 기준 날짜(YYYY-MM-DD) + 분 → 실제 시각 (지금 시간대 기준. 지난 예약·다음 예약을 가리는 데 쓴다) */
+export function scheduleDate(date: string, minutes: number) {
+  const [y, m, d] = date.split("-").map(Number);
+  return new Date(y!, m! - 1, d!, 0, minutes);
+}
