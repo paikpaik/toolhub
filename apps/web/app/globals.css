@@ -3390,3 +3390,52 @@ td.related {
     flex-basis: calc(100% - 34px);
   }
 }
+
+/* 초안 화면 안의 썸네일 (접었다 펴기) */
+.thumbnail-panel {
+  margin-top: 32px;
+  /* 버튼으로 열며 스크롤할 때 위쪽 고정 헤더에 가리지 않게 */
+  scroll-margin-top: 72px;
+}
+
+.thumbnail-panel summary {
+  cursor: pointer;
+  list-style: none;
+}
+
+.thumbnail-panel summary::-webkit-details-marker {
+  display: none;
+}
+
+.thumbnail-panel summary h2 {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  margin: 0;
+}
+
+.thumbnail-panel summary h2::before {
+  content: "▸";
+  color: var(--accent);
+}
+
+.thumbnail-panel[open] summary h2::before {
+  content: "▾";
+}
+
+/* 본문 열 안이라 좁다: 폼을 조금 줄이고, 더 좁으면 위아래로 */
+.thumbnail-panel .thumbnail-layout {
+  grid-template-columns: minmax(0, 1fr) 280px;
+}
+
+@media (max-width: 1200px) {
+  .thumbnail-panel .thumbnail-layout {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
+.thumbnail-panel .thumbnail-form {
+  border: 0;
+  padding: 0;
+  box-shadow: none;
+}

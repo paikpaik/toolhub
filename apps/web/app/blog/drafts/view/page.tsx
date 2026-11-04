@@ -6,7 +6,9 @@ import { AddTaskPopover } from "../../../add-task-popover";
 import { countBodyChars, naverPasteHtml, previewDocument } from "../../../../lib/preview";
 import { CopyButton } from "../../copy-button";
 import { DraftChecklist } from "../checklist";
+import { THUMBNAIL_FONTS } from "../../thumbnail/fonts";
 import { ImagePromptCard } from "./image-prompt";
+import { ThumbnailButton, ThumbnailPanel } from "./thumbnail-panel";
 
 export const dynamic = "force-dynamic";
 
@@ -36,7 +38,6 @@ export default async function DraftViewPage({ searchParams }: { searchParams: Pr
   // 네이버 텍스트 본문은 ■·★·표를 서식으로 바꿔 복사할 수 있다
   const naverText = platform === "naver" && draft.bodyLang !== "html";
   const recommendedTitle = draft.titles.find((t) => t.recommended)?.text ?? draft.titles[0]?.text ?? summary.keyword;
-  const thumbnailHref = `/blog/thumbnail?title=${encodeURIComponent(recommendedTitle)}`;
   const imagePrompts = Object.fromEntries(
     (Object.keys(IMAGE_PROMPT_STYLES) as ImagePromptStyle[]).map((style) => [
       style,
@@ -73,9 +74,7 @@ export default async function DraftViewPage({ searchParams }: { searchParams: Pr
             title={`발행 할 일 만들기${subtasks.length ? ` (남은 자리 ${subtasks.length}개가 하위 할 일로)` : ""}`}
           />
         )}
-        <Link className="button" href={thumbnailHref}>
-          썸네일 만들기
-        </Link>
+        <ThumbnailButton />
         <Link className="button" href="/blog/drafts">
           목록으로
         </Link>
@@ -116,6 +115,8 @@ export default async function DraftViewPage({ searchParams }: { searchParams: Pr
               {platform && <PasteGuide platform={platform} />}
             </section>
           )}
+
+          <ThumbnailPanel fonts={THUMBNAIL_FONTS} title={recommendedTitle} />
 
           {draft.threads.length > 0 && (
             <section>
@@ -178,7 +179,8 @@ export default async function DraftViewPage({ searchParams }: { searchParams: Pr
                 태그 <small>{draft.tags.length}개</small>
               </h3>
               <p className="tags">{draft.tags.map((t) => `#${t}`).join(" ")}</p>
-              <CopyButton text={draft.tags.join(", ")} label="쉼표로 복사" />
+              {/* 네이버는 보이는 그대로(#태그 #태그) 붙여넣으면 태그가 나뉜다. 티스토리·Blogger 태그 칸은 쉼표로 나눈다 */}
+              <CopyButton text={platform === "naver" ? draft.tags.map((t) => `#${t}`).join(" ") : draft.tags.join(", ")} label="전체 복사" />
             </section>
           )}
 
