@@ -14,7 +14,7 @@ export function ImagePromptCard({ prompts }: { prompts: Record<string, { label: 
         이미지 5장 프롬프트 <small>Gemini용</small>
       </h3>
       <p className="hint-text">
-        대표 1장 + 소제목별 4장. 화면 캡처·표는 직접 준비하고, 이건 분위기 사진용이에요. 확장 프로그램 이미지 모음을 열어 두면 만든 이미지가 저절로 모여요.
+        대표 1장 + 초안의 사진 자리(직접 촬영) + 소제목별 장면. 화면 캡처·표·카드는 직접 준비해요. 확장 프로그램 이미지 모음을 열어 두면 만든 이미지가 저절로 모여요.
       </p>
       <div className="image-prompt-actions">
         <select value={style} onChange={(e) => setStyle(e.target.value)} aria-label="이미지 스타일">

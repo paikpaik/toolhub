@@ -1,8 +1,9 @@
 /**
  * 초안으로 Gemini 같은 이미지 AI에 그대로 붙여넣을 "이미지 5장" 요청문을 만든다 (초안 화면의 복사 버튼).
  *
- * 초안의 [이미지: …] 자리는 대부분 공식 사이트 화면·표처럼 직접 캡처할 것이라, AI가 그리면 사실과 다른 가짜 화면이 된다.
- * 그래서 대표 이미지 1장 + 소제목별 상황·개념 이미지 4장으로 나누고, 글자·화면·표는 넣지 않게 한다.
+ * 초안의 [이미지: …] 자리 중 화면·표·직접 만든 카드는 AI가 그리면 사실과 다른 가짜가 되어 빼고,
+ * 직접 찍을 사진 자리(직접 촬영·무료 사진)는 그 자리의 장면 그대로 요청해 초안과 맞춘다.
+ * 대표 이미지 1장 + 사진 자리 + 남은 장은 이미지 자리가 없는 소제목으로 채우고, 글자·화면·표는 넣지 않게 한다.
  */
 import { MARKER_PATTERN } from "./drafts.ts";
 
@@ -57,15 +58,47 @@ export function bodySections(body: string): BodySection[] {
       continue;
     }
     const current = sections.at(-1);
-    const clean = line.replace(MARKER_PATTERN, "").replace(/^\[표:.*$/, "").replace(/^★\s*/, "").trim();
+    // 표 머리([표: …])와 표의 줄(값 | 값)은 장면 단서가 아니다
+    const clean = line.replace(MARKER_PATTERN, "").replace(/^\[표:.*$/, "").replace(/^.*\|.*$/, "").replace(/^★\s*/, "").trim();
     if (current && !current.lead && clean.length >= 10) current.lead = clean.length > 90 ? `${clean.slice(0, 90)}…` : clean;
   }
   return sections;
 }
 
+export interface ImageSlot {
+  /** 이미지 자리가 있는 소제목 (도입부면 빈 문자열) */
+  heading: string;
+  /** 초안에 적힌 "무엇을 보여주는 이미지인지" */
+  scene: string;
+}
+
+/** AI로 만들어도 되는 자리: 직접 찍을 사진. 화면·표·서류처럼 실제 정보를 담는 건 사진 자리여도 뺀다 */
+const PHOTO_SLOT = /직접 촬영|무료 사진/;
+const INFO_SCENE = /화면|캡처|표|조항|서류|계약서|영수증|문구|체크리스트|메모/;
+
+/** 본문의 사진 이미지 자리를 순서대로 (어느 소제목 아래인지와 함께) */
+export function photoSlots(body: string): ImageSlot[] {
+  const slots: ImageSlot[] = [];
+  let heading = "";
+  for (const line of toPlainLines(body)) {
+    const found = HEADING.exec(line)?.[1]?.trim();
+    if (found) heading = found;
+    for (const m of line.matchAll(MARKER_PATTERN)) {
+      if (m[1] !== "이미지") continue;
+      const [scene = "", ...rest] = m[2]!.split("|").map((part) => part.trim());
+      const recommend = rest.find((part) => part.startsWith("추천:")) ?? "";
+      if (PHOTO_SLOT.test(recommend) && !INFO_SCENE.test(scene)) slots.push({ heading, scene });
+    }
+  }
+  return slots;
+}
+
 /** 소제목이 많으면 글 전체에 고르게 퍼지도록 n개를 고른다 */
 export function spreadPick<T>(items: T[], n: number): T[] {
   if (items.length <= n) return items;
+  if (n <= 0) return [];
+  // 하나만 고를 때는 가운데 (아래 식은 n - 1로 나눠서 n이 1이면 못 쓴다)
+  if (n === 1) return [items[Math.floor((items.length - 1) / 2)]!];
   return Array.from({ length: n }, (_, i) => items[Math.round((i * (items.length - 1)) / (n - 1))]!);
 }
 
@@ -74,12 +107,14 @@ export function spreadPick<T>(items: T[], n: number): T[] {
  * 소제목은 단위가 붙은 숫자(500만원, 64년생)와 괄호 설명만 지우고(4대보험 같은 이름은 그대로),
  * 첫 문단은 숫자가 들어간 문장을 통째로 뺀다 (숫자만 지우면 "공제율이 로 올랐어요"처럼 문장이 깨진다)
  */
-const NUMBER_WITH_UNIT = /(?:[~·]\s*)?\d[\d,.]*\s*(?:만\s*원|천\s*원|억\s*원|원|만|천|억|%|퍼센트|배|년생|년|월|일|세|살|개월|가지|명|회|시간|분)(?:까지|부터|이상|이하|초과|미만|씩|에|은|는|이|가|을|를|의|도)?/g;
+const NUMBER_WITH_UNIT = /(?:[~·]\s*)?\d[\d,.]*(?:\s*(?:[~·]|년|개월)?\s*\d[\d,.]*)*\s*(?:만\s*원|천\s*원|억\s*원|원|만|천|억|%|퍼센트|배|년생|년|월|일|세|살|개월|가지|명|회|시간|시|분)(?:까지|부터|이상|이하|초과|미만|씩|에|은|는|이|가|을|를|의|도)?/g;
 
 export function stripNumbers(heading: string) {
   return heading
     .replace(/\([^)]*\)/g, "")
     .replace(NUMBER_WITH_UNIT, " ")
+    // 숫자를 지우고 남은 조사 (…년 6개월로 → 로)
+    .replace(/\s(?:로|으로|면|이면)(?=\s|$)/g, " ")
     .replace(/\s+([,.?!])/g, "$1")
     .replace(/(?:^|\s)[,.](?=\s|$)/g, " ")
     .replace(/\s{2,}/g, " ")
@@ -102,13 +137,28 @@ export interface ImagePromptInput {
 }
 
 export function buildImagePrompt({ title, keyword, body, style = "photo" }: ImagePromptInput) {
-  const sections = spreadPick(bodySections(body ?? ""), IMAGE_PROMPT_COUNT - 1);
+  const all = bodySections(body ?? "");
+  // 초안의 사진 자리를 먼저 채우고, 남은 장은 사진 자리가 없는 소제목에서 고르게. 둘 다 본문 순서로 놓는다
+  const slots = photoSlots(body ?? "").slice(0, IMAGE_PROMPT_COUNT - 1);
+  const covered = new Set(slots.map((s) => s.heading));
+  const sections = spreadPick(
+    all.filter((s) => !covered.has(s.heading)),
+    IMAGE_PROMPT_COUNT - 1 - slots.length,
+  );
+  const order = (heading: string) => all.findIndex((s) => s.heading === heading);
+  const where = (heading: string) => (heading ? `"${stripNumbers(heading)}"` : "도입부");
+  const entries = [
+    // 사진 자리의 괄호는 장면 설명(투명한 껍질 등)이라 남기고 숫자만 지운다
+    ...slots.map((s) => ({ at: order(s.heading), text: `${where(s.heading)} 사진 자리: ${stripNumbers(s.scene.replace(/[()]/g, (c) => (c === "(" ? " — " : "")))}` })),
+    ...sections.map((s) => {
+      const lead = sentencesWithoutNumbers(s.lead);
+      // "아니에요."처럼 너무 짧으면 장면 단서가 안 된다
+      return { at: order(s.heading), text: `${where(s.heading)} 부분${lead.length >= 10 ? ` (내용: ${lead})` : ""}` };
+    }),
+  ].sort((a, b) => a.at - b.at);
   const items = [
     `1. 대표 이미지: 글 전체("${stripNumbers(title)}")를 대표하는 장면. 썸네일로 정사각형으로 잘려도 보이도록 핵심 대상을 가운데에`,
-    ...sections.map((s, i) => {
-      const lead = sentencesWithoutNumbers(s.lead);
-      return `${i + 2}. "${stripNumbers(s.heading)}" 부분${lead ? ` (내용: ${lead})` : ""}`;
-    }),
+    ...entries.map((e, i) => `${i + 2}. ${e.text}`),
   ];
   // 소제목이 4개보다 적으면 남은 장은 글 주제로 채운다
   for (let i = items.length; i < IMAGE_PROMPT_COUNT; i++) {
@@ -122,7 +172,7 @@ export function buildImagePrompt({ title, keyword, body, style = "photo" }: Imag
     `글 주제: ${keyword}`,
     "",
     "[장면 정하기]",
-    "각 항목의 내용을 떠올리게 하는, 실제로 있을 법한 장면 하나를 정해서 그려 주세요.",
+    "각 항목의 내용을 떠올리게 하는, 실제로 있을 법한 장면 하나를 정해서 그려 주세요. '사진 자리'는 적힌 장면 그대로 그려 주세요.",
     "- 세금·제도·절차 같은 추상적인 내용은 그 상황에 놓인 사람이나 사물로 표현 (예: 집에서 노트북으로 서류를 정리하는 직장인, 계산기와 커피가 놓인 식탁)",
     `- ${IMAGE_PROMPT_COUNT}장은 서로 다른 장면·구도로: 사물 가까이, 사람 상반신, 공간 전체를 섞기`,
     "",
