@@ -89,3 +89,16 @@ export function toggleKinAnswer(entry: DraftStatusEntry | undefined, question: {
   if (next.answers.length === 0) delete next.answers;
   return next;
 }
+
+/**
+ * 목록 순서(files)에서 지금 초안의 앞·뒤로 가장 가까운 "초안" 상태 파일. 예약됨·발행됨은 건너뛴다.
+ * 지금 초안이 발행됐어도 목록 속 자리를 기준으로 찾는다
+ */
+export function adjacentDrafts(files: string[], current: string, statuses: DraftStatusMap, now = Date.now()) {
+  const index = files.indexOf(current);
+  const isDraft = (file: string) => effectiveStatus(statuses[file], now) === "draft";
+  if (index < 0) return { prev: null, next: null };
+  const prev = files.slice(0, index).reverse().find(isDraft) ?? null;
+  const next = files.slice(index + 1).find(isDraft) ?? null;
+  return { prev, next };
+}

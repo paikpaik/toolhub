@@ -1,25 +1,12 @@
 "use client";
 
-import { addDays, isOpen, weekday, type Project, type Task } from "@toolhub/tasks/model";
+import { isOpen, monthGrid, shiftMonth, type Project, type Task } from "@toolhub/tasks/model";
 import { useState } from "react";
 import { Icon } from "../icons";
 import { priorityColor } from "./ui";
 
 const WEEK_HEADER = ["월", "화", "수", "목", "금", "토", "일"];
 const MAX_CHIPS = 3;
-
-/** 월요일 시작 6주 달력 */
-function monthGrid(month: string) {
-  const first = `${month}-01`;
-  const start = addDays(first, -((weekday(first) + 6) % 7));
-  return Array.from({ length: 42 }, (_, i) => addDays(start, i));
-}
-
-function shiftMonth(month: string, delta: number) {
-  const [y, m] = month.split("-").map(Number) as [number, number];
-  const d = new Date(Date.UTC(y, m - 1 + delta, 1));
-  return d.toISOString().slice(0, 7);
-}
 
 /** TickTick식 월간 캘린더. 날짜를 누르면 그 날짜로 추가, 할 일을 다른 날짜로 끌면 마감일이 바뀐다 */
 export function CalendarView({

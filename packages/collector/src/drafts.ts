@@ -144,6 +144,9 @@ const listItems = (content: string) =>
     .map((line) => line.replace(/^\s*(?:[-*+]|\d+[.)])\s+/, "").replace(/\*\*/g, "").trim())
     .filter(Boolean);
 
+/** 제목 끝에 화살표·줄표로 붙인 추천 표시 (제목 <- 추천, 제목 ← 추천!, 제목 — 추천) */
+const ARROW_RECOMMENDED = /\s*(?:<-+|<=+|←|⬅|⇐|-+|—|–)\s*추천\s*[!！.]?\s*$/;
+
 export function parseDraft(markdown: string): ParsedDraft {
   // /blog-draft 스킬이 맨 위에 접어 둔 브리프는 제외
   const sections = splitSections(markdown.replace(/<details>[\s\S]*?<\/details>/g, ""));
@@ -162,11 +165,12 @@ export function parseDraft(markdown: string): ParsedDraft {
   const threadSection = find("스레드");
 
   const titles = listItems(titleSection ?? "").map((line) => {
-    // 추천 표시: ⭐·★, (추천)·[추천], 앞의 "추천:". 제목 속 낱말 "추천"(도시락통 추천)은 표시가 아니다
-    const recommended = /[⭐★]|[(（[]\s*추천|^\s*추천\s*[:：]/.test(line);
-    const text = line
-      // 끝의 글자 수 표시 (34자)
-      .replace(/\s*[(（]\s*\d+\s*자\s*[)）]\s*$/, "")
+    // 추천 표시: ⭐·★, (추천)·[추천], 앞의 "추천:", 끝의 "<- 추천"·"← 추천"·"- 추천". 제목 속 낱말 "추천"(도시락통 추천)은 표시가 아니다
+    // 끝의 글자 수 표시 (34자)는 먼저 걷는다 (제목 - 추천 (32자)처럼 추천 표시 뒤에 붙기도 한다)
+    const bare = line.replace(/\s*[(（]\s*\d+\s*자\s*[)）]\s*$/, "");
+    const recommended = /[⭐★]|[(（[]\s*추천|^\s*추천\s*[:：]/.test(bare) || ARROW_RECOMMENDED.test(bare);
+    const text = bare
+      .replace(ARROW_RECOMMENDED, "")
       .replace(/[(（[]\s*(?:추천|⭐|★)[^)）\]]*[)）\]]/g, " ")
       .replace(/[⭐★]/g, " ")
       .replace(/^\s*추천\s*[:：]\s*/, "")

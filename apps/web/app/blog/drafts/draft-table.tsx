@@ -3,6 +3,7 @@
 import { DRAFT_STATUS_LABELS, DRAFT_STATUSES, effectiveStatus, type DraftStatus, type DraftStatusEntry, type DraftStatusMap } from "@toolhub/collector/draft-status";
 import Link from "next/link";
 import { Fragment, useState } from "react";
+import { dateLabel, DateFilter } from "./date-filter";
 import { KinPanel } from "./kin-panel";
 import { DraftStatusControl, StatusBadge } from "./status-control";
 
@@ -19,20 +20,29 @@ export function DraftTable({ rows, statuses: initial }: { rows: DraftRow[]; stat
   const [statuses, setStatuses] = useState(initial);
   const [filter, setFilter] = useState<DraftStatus | "all">("all");
   const [open, setOpen] = useState<string | null>(null);
+  const [date, setDate] = useState<string | null>(null);
 
   const statusOf = (file: string) => effectiveStatus(statuses[file]);
-  const counts = Object.fromEntries(DRAFT_STATUSES.map((s) => [s, rows.filter((r) => statusOf(r.file) === s).length])) as Record<DraftStatus, number>;
-  const shown = filter === "all" ? rows : rows.filter((r) => statusOf(r.file) === filter);
+  const matchesStatus = (r: DraftRow) => filter === "all" || statusOf(r.file) === filter;
+  // 상태 탭 개수는 고른 작성일 안에서, 달력의 날짜별 개수는 고른 상태 안에서 센다
+  const inDate = date ? rows.filter((r) => r.date === date) : rows;
+  const counts = Object.fromEntries(DRAFT_STATUSES.map((s) => [s, inDate.filter((r) => statusOf(r.file) === s).length])) as Record<DraftStatus, number>;
+  const dateCounts = new Map<string, number>();
+  for (const r of rows) if (r.date && matchesStatus(r)) dateCounts.set(r.date, (dateCounts.get(r.date) ?? 0) + 1);
+  const shown = inDate.filter(matchesStatus);
   const update = (file: string) => (entry: DraftStatusEntry) => setStatuses((prev) => ({ ...prev, [file]: entry }));
 
   return (
     <>
-      <div className="status-filter" role="tablist" aria-label="상태로 거르기">
-        {(["all", ...DRAFT_STATUSES] as const).map((s) => (
-          <button key={s} type="button" role="tab" aria-selected={filter === s} className={filter === s ? "on" : ""} onClick={() => setFilter(s)}>
-            {s === "all" ? "전체" : DRAFT_STATUS_LABELS[s]} <small>{s === "all" ? rows.length : counts[s]}</small>
-          </button>
-        ))}
+      <div className="draft-filters">
+        <div className="status-filter" role="tablist" aria-label="상태로 거르기">
+          {(["all", ...DRAFT_STATUSES] as const).map((s) => (
+            <button key={s} type="button" role="tab" aria-selected={filter === s} className={filter === s ? "on" : ""} onClick={() => setFilter(s)}>
+              {s === "all" ? "전체" : DRAFT_STATUS_LABELS[s]} <small>{s === "all" ? inDate.length : counts[s]}</small>
+            </button>
+          ))}
+        </div>
+        <DateFilter counts={dateCounts} value={date} onChange={setDate} />
       </div>
       <div className="table-wrap">
         <table className="draft-table">
@@ -89,7 +99,11 @@ export function DraftTable({ rows, statuses: initial }: { rows: DraftRow[]; stat
           </tbody>
         </table>
       </div>
-      {shown.length === 0 && <p className="notice">{filter === "all" ? "" : `${DRAFT_STATUS_LABELS[filter]} 초안이 없어요.`}</p>}
+      {shown.length === 0 && (
+        <p className="notice">
+          {[date && dateLabel(date), filter !== "all" && DRAFT_STATUS_LABELS[filter]].filter(Boolean).join(" · ")} 초안이 없어요.
+        </p>
+      )}
     </>
   );
 }

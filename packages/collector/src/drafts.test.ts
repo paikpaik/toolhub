@@ -58,7 +58,7 @@ describe("parseDraft", () => {
     ]);
   });
 
-  it("⭐추천: 앞 표시와 끝의 글자 수(34자)를 걷고, 제목 속 낱말 '추천'은 표시로 보지 않는다", () => {
+  it("⭐추천: 앞 표시·끝의 화살표 추천(<-추천, ← 추천)·글자 수(34자)를 걷고, 제목 속 낱말 '추천'은 표시로 보지 않는다", () => {
     const titles = parseDraft(
       [
         "## 제목 후보",
@@ -67,6 +67,9 @@ describe("parseDraft", () => {
         "3. (추천) 연말정산 모의계산 질문 6가지",
         "4. 수능 도시락통 추천 3가지, 보온·죽통 비교",
         "5. 김장용생새우 고르는 법 [추천]",
+        "6. 실업급여조건 상황별 판정표 <-추천",
+        "7. 수능시간표 교시별 정리 ← 추천",
+        "8. 퇴직금계산기 입력값 4가지 - 추천 (32자)",
       ].join("\n"),
     ).titles;
     assert.deepEqual(titles, [
@@ -75,6 +78,9 @@ describe("parseDraft", () => {
       { text: "연말정산 모의계산 질문 6가지", recommended: true },
       { text: "수능 도시락통 추천 3가지, 보온·죽통 비교", recommended: false },
       { text: "김장용생새우 고르는 법", recommended: true },
+      { text: "실업급여조건 상황별 판정표", recommended: true },
+      { text: "수능시간표 교시별 정리", recommended: true },
+      { text: "퇴직금계산기 입력값 4가지", recommended: true },
     ]);
   });
 

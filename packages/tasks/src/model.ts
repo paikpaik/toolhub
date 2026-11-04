@@ -103,6 +103,19 @@ export function diffDays(from: string, to: string) {
 export const weekday = (date: string) => toUtc(date).getUTCDay();
 export const WEEKDAY_NAMES = ["일", "월", "화", "수", "목", "금", "토"];
 
+/** 월요일 시작 6주 달력의 날짜 42개 (month: YYYY-MM). 일정 캘린더와 초안 작성일 달력이 함께 쓴다 */
+export function monthGrid(month: string) {
+  const first = `${month}-01`;
+  const start = addDays(first, -((weekday(first) + 6) % 7));
+  return Array.from({ length: 42 }, (_, i) => addDays(start, i));
+}
+
+/** YYYY-MM에서 delta달 옮긴 달 */
+export function shiftMonth(month: string, delta: number) {
+  const [y, m] = month.split("-").map(Number) as [number, number];
+  return new Date(Date.UTC(y, m - 1 + delta, 1)).toISOString().slice(0, 7);
+}
+
 function addMonths(date: string, months: number) {
   const d = toUtc(date);
   const day = d.getUTCDate();

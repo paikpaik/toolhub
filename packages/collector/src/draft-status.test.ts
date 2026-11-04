@@ -3,7 +3,7 @@ import { mkdtemp, readFile, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { describe, it } from "node:test";
-import { applyStatusPatch, effectiveStatus, normalizePostUrl, toggleKinAnswer } from "./draft-status.ts";
+import { adjacentDrafts, applyStatusPatch, effectiveStatus, normalizePostUrl, toggleKinAnswer } from "./draft-status.ts";
 import { readDraftStatuses, setDraftStatus, setKinAnswered } from "./draft-status-store.ts";
 
 describe("초안 상태", () => {
@@ -37,6 +37,26 @@ describe("초안 상태", () => {
     const twice = toggleKinAnswer(once, q, true);
     assert.equal(twice.answers?.length, 1);
     assert.equal(toggleKinAnswer(twice, q, false).answers, undefined);
+  });
+});
+
+describe("이전·다음 초안", () => {
+  const files = ["a.md", "b.md", "c.md", "d.md", "e.md"];
+  const now = Date.parse("2026-11-04T12:00:00Z");
+  const statuses = {
+    "b.md": { status: "published" as const },
+    "d.md": { status: "scheduled" as const, at: "2026-11-05T00:00:00Z" },
+    "e.md": { status: "scheduled" as const, at: "2026-11-04T00:00:00Z" }, // 예약 시각 지남 → 발행됨
+  };
+
+  it("예약됨·발행됨을 건너뛰고 가장 가까운 초안으로", () => {
+    assert.deepEqual(adjacentDrafts(files, "c.md", statuses, now), { prev: "a.md", next: null });
+    assert.deepEqual(adjacentDrafts(files, "a.md", statuses, now), { prev: null, next: "c.md" });
+  });
+
+  it("지금 글이 발행됐어도 목록 속 자리를 기준으로, 목록에 없으면 없음", () => {
+    assert.deepEqual(adjacentDrafts(files, "b.md", statuses, now), { prev: "a.md", next: "c.md" });
+    assert.deepEqual(adjacentDrafts(files, "z.md", statuses, now), { prev: null, next: null });
   });
 });
 

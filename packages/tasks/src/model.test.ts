@@ -7,8 +7,10 @@ import {
   filterTasks,
   formatDue,
   groupOf,
+  monthGrid,
   nextRepeatDate,
   parseQuickAdd,
+  shiftMonth,
   type Task,
 } from "./model.ts";
 
@@ -82,6 +84,16 @@ describe("날짜 계산", () => {
     assert.equal(addDays("2026-12-31", 1), "2027-01-01");
     assert.equal(addDays("2026-03-01", -1), "2026-02-28");
     assert.equal(diffDays("2026-10-30", "2026-11-02"), 3);
+  });
+
+  it("월요일 시작 6주 달력과 달 옮기기", () => {
+    const days = monthGrid("2026-11");
+    assert.equal(days.length, 42);
+    assert.equal(days[0], "2026-10-26"); // 11월 1일(일)이 있는 주의 월요일
+    assert.equal(days[6], "2026-11-01");
+    assert.equal(days[41], "2026-12-06");
+    assert.equal(shiftMonth("2026-01", -1), "2025-12");
+    assert.equal(shiftMonth("2026-11", 2), "2027-01");
   });
 
   it("반복 다음 날짜 (월말·윤년 보정)", () => {

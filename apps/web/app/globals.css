@@ -3807,3 +3807,196 @@ td.related {
   cursor: pointer;
   color: var(--muted);
 }
+
+/* 초안 목록 거르기: 상태 탭 + 작성일 달력 */
+.draft-filters {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  margin: 16px 0 8px;
+}
+
+.draft-filters .status-filter {
+  margin: 0;
+}
+
+.date-filter {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.date-filter-button {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font: inherit;
+  font-size: 13px;
+  padding: 4px 12px;
+  border: 1px solid var(--border);
+  border-radius: 16px;
+  background: var(--surface);
+  color: var(--muted);
+  cursor: pointer;
+}
+
+.date-filter-button.on {
+  border-color: var(--accent);
+  background: var(--active);
+  color: var(--accent);
+  font-weight: 600;
+}
+
+.date-filter-clear {
+  display: inline-grid;
+  place-items: center;
+  width: 22px;
+  height: 22px;
+  border: 0;
+  border-radius: 50%;
+  background: var(--hover);
+  color: var(--muted);
+  cursor: pointer;
+}
+
+.date-filter-popover {
+  position: absolute;
+  z-index: 30;
+  top: calc(100% + 6px);
+  right: 0;
+  width: 280px;
+  padding: 12px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--surface);
+  box-shadow: var(--shadow);
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  animation: toast-in 0.12s ease;
+}
+
+.date-filter-popover .calendar-nav {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.date-filter-popover .calendar-nav small {
+  font-weight: normal;
+  color: var(--muted);
+}
+
+.mini-calendar {
+  display: grid;
+  grid-template-columns: repeat(7, 1fr);
+  gap: 2px;
+}
+
+.mini-weekday {
+  text-align: center;
+  font-size: 11px;
+  color: var(--faint);
+  padding: 2px 0;
+}
+
+.mini-day {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 1px;
+  height: 36px;
+  border: 0;
+  border-radius: 8px;
+  background: none;
+  color: var(--faint);
+  font: inherit;
+  font-size: 12.5px;
+}
+
+.mini-day.outside {
+  opacity: 0.4;
+}
+
+.mini-day.has {
+  color: var(--text);
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.mini-day.has:hover {
+  background: var(--hover);
+}
+
+.mini-day small {
+  min-width: 16px;
+  padding: 0 4px;
+  border-radius: 8px;
+  background: var(--active);
+  color: var(--accent);
+  font-size: 10px;
+  line-height: 14px;
+}
+
+.mini-day.selected {
+  background: var(--accent);
+  color: var(--accent-text);
+}
+
+.mini-day.selected small {
+  background: var(--accent-text);
+  color: var(--accent);
+}
+
+/* 좁은 화면에서는 작성일 버튼이 왼쪽 줄로 내려가므로 달력도 왼쪽에 맞춘다 */
+@media (max-width: 600px) {
+  .date-filter-popover {
+    left: 0;
+    right: auto;
+  }
+}
+
+/* 초안 상세 제목 옆 이전·다음 초안 버튼 */
+.draft-title {
+  display: flex;
+  align-items: baseline;
+  flex-wrap: wrap;
+  gap: 4px 8px;
+}
+
+.draft-nav {
+  display: inline-grid;
+  place-items: center;
+  align-self: center;
+  width: 30px;
+  height: 30px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--surface);
+  color: var(--text);
+  text-decoration: none;
+}
+
+.draft-nav:hover {
+  border-color: var(--accent);
+  color: var(--accent);
+}
+
+.draft-nav.disabled {
+  color: var(--faint);
+  background: none;
+  cursor: default;
+}
+
+.draft-nav.disabled:hover {
+  border-color: var(--border);
+  color: var(--faint);
+}
+
+.draft-nav + .draft-nav {
+  margin-right: 4px;
+}

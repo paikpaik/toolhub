@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "toolhub 글쓰기 도우미",
-  "version": "1.0.4",
+  "version": "1.0.5",
   "description": "네이버 블로그 에디터의 드래그 서식(소제목·강조·형광펜)과, AI로 만든 이미지를 모아 바로 붙여넣는 사이드 패널.",
   "permissions": ["storage", "unlimitedStorage", "sidePanel", "contextMenus", "scripting", "clipboardWrite"],
   "host_permissions": ["<all_urls>"],

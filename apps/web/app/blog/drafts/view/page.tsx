@@ -1,9 +1,10 @@
-import { buildImagePrompt, IMAGE_PROMPT_STYLES, listDrafts, parseDraft, PLATFORM_LABELS, readDraftFile, readDraftStatuses, type ImagePromptStyle } from "@toolhub/collector";
+import { buildImagePrompt, IMAGE_PROMPT_STYLES, listDrafts, parseDraft, PLATFORM_LABELS, readDraftFile, readDraftStatuses, adjacentDrafts, type ImagePromptStyle } from "@toolhub/collector";
 import { isOpen, readStore } from "@toolhub/tasks";
 import Link from "next/link";
 import { DATA_DIR, DRAFTS_DIR } from "../../../../lib/data";
 import { AddTaskPopover } from "../../../add-task-popover";
 import { countBodyChars, naverPasteHtml, previewDocument } from "../../../../lib/preview";
+import { Icon } from "../../../icons";
 import { CopyButton } from "../../copy-button";
 import { DraftChecklist } from "../checklist";
 import { DraftStatusCard } from "../status-control";
@@ -19,7 +20,8 @@ const TARGET_CHARS = { tistory: "2,000~3,000자", blogger: "2,000~3,500자", nav
 export default async function DraftViewPage({ searchParams }: { searchParams: Promise<{ file?: string }> }) {
   const { file = "" } = await searchParams;
   const markdown = await readDraftFile(DRAFTS_DIR, file);
-  const summary = (await listDrafts(DRAFTS_DIR)).find((d) => d.file === file);
+  const allDrafts = await listDrafts(DRAFTS_DIR);
+  const summary = allDrafts.find((d) => d.file === file);
 
   if (markdown === null || !summary) {
     return (
@@ -49,7 +51,11 @@ export default async function DraftViewPage({ searchParams }: { searchParams: Pr
   // 이 초안으로 만든 발행 할 일 (링크로 찾는다). 있으면 새로 만들지 않고 그 할 일로 안내한다
   const draftHref = `/blog/drafts/view?file=${encodeURIComponent(file)}`;
   const publishTask = (await readStore(DATA_DIR)).tasks.find((t) => t.link === draftHref && isOpen(t));
-  const status = (await readDraftStatuses(DATA_DIR))[file];
+  const statuses = await readDraftStatuses(DATA_DIR);
+  const status = statuses[file];
+  // 초안 목록과 같은 순서(최근 수정 순)에서 앞뒤의 "초안" 상태 글. 예약됨·발행됨은 건너뛴다
+  const near = adjacentDrafts(allDrafts.map((d) => d.file), file, statuses);
+  const keywordOf = (f: string | null) => allDrafts.find((d) => d.file === f)?.keyword ?? "";
   // 남은 사람이 채울 자리를 발행 할 일의 하위 할 일로
   const markerLabel = { image: "이미지", write: "직접 작성", check: "확인" } as const;
   const subtasks = draft.markers.map((m, i) => ({
@@ -61,7 +67,9 @@ export default async function DraftViewPage({ searchParams }: { searchParams: Pr
   return (
     <main>
       <header>
-        <h1>
+        <h1 className="draft-title">
+          <DraftNavLink file={near.prev} keyword={keywordOf(near.prev)} direction="prev" />
+          <DraftNavLink file={near.next} keyword={keywordOf(near.next)} direction="next" />
           {summary.keyword} <small>{platform ? PLATFORM_LABELS[platform] : ""} · {summary.date}</small>
         </h1>
         {publishTask ? (
@@ -70,6 +78,7 @@ export default async function DraftViewPage({ searchParams }: { searchParams: Pr
           </Link>
         ) : (
           <AddTaskPopover
+            key={file}
             text={`${summary.keyword} 글 발행 내일`}
             defaults={{ link: draftHref, subtasks }}
             label="발행 할 일"
@@ -118,7 +127,7 @@ export default async function DraftViewPage({ searchParams }: { searchParams: Pr
             </section>
           )}
 
-          <ThumbnailPanel fonts={THUMBNAIL_FONTS} title={recommendedTitle} />
+          <ThumbnailPanel key={file} fonts={THUMBNAIL_FONTS} title={recommendedTitle} />
 
           {draft.threads.length > 0 && (
             <section>
@@ -147,7 +156,8 @@ export default async function DraftViewPage({ searchParams }: { searchParams: Pr
         </div>
 
         <aside className="draft-side">
-          <DraftStatusCard file={file} entry={status} />
+          {/* 이전·다음 초안으로 옮기면 화면을 새로 그리지 않으므로, 초안마다 새로 만들어 앞 초안의 상태가 남지 않게 한다 */}
+          <DraftStatusCard key={file} file={file} entry={status} />
 
           {draft.titles.length > 0 && (
             <section className="card">
@@ -197,6 +207,24 @@ export default async function DraftViewPage({ searchParams }: { searchParams: Pr
         </aside>
       </div>
     </main>
+  );
+}
+
+/** 앞·뒤의 "초안" 상태 글로 가는 버튼. 없으면 눌리지 않는다 */
+function DraftNavLink({ file, keyword, direction }: { file: string | null; keyword: string; direction: "prev" | "next" }) {
+  const icon = <Icon name={direction === "prev" ? "chevronLeft" : "chevronRight"} />;
+  const label = direction === "prev" ? "이전 초안" : "다음 초안";
+  if (!file) {
+    return (
+      <span className="icon-button draft-nav disabled" aria-disabled="true" title={`${label} 없음 (예약됨·발행됨은 건너뜀)`}>
+        {icon}
+      </span>
+    );
+  }
+  return (
+    <Link className="icon-button draft-nav" href={`/blog/drafts/view?file=${encodeURIComponent(file)}`} title={`${label}: ${keyword}`} aria-label={`${label}: ${keyword}`}>
+      {icon}
+    </Link>
   );
 }
 
