@@ -131,9 +131,10 @@ export async function searchBlog(config: HubConfig, query: string, display = 10)
   };
 }
 
-export async function searchKin(config: HubConfig, query: string, display = 10) {
+/** sort: sim(정확도) · date(최신, 아직 답이 적은 질문을 찾기 좋다) · point(평점) */
+export async function searchKin(config: HubConfig, query: string, display = 10, sort: "sim" | "date" | "point" = "sim") {
   const data = await request<SearchResponse<{ title: string; link: string; description: string }>>(config, "/search/v1/kin", {
-    query: { query, display: String(display), sort: "sim" },
+    query: { query, display: String(display), sort },
   });
   return {
     total: data.total,

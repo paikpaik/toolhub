@@ -28,6 +28,9 @@ import {
   fetchKeywordInsight,
   computeSaturation,
   draftOpening,
+  DRAFT_STATUS_LABELS,
+  effectiveStatus,
+  readDraftStatuses,
   draftsForKeyword,
   fetchShoppingTrend,
   formatPlanningBriefing,
@@ -512,7 +515,7 @@ server.registerTool(
   {
     title: "초안 목록",
     description:
-      "drafts/의 초안을 최근 수정 순으로 보여준다. 파일 이름·날짜·키워드·플랫폼·추천 제목·도입 첫 문장·사람이 채울 자리 수를 포함한다. keyword를 주면 같은 키워드(공백·구두점 무시)로 쓴 초안만 보여 주므로, 새 글을 쓰기 전에 이미 쓴 주제인지 확인할 때 쓴다.",
+      "drafts/의 초안을 최근 수정 순으로 보여준다. 파일 이름·날짜·키워드·플랫폼·상태(초안·예약됨·발행됨, 글 주소, 지식iN 답변 수)·추천 제목·도입 첫 문장·사람이 채울 자리 수를 포함한다. keyword를 주면 같은 키워드(공백·구두점 무시)로 쓴 초안만 보여 주므로, 새 글을 쓰기 전에 이미 쓴 주제인지 확인할 때 쓴다.",
     inputSchema: {
       keyword: z.string().optional().describe("이 키워드로 쓴 초안만 (생략하면 전체)"),
       limit: z.number().int().min(1).max(100).default(20),
@@ -521,7 +524,7 @@ server.registerTool(
   },
   async ({ keyword, limit }) => {
     try {
-      const all = await listDrafts(DRAFTS_DIR);
+      const [all, statuses] = await Promise.all([listDrafts(DRAFTS_DIR), readDraftStatuses(DATA_DIR)]);
       const drafts = (keyword ? draftsForKeyword(all, keyword) : all).slice(0, limit);
       if (drafts.length === 0) return text(keyword ? `키워드 "${keyword}"의 초안이 없습니다.` : "초안이 없습니다.");
 
@@ -531,14 +534,16 @@ server.registerTool(
           const title = parsed.titles.find((t) => t.recommended)?.text ?? parsed.titles[0]?.text ?? "-";
           const count = (type: string) => parsed.markers.filter((m) => m.type === type).length;
           const cell = (v: string) => v.replace(/\|/g, "/");
-          return `| ${d.file} | ${d.platform ? PLATFORM_LABELS[d.platform] : "-"} | ${cell(title)} | ${cell(draftOpening(parsed.body) ?? "-")} | 이미지 ${count("image")} · 직접 작성 ${count("write")} · 확인 ${count("check")} |`;
+          const entry = statuses[d.file];
+          const status = `${DRAFT_STATUS_LABELS[effectiveStatus(entry)]}${entry?.url ? ` ${entry.url}` : ""}${entry?.answers?.length ? ` · 지식iN 답변 ${entry.answers.length}` : ""}`;
+          return `| ${d.file} | ${d.platform ? PLATFORM_LABELS[d.platform] : "-"} | ${cell(status)} | ${cell(title)} | ${cell(draftOpening(parsed.body) ?? "-")} | 이미지 ${count("image")} · 직접 작성 ${count("write")} · 확인 ${count("check")} |`;
         }),
       );
       return text(
         [
           `${keyword ? `"${keyword}" 초안` : "최근 초안"} ${drafts.length}개 (전체 ${all.length}개)`,
-          "| 파일 | 플랫폼 | 추천 제목 | 도입 첫 문장 | 사람이 채울 자리 |",
-          "|---|---|---|---|---|",
+          "| 파일 | 플랫폼 | 상태 | 추천 제목 | 도입 첫 문장 | 사람이 채울 자리 |",
+          "|---|---|---|---|---|---|",
           ...rows,
         ].join("\n"),
       );

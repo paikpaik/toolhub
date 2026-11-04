@@ -58,6 +58,26 @@ describe("parseDraft", () => {
     ]);
   });
 
+  it("⭐추천: 앞 표시와 끝의 글자 수(34자)를 걷고, 제목 속 낱말 '추천'은 표시로 보지 않는다", () => {
+    const titles = parseDraft(
+      [
+        "## 제목 후보",
+        "1. ⭐추천: 고향사랑기부제 하기 전 확인할 것, 주소지·한도 정리 (34자)",
+        "2. 고향사랑기부제 여러 지역에 나눠 해도 될까? (33자)",
+        "3. (추천) 연말정산 모의계산 질문 6가지",
+        "4. 수능 도시락통 추천 3가지, 보온·죽통 비교",
+        "5. 김장용생새우 고르는 법 [추천]",
+      ].join("\n"),
+    ).titles;
+    assert.deepEqual(titles, [
+      { text: "고향사랑기부제 하기 전 확인할 것, 주소지·한도 정리", recommended: true },
+      { text: "고향사랑기부제 여러 지역에 나눠 해도 될까?", recommended: false },
+      { text: "연말정산 모의계산 질문 6가지", recommended: true },
+      { text: "수능 도시락통 추천 3가지, 보온·죽통 비교", recommended: false },
+      { text: "김장용생새우 고르는 법", recommended: true },
+    ]);
+  });
+
   it("메타 설명·태그·본문(언어)·스레드 글", () => {
     assert.equal(d.meta, "국민연금 수령나이는 출생연도에 따라 다릅니다.");
     assert.deepEqual(d.tags, ["국민연금", "국민연금 수령나이", "노령연금"]);

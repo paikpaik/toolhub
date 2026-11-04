@@ -162,9 +162,15 @@ export function parseDraft(markdown: string): ParsedDraft {
   const threadSection = find("스레드");
 
   const titles = listItems(titleSection ?? "").map((line) => {
-    const recommended = /추천|⭐|★/.test(line);
+    // 추천 표시: ⭐·★, (추천)·[추천], 앞의 "추천:". 제목 속 낱말 "추천"(도시락통 추천)은 표시가 아니다
+    const recommended = /[⭐★]|[(（[]\s*추천|^\s*추천\s*[:：]/.test(line);
     const text = line
-      .replace(/\s*[(（\[]?\s*(?:추천|⭐|★)[^)）\]]*[)）\]]?\s*/g, " ")
+      // 끝의 글자 수 표시 (34자)
+      .replace(/\s*[(（]\s*\d+\s*자\s*[)）]\s*$/, "")
+      .replace(/[(（[]\s*(?:추천|⭐|★)[^)）\]]*[)）\]]/g, " ")
+      .replace(/[⭐★]/g, " ")
+      .replace(/^\s*추천\s*[:：]\s*/, "")
+      .replace(/\s{2,}/g, " ")
       .trim()
       // 제목 전체를 감싼 따옴표만 벗긴다 ("나는 언제 받지?" 국민연금… 같은 제목은 그대로)
       .replace(/^["“]([^"“”]*)["”]$/, "$1");

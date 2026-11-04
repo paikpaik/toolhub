@@ -1,4 +1,4 @@
-import { buildImagePrompt, IMAGE_PROMPT_STYLES, listDrafts, parseDraft, PLATFORM_LABELS, readDraftFile, type ImagePromptStyle } from "@toolhub/collector";
+import { buildImagePrompt, IMAGE_PROMPT_STYLES, listDrafts, parseDraft, PLATFORM_LABELS, readDraftFile, readDraftStatuses, type ImagePromptStyle } from "@toolhub/collector";
 import { isOpen, readStore } from "@toolhub/tasks";
 import Link from "next/link";
 import { DATA_DIR, DRAFTS_DIR } from "../../../../lib/data";
@@ -6,6 +6,7 @@ import { AddTaskPopover } from "../../../add-task-popover";
 import { countBodyChars, naverPasteHtml, previewDocument } from "../../../../lib/preview";
 import { CopyButton } from "../../copy-button";
 import { DraftChecklist } from "../checklist";
+import { DraftStatusCard } from "../status-control";
 import { THUMBNAIL_FONTS } from "../../thumbnail/fonts";
 import { ImagePromptCard } from "./image-prompt";
 import { ThumbnailButton, ThumbnailPanel } from "./thumbnail-panel";
@@ -48,6 +49,7 @@ export default async function DraftViewPage({ searchParams }: { searchParams: Pr
   // 이 초안으로 만든 발행 할 일 (링크로 찾는다). 있으면 새로 만들지 않고 그 할 일로 안내한다
   const draftHref = `/blog/drafts/view?file=${encodeURIComponent(file)}`;
   const publishTask = (await readStore(DATA_DIR)).tasks.find((t) => t.link === draftHref && isOpen(t));
+  const status = (await readDraftStatuses(DATA_DIR))[file];
   // 남은 사람이 채울 자리를 발행 할 일의 하위 할 일로
   const markerLabel = { image: "이미지", write: "직접 작성", check: "확인" } as const;
   const subtasks = draft.markers.map((m, i) => ({
@@ -145,6 +147,8 @@ export default async function DraftViewPage({ searchParams }: { searchParams: Pr
         </div>
 
         <aside className="draft-side">
+          <DraftStatusCard file={file} entry={status} />
+
           {draft.titles.length > 0 && (
             <section className="card">
               <h3>제목</h3>

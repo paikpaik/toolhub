@@ -5,7 +5,9 @@
   "type": "module",
   "exports": {
     ".": "./src/index.ts",
-    "./platforms": "./src/platforms.ts"
+    "./platforms": "./src/platforms.ts",
+    "./draft-status": "./src/draft-status.ts",
+    "./kin-answer": "./src/kin-answer.ts"
   },
   "scripts": {
     "collect": "node src/cli.ts",
