@@ -122,7 +122,7 @@ export function KinPanel({ file, keyword, entry, onChange }: { file: string; key
         <small>최신 질문일수록 아직 답이 적어요 · 다시 펼치면 10분 동안은 저장된 목록, 검색을 누르면 새로</small>
       </form>
 
-      {!url && <p className="kin-warn">글 주소가 없어요. 위에서 예약됨·발행됨으로 바꾸고 주소를 넣어야 답변에 링크가 들어가요. 지금 복사하면 [글 주소] 자리로 남아요.</p>}
+      {!url && <p className="kin-warn">글 주소가 없어요. 위에서 발행됨으로 바꾸고 주소를 넣어야 답변에 링크가 들어가요. 지금 복사하면 [글 주소] 자리로 남아요.</p>}
       {error && <p className="error">{error}</p>}
       {questions === null ? (
         <p className="meta">지식iN 질문을 찾는 중…</p>

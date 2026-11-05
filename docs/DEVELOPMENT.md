@@ -161,12 +161,12 @@ toolhub 전체가 하나의 버전(`1.0.0` 형식)을 씁니다. 올릴 때는 �
 
 | 필드 | 설명 |
 |---|---|
-| `status` | `draft`(초안) · `scheduled`(예약됨) · `published`(발행됨). 기록이 없으면 초안. 예약 시각(`at`)이 지난 `scheduled`는 화면에서 발행됨으로 봄 (`effectiveStatus`) |
-| `url` | 발행(예약)한 글 주소. http(s)만 (`normalizePostUrl`). 지식iN 답변 링크로 씀 |
-| `at` | 예약 시각 또는 발행 시각 (ISO). 발행됨으로 바꿀 때 비어 있으면 그 시각 |
+| `status` | `draft`(초안) · `published`(발행됨). 기록이 없으면 초안. 예전에 저장한 `scheduled`(예약됨, 없앤 상태)는 발행됨으로 봄 (`effectiveStatus`). 새로 저장할 수는 없음 |
+| `url` | 발행한 글 주소. http(s)만 (`normalizePostUrl`). 지식iN 답변 링크로 씀 |
+| `at` | 발행 시각 (ISO). 발행됨으로 바꿀 때 비어 있으면 그 시각 |
 | `answers` | 이 글로 답한 지식iN 질문 `{ link, title, answeredAt }` (같은 질문 주소는 하나만) |
 
-초안 화면의 이전·다음 버튼은 `adjacentDrafts`(초안 목록과 같은 최근 수정 순, `effectiveStatus`가 초안인 글만)로 찾습니다. 이 버튼은 클라이언트 이동이라 화면의 클라이언트 컴포넌트가 다시 만들어지지 않으므로, 상태를 들고 있는 상태 카드·썸네일 패널·발행 할 일 버튼에는 `key={file}`를 줘서 앞 초안의 상태가 남지 않게 합니다.
+초안 목록 순서는 `sortDrafts`(발행됨 → 초안, 같은 상태끼리는 `updatedAt` 내림차순)로 서버에서 정합니다. 화면에서 상태를 바꿔도 줄이 튀지 않게 클라이언트에서는 다시 정렬하지 않습니다. MCP `list_drafts`는 최근 초안의 패턴을 피하려고 쓰므로 그대로 최근 수정 순입니다. 초안 화면의 이전·다음 버튼은 `adjacentDrafts`(같은 `sortDrafts` 순서에서 `effectiveStatus`가 초안인 글만)로 찾습니다. 이 버튼은 클라이언트 이동이라 화면의 클라이언트 컴포넌트가 다시 만들어지지 않으므로, 상태를 들고 있는 상태 카드·썸네일 패널·발행 할 일 버튼에는 `key={file}`를 줘서 앞 초안의 상태가 남지 않게 합니다.
 
 초안 목록의 작성일 거르기(`apps/web/app/blog/drafts/date-filter.tsx`)는 파일 이름의 날짜(`DraftSummary.date`)로 달력에 개수를 표시합니다. 상태 탭 개수는 고른 작성일 안에서, 달력의 날짜별 개수는 고른 상태 안에서 셉니다. 달력 칸 계산(`monthGrid`, `shiftMonth`)은 일정 캘린더와 함께 `@toolhub/tasks/model`에 있습니다.
 

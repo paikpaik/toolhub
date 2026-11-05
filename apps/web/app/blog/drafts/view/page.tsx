@@ -1,4 +1,4 @@
-import { buildImagePrompt, IMAGE_PROMPT_STYLES, listDrafts, parseDraft, PLATFORM_LABELS, readDraftFile, readDraftStatuses, adjacentDrafts, type ImagePromptStyle } from "@toolhub/collector";
+import { buildImagePrompt, IMAGE_PROMPT_STYLES, listDrafts, parseDraft, PLATFORM_LABELS, readDraftFile, readDraftStatuses, adjacentDrafts, sortDrafts, type ImagePromptStyle } from "@toolhub/collector";
 import { isOpen, readStore } from "@toolhub/tasks";
 import Link from "next/link";
 import { DATA_DIR, DRAFTS_DIR } from "../../../../lib/data";
@@ -53,8 +53,8 @@ export default async function DraftViewPage({ searchParams }: { searchParams: Pr
   const publishTask = (await readStore(DATA_DIR)).tasks.find((t) => t.link === draftHref && isOpen(t));
   const statuses = await readDraftStatuses(DATA_DIR);
   const status = statuses[file];
-  // 초안 목록과 같은 순서(최근 수정 순)에서 앞뒤의 "초안" 상태 글. 예약됨·발행됨은 건너뛴다
-  const near = adjacentDrafts(allDrafts.map((d) => d.file), file, statuses);
+  // 초안 목록과 같은 순서(발행됨 → 초안, 최근 수정 순)에서 앞뒤의 "초안" 상태 글. 발행됨은 건너뛴다
+  const near = adjacentDrafts(sortDrafts(allDrafts, statuses).map((d) => d.file), file, statuses);
   const keywordOf = (f: string | null) => allDrafts.find((d) => d.file === f)?.keyword ?? "";
   // 남은 사람이 채울 자리를 발행 할 일의 하위 할 일로
   const markerLabel = { image: "이미지", write: "직접 작성", check: "확인" } as const;
@@ -216,7 +216,7 @@ function DraftNavLink({ file, keyword, direction }: { file: string | null; keywo
   const label = direction === "prev" ? "이전 초안" : "다음 초안";
   if (!file) {
     return (
-      <span className="icon-button draft-nav disabled" aria-disabled="true" title={`${label} 없음 (예약됨·발행됨은 건너뜀)`}>
+      <span className="icon-button draft-nav disabled" aria-disabled="true" title={`${label} 없음 (발행됨은 건너뜀)`}>
         {icon}
       </span>
     );

@@ -3,10 +3,10 @@
  * 초안 파일(.md)은 Claude가 통째로 고쳐 쓰므로 상태는 data/draft-status.json에 파일 이름별로 따로 둔다.
  */
 
-export const DRAFT_STATUSES = ["draft", "scheduled", "published"] as const;
+export const DRAFT_STATUSES = ["draft", "published"] as const;
 export type DraftStatus = (typeof DRAFT_STATUSES)[number];
 
-export const DRAFT_STATUS_LABELS: Record<DraftStatus, string> = { draft: "초안", scheduled: "예약됨", published: "발행됨" };
+export const DRAFT_STATUS_LABELS: Record<DraftStatus, string> = { draft: "초안", published: "발행됨" };
 
 export const isDraftStatus = (value: unknown): value is DraftStatus => DRAFT_STATUSES.includes(value as DraftStatus);
 
@@ -21,9 +21,9 @@ export interface KinAnswer {
 
 export interface DraftStatusEntry {
   status: DraftStatus;
-  /** 발행(예약)한 글 주소. 지식iN 답변의 링크로 쓴다 */
+  /** 발행한 글 주소. 지식iN 답변의 링크로 쓴다 */
   url?: string;
-  /** 예약 시각 또는 발행 시각 (ISO) */
+  /** 발행 시각 (ISO) */
   at?: string;
   answers?: KinAnswer[];
 }
@@ -32,11 +32,16 @@ export type DraftStatusMap = Record<string, DraftStatusEntry>;
 
 const EMPTY: DraftStatusEntry = { status: "draft" };
 
-/** 예약 시각이 지난 예약 글은 발행된 것으로 본다 (예약 발행은 그 시각에 저절로 올라간다) */
-export function effectiveStatus(entry: DraftStatusEntry | undefined, now = Date.now()): DraftStatus {
-  const { status, at } = entry ?? EMPTY;
-  if (status === "scheduled" && at && Date.parse(at) <= now) return "published";
-  return status;
+/** 기록이 없으면 초안. 예전에 저장한 "scheduled"(예약됨, 지금은 없앤 상태)는 발행됨으로 본다 */
+export function effectiveStatus(entry: DraftStatusEntry | undefined): DraftStatus {
+  const status = (entry ?? EMPTY).status;
+  return status === "draft" ? "draft" : "published";
+}
+
+/** 초안 목록 순서: 발행됨 → 초안, 같은 상태끼리는 최근 수정 순 */
+export function sortDrafts<T extends { file: string; updatedAt: string }>(rows: T[], statuses: DraftStatusMap): T[] {
+  const rank = (row: T) => (effectiveStatus(statuses[row.file]) === "published" ? 0 : 1);
+  return [...rows].sort((a, b) => rank(a) - rank(b) || b.updatedAt.localeCompare(a.updatedAt));
 }
 
 /** 글 주소로 쓸 수 있는 http(s) 주소만. 앞뒤 공백·꺾쇠는 걷어낸다 */
@@ -91,12 +96,12 @@ export function toggleKinAnswer(entry: DraftStatusEntry | undefined, question: {
 }
 
 /**
- * 목록 순서(files)에서 지금 초안의 앞·뒤로 가장 가까운 "초안" 상태 파일. 예약됨·발행됨은 건너뛴다.
+ * 목록 순서(files)에서 지금 초안의 앞·뒤로 가장 가까운 "초안" 상태 파일. 발행됨은 건너뛴다.
  * 지금 초안이 발행됐어도 목록 속 자리를 기준으로 찾는다
  */
-export function adjacentDrafts(files: string[], current: string, statuses: DraftStatusMap, now = Date.now()) {
+export function adjacentDrafts(files: string[], current: string, statuses: DraftStatusMap) {
   const index = files.indexOf(current);
-  const isDraft = (file: string) => effectiveStatus(statuses[file], now) === "draft";
+  const isDraft = (file: string) => effectiveStatus(statuses[file]) === "draft";
   if (index < 0) return { prev: null, next: null };
   const prev = files.slice(0, index).reverse().find(isDraft) ?? null;
   const next = files.slice(index + 1).find(isDraft) ?? null;

@@ -1,4 +1,4 @@
-import { listDrafts, PLATFORM_LABELS, readDraftStatuses } from "@toolhub/collector";
+import { listDrafts, PLATFORM_LABELS, readDraftStatuses, sortDrafts } from "@toolhub/collector";
 import Link from "next/link";
 import { DATA_DIR, DRAFTS_DIR } from "../../../lib/data";
 import { DraftTable } from "./draft-table";
@@ -26,7 +26,8 @@ export default async function DraftsPage() {
         </p>
       ) : (
         <DraftTable
-          rows={drafts.map((d) => ({ ...d, platform: d.platform ? PLATFORM_LABELS[d.platform] : null }))}
+          // 발행됨 → 초안, 같은 상태끼리는 최근 수정 순. 화면에서 상태를 바꿔도 줄이 튀지 않게 새로 열 때만 다시 정렬한다
+          rows={sortDrafts(drafts, statuses).map((d) => ({ ...d, platform: d.platform ? PLATFORM_LABELS[d.platform] : null }))}
           statuses={statuses}
         />
       )}

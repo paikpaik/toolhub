@@ -18,18 +18,18 @@ export async function saveDraftStatus(file: string, patch: DraftStatusPatch): Pr
   return body;
 }
 
-/** 상태 뱃지. 예약 시각이 지난 예약 글은 발행됨으로 보인다 */
+/** 상태 뱃지 */
 export function StatusBadge({ entry }: { entry?: DraftStatusEntry }) {
   const status = effectiveStatus(entry);
   return <span className={`status-badge ${status}`}>{DRAFT_STATUS_LABELS[status]}</span>;
 }
 
-/** 초안 / 예약됨 / 발행됨 + 글 주소 + 예약(발행) 시각. 바꾸면 바로 저장한다 */
+/** 초안 / 발행됨 + 글 주소 + 발행 시각. 바꾸면 바로 저장한다 */
 export function DraftStatusControl({ file, entry, onChange }: { file: string; entry?: DraftStatusEntry; onChange: (entry: DraftStatusEntry) => void }) {
   const [url, setUrl] = useState(entry?.url ?? "");
   const [at, setAt] = useState(toLocalInput(entry?.at));
   const [message, setMessage] = useState("");
-  const status = entry?.status ?? "draft";
+  const status = effectiveStatus(entry);
 
   const save = async (patch: DraftStatusPatch) => {
     try {
@@ -51,8 +51,6 @@ export function DraftStatusControl({ file, entry, onChange }: { file: string; en
     }
     save(patch);
   };
-
-  const passed = status === "scheduled" && effectiveStatus(entry) === "published";
 
   return (
     <div className="status-control">
@@ -77,7 +75,7 @@ export function DraftStatusControl({ file, entry, onChange }: { file: string; en
             />
           </label>
           <label>
-            {status === "scheduled" ? "예약 시각" : "발행 시각"}
+            발행 시각
             <input
               type="datetime-local"
               value={at}
@@ -89,7 +87,7 @@ export function DraftStatusControl({ file, entry, onChange }: { file: string; en
           </label>
         </>
       )}
-      {(message || passed) && <small className="status-message">{message || "예약 시각이 지나서 발행됨으로 보여요"}</small>}
+      {message && <small className="status-message">{message}</small>}
     </div>
   );
 }

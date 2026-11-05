@@ -3536,7 +3536,7 @@ td.related {
   font-weight: normal;
 }
 
-/* 초안 상태 (초안 / 예약됨 / 발행됨) */
+/* 초안 상태 (초안 / 발행됨) */
 .status-badge {
   display: inline-block;
   padding: 1px 8px;
@@ -3546,11 +3546,6 @@ td.related {
   white-space: nowrap;
   background: var(--hover);
   color: var(--muted);
-}
-
-.status-badge.scheduled {
-  background: color-mix(in srgb, var(--new) 16%, transparent);
-  color: var(--new);
 }
 
 .status-badge.published {
@@ -3613,11 +3608,6 @@ td.related {
   font-weight: 600;
   background: var(--hover);
   color: var(--text);
-}
-
-.status-segments button.on.scheduled {
-  background: color-mix(in srgb, var(--new) 16%, transparent);
-  color: var(--new);
 }
 
 .status-segments button.on.published {
