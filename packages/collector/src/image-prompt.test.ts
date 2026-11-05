@@ -95,10 +95,19 @@ const photoBody = `[이미지: 생새우와 새우젓을 나란히 놓고 찍은
 
 describe("photoSlots (초안의 사진 자리)", () => {
   it("직접 촬영·무료 사진만, 화면·표·서류·직접 제작 카드는 뺀다. 어느 소제목 아래인지 함께", () => {
-    assert.deepEqual(photoSlots(photoBody), [
-      { heading: "", scene: "생새우와 새우젓을 나란히 놓고 찍은 사진" },
-      { heading: "신선한 생새우 고르는 법", scene: "신선한 생새우를 가까이서 찍은 사진(투명한 껍질)" },
-    ]);
+    assert.deepEqual(photoSlots(photoBody), {
+      thumbnail: null,
+      slots: [
+        { heading: "", scene: "생새우와 새우젓을 나란히 놓고 찍은 사진", index: 1 },
+        { heading: "신선한 생새우 고르는 법", scene: "신선한 생새우를 가까이서 찍은 사진(투명한 껍질)", index: 3 },
+      ],
+    });
+  });
+
+  it("본문 첫 줄의 대표 썸네일은 따로, 본문 이미지 번호에서 빼고 센다", () => {
+    const found = photoSlots(`[이미지: 대표 썸네일: 식탁에서 서류를 정리하는 직장인 | alt: a | 추천: AI 생성]\n\n■ 소제목\n\n[이미지: 은행 창구 앞 | alt: b | 추천: AI 생성]`);
+    assert.equal(found.thumbnail, "식탁에서 서류를 정리하는 직장인");
+    assert.deepEqual(found.slots, [{ heading: "소제목", scene: "은행 창구 앞", index: 1 }]);
   });
 });
 
@@ -107,27 +116,45 @@ describe("buildImagePrompt", () => {
     const prompt = buildImagePrompt({ title: "김장용 생새우", keyword: "김장용생새우", body: photoBody });
     const items = prompt.split("[이미지 목록]\n")[1]!.split("\n\n")[0]!.split("\n");
     assert.deepEqual(items.slice(1), [
-      "2. 도입부 사진 자리: 생새우와 새우젓을 나란히 놓고 찍은 사진",
+      "2. 본문 이미지 1번 (도입부): 생새우와 새우젓을 나란히 놓고 찍은 사진",
       '3. "생새우와 새우젓, 뭐가 다를까요?" 부분 (내용: 생새우는 김장 양념에 시원한 맛을 더해 줘요.)',
-      '4. "신선한 생새우 고르는 법" 사진 자리: 신선한 생새우를 가까이서 찍은 사진 — 투명한 껍질',
-      '5. "시세는 어디서 보나요?" 부분 (내용: 수산시장 앱에서 오늘 시세를 볼 수 있어요.)',
+      '4. 본문 이미지 3번 ("신선한 생새우 고르는 법"): 신선한 생새우를 가까이서 찍은 사진 — 투명한 껍질',
+      '5. "색이 변했는데 써도 될까요?" 부분 (내용: 암모니아 냄새가 나면 버리는 게 맞아요.)',
+      '6. "시세는 어디서 보나요?" 부분 (내용: 수산시장 앱에서 오늘 시세를 볼 수 있어요.)',
     ]);
-    assert.match(prompt, /'사진 자리'는 적힌 장면 그대로/);
+    assert.match(prompt, /'대표 썸네일'과 '본문 이미지'는 적힌 장면 그대로/);
   });
 
-  it("대표 1장 + 소제목별, 모자라면 주제로 채워 항상 5장. 단서에 숫자가 남지 않는다", () => {
+  it("새 규칙 초안(대표 썸네일 + AI 생성 5개)은 6장이 초안과 1:1, 화면이란 말이 있어도 넣고 alt는 따로 받지 않는다", () => {
+    const scenes = ["식탁에서 노트북 화면을 보며 지출을 정리하는 직장인", "은행 창구 앞에서 번호표를 기다리는 사람", "카드 명세서와 계산기가 놓인 책상", "퇴근길 지하철에서 휴대폰을 보는 사람", "거실에서 서류를 나눠 정리하는 부부"];
+    const body = [
+      "[이미지: 대표 썸네일: 따뜻한 조명 아래 서류를 정리하는 직장인 | alt: t | 추천: AI 생성]",
+      ...scenes.map((scene, i) => `■ 소제목 ${i + 1}\n\n본문 문장입니다 열 글자 넘게.\n\n[이미지: ${scene} | alt: a | 추천: AI 생성]`),
+    ].join("\n\n");
+    const prompt = buildImagePrompt({ title: "t", keyword: "연말정산", body });
+    const items = prompt.split("[이미지 목록]\n")[1]!.split("\n\n")[0]!.split("\n");
+    assert.equal(items.length, 6);
+    assert.match(prompt, /이미지 6장을 만들어/);
+    assert.match(items[0]!, /^1\. 대표 썸네일: 따뜻한 조명 아래 서류를 정리하는 직장인\./);
+    assert.equal(items[1], '2. 본문 이미지 1번 ("소제목 1"): 식탁에서 노트북 화면을 보며 지출을 정리하는 직장인');
+    assert.equal(items[5], '6. 본문 이미지 5번 ("소제목 5"): 거실에서 서류를 나눠 정리하는 부부');
+    assert.doesNotMatch(prompt, /대체 텍스트/);
+  });
+
+  it("이미지 자리가 없는 예전 초안은 소제목, 모자라면 주제로 채워 항상 6장. 단서에 숫자가 남지 않는다", () => {
     const prompt = buildImagePrompt({ title: "연말정산 모의계산 6가지", keyword: "연말정산모의계산", body: naverBody });
     const items = prompt.split("[이미지 목록]\n")[1]!.split("\n\n")[0]!.split("\n");
-    assert.equal(items.length, 5);
-    assert.match(items[0]!, /^1\. 대표 이미지/);
+    assert.equal(items.length, 6);
+    assert.match(items[0]!, /^1\. 대표 썸네일: 글 전체/);
     assert.equal(items[1], '2. "연말정산 미리보기 메뉴가 사라졌어요" 부분 (내용: 사라진 게 아니라 기간에만 열리는 서비스예요.)');
-    assert.match(items[4]!, /^5\. 글 주제\("연말정산모의계산"\)/);
+    assert.match(items[5]!, /^6\. 글 주제\("연말정산모의계산"\)/);
+    assert.match(prompt, /대체 텍스트/);
     assert.doesNotMatch(items.slice(1, 4).join("\n"), /\d{2,}/);
   });
 
-  it("한 답변에 5장을 모두 요청하고, 블로그용 규칙(AI 티·화면 글자·구도)을 담는다", () => {
+  it("한 답변에 6장을 모두 요청하고, 블로그용 규칙(AI 티·화면 글자·구도)을 담는다", () => {
     const prompt = buildImagePrompt({ title: "t", keyword: "캠핑", body: null });
-    assert.match(prompt, /이번 답변 하나에서 1번부터 5번까지 모두/);
+    assert.match(prompt, /이번 답변 하나에서 1번부터 6번까지 모두/);
     assert.doesNotMatch(prompt, /"다음"/);
     assert.match(prompt, /스마트폰으로 직접 찍은 듯한/);
     assert.match(prompt, /화면은 흐리게/);

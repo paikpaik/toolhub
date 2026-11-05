@@ -3,7 +3,7 @@ import { mkdtemp, readFile, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { describe, it } from "node:test";
-import { adjacentDrafts, applyStatusPatch, effectiveStatus, normalizePostUrl, sortDrafts, toggleKinAnswer } from "./draft-status.ts";
+import { adjacentDrafts, applyStatusPatch, draftEditBlocked, effectiveStatus, normalizePostUrl, sortDrafts, toggleKinAnswer } from "./draft-status.ts";
 import { readDraftStatuses, setDraftStatus, setKinAnswered } from "./draft-status-store.ts";
 
 describe("초안 상태", () => {
@@ -11,6 +11,12 @@ describe("초안 상태", () => {
     assert.equal(effectiveStatus(undefined), "draft");
     assert.equal(effectiveStatus({ status: "published" }), "published");
     assert.equal(effectiveStatus({ status: "scheduled" as never }), "published");
+  });
+
+  it("발행됨 초안은 고칠 수 없다 (정책), 초안은 고칠 수 있다", () => {
+    assert.equal(draftEditBlocked("a.md", undefined), null);
+    assert.equal(draftEditBlocked("a.md", { status: "draft" }), null);
+    assert.match(draftEditBlocked("a.md", { status: "published" }) ?? "", /발행됨 초안은 고치지 않습니다/);
   });
 
   it("목록은 발행됨 → 초안, 같은 상태끼리는 최근 수정 순", () => {

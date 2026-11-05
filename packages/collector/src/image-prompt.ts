@@ -1,13 +1,17 @@
 /**
- * 초안으로 Gemini 같은 이미지 AI에 그대로 붙여넣을 "이미지 5장" 요청문을 만든다 (초안 화면의 복사 버튼).
+ * 초안으로 Gemini 같은 이미지 AI에 그대로 붙여넣을 이미지 요청문을 만든다 (초안 화면의 복사 버튼).
  *
- * 초안의 [이미지: …] 자리 중 화면·표·직접 만든 카드는 AI가 그리면 사실과 다른 가짜가 되어 빼고,
- * 직접 찍을 사진 자리(직접 촬영·무료 사진)는 그 자리의 장면 그대로 요청해 초안과 맞춘다.
- * 대표 이미지 1장 + 사진 자리 + 남은 장은 이미지 자리가 없는 소제목으로 채우고, 글자·화면·표는 넣지 않게 한다.
+ * 초안은 대표 썸네일 1개(본문 첫 줄 "[이미지: 대표 썸네일: …]") + 본문 이미지 5개를 둔다 (writing.md).
+ * 요청문도 늘 6장: 1번 대표 썸네일, 2~6번은 본문 이미지 1~5번을 적힌 장면 그대로 요청해 초안과 1:1로 맞춘다.
+ * 예전 초안처럼 자리가 모자라면 이미지 자리가 없는 소제목으로 채우고, 화면·표·직접 만든 카드 자리는
+ * AI가 그리면 사실과 다른 가짜가 되어 뺀다. 글자·화면·표는 넣지 않게 한다.
  */
 import { MARKER_PATTERN } from "./drafts.ts";
 
-export const IMAGE_PROMPT_COUNT = 5;
+/** 본문 이미지 개수 (대표 썸네일 빼고) */
+export const BODY_IMAGE_COUNT = 5;
+/** 요청하는 장수: 대표 썸네일 1 + 본문 5 */
+export const IMAGE_PROMPT_COUNT = BODY_IMAGE_COUNT + 1;
 
 /** 스타일별 규칙. 사진은 "AI 티"(과한 보정·광택·어색한 손)가 블로그 신뢰를 깎아서 스마트폰 사진처럼 요청한다 */
 export const IMAGE_PROMPT_STYLES = {
@@ -70,27 +74,43 @@ export interface ImageSlot {
   heading: string;
   /** 초안에 적힌 "무엇을 보여주는 이미지인지" */
   scene: string;
+  /** 본문의 몇 번째 이미지 자리인지 (1부터, 대표 썸네일은 세지 않음. 초안의 이미지 목록 번호) */
+  index: number;
 }
 
-/** AI로 만들어도 되는 자리: 직접 찍을 사진. 화면·표·서류처럼 실제 정보를 담는 건 사진 자리여도 뺀다 */
+/** 대표 썸네일 자리: 장면 앞의 "대표 썸네일:" */
+const THUMBNAIL = /^대표\s*썸네일\s*[:：-]?\s*/;
+
+/** AI로 만드는 자리. 예전 초안의 직접 찍을 사진 자리도 쓰되, 화면·표·서류처럼 실제 정보를 담는 건 뺀다 */
+const AI_SLOT = /AI 생성/;
 const PHOTO_SLOT = /직접 촬영|무료 사진/;
 const INFO_SCENE = /화면|캡처|표|조항|서류|계약서|영수증|문구|체크리스트|메모/;
 
-/** 본문의 사진 이미지 자리를 순서대로 (어느 소제목 아래인지와 함께) */
-export function photoSlots(body: string): ImageSlot[] {
+/**
+ * 본문에서 AI로 만들 이미지 자리를 순서대로 (어느 소제목 아래인지, 몇 번째 자리인지와 함께).
+ * 대표 썸네일 자리는 따로 돌려준다
+ */
+export function photoSlots(body: string): { thumbnail: string | null; slots: ImageSlot[] } {
   const slots: ImageSlot[] = [];
+  let thumbnail: string | null = null;
   let heading = "";
+  let index = 0;
   for (const line of toPlainLines(body)) {
     const found = HEADING.exec(line)?.[1]?.trim();
     if (found) heading = found;
     for (const m of line.matchAll(MARKER_PATTERN)) {
       if (m[1] !== "이미지") continue;
-      const [scene = "", ...rest] = m[2]!.split("|").map((part) => part.trim());
+      const [first = "", ...rest] = m[2]!.split("|").map((part) => part.trim());
+      if (THUMBNAIL.test(first)) {
+        thumbnail ??= first.replace(THUMBNAIL, "");
+        continue;
+      }
+      index++;
       const recommend = rest.find((part) => part.startsWith("추천:")) ?? "";
-      if (PHOTO_SLOT.test(recommend) && !INFO_SCENE.test(scene)) slots.push({ heading, scene });
+      if (AI_SLOT.test(recommend) || (PHOTO_SLOT.test(recommend) && !INFO_SCENE.test(first))) slots.push({ heading, scene: first, index });
     }
   }
-  return slots;
+  return { thumbnail, slots };
 }
 
 /** 소제목이 많으면 글 전체에 고르게 퍼지도록 n개를 고른다 */
@@ -138,43 +158,50 @@ export interface ImagePromptInput {
 
 export function buildImagePrompt({ title, keyword, body, style = "photo" }: ImagePromptInput) {
   const all = bodySections(body ?? "");
-  // 초안의 사진 자리를 먼저 채우고, 남은 장은 사진 자리가 없는 소제목에서 고르게. 둘 다 본문 순서로 놓는다
-  const slots = photoSlots(body ?? "").slice(0, IMAGE_PROMPT_COUNT - 1);
+  // 본문 이미지 자리 5개를 그대로 (많으면 고르게 5개), 모자라면 이미지 자리가 없는 소제목에서 고르게. 둘 다 본문 순서로 놓는다
+  const found = photoSlots(body ?? "");
+  const slots = spreadPick(found.slots, BODY_IMAGE_COUNT);
   const covered = new Set(slots.map((s) => s.heading));
   const sections = spreadPick(
     all.filter((s) => !covered.has(s.heading)),
-    IMAGE_PROMPT_COUNT - 1 - slots.length,
+    BODY_IMAGE_COUNT - slots.length,
   );
   const order = (heading: string) => all.findIndex((s) => s.heading === heading);
   const where = (heading: string) => (heading ? `"${stripNumbers(heading)}"` : "도입부");
   const entries = [
-    // 사진 자리의 괄호는 장면 설명(투명한 껍질 등)이라 남기고 숫자만 지운다
-    ...slots.map((s) => ({ at: order(s.heading), text: `${where(s.heading)} 사진 자리: ${stripNumbers(s.scene.replace(/[()]/g, (c) => (c === "(" ? " — " : "")))}` })),
+    // 이미지 자리의 괄호는 장면 설명(투명한 껍질 등)이라 남기고 숫자만 지운다
+    ...slots.map((s) => ({
+      at: order(s.heading),
+      text: `본문 이미지 ${s.index}번 (${where(s.heading)}): ${stripNumbers(s.scene.replace(/[()]/g, (c) => (c === "(" ? " — " : "")))}`,
+    })),
     ...sections.map((s) => {
       const lead = sentencesWithoutNumbers(s.lead);
       // "아니에요."처럼 너무 짧으면 장면 단서가 안 된다
       return { at: order(s.heading), text: `${where(s.heading)} 부분${lead.length >= 10 ? ` (내용: ${lead})` : ""}` };
     }),
   ].sort((a, b) => a.at - b.at);
+  const thumbnail = found.thumbnail ? stripNumbers(found.thumbnail) : `글 전체("${stripNumbers(title)}")를 대표하는 장면`;
   const items = [
-    `1. 대표 이미지: 글 전체("${stripNumbers(title)}")를 대표하는 장면. 썸네일로 정사각형으로 잘려도 보이도록 핵심 대상을 가운데에`,
+    `1. 대표 썸네일: ${thumbnail}. 정사각형으로 잘려도 보이도록 핵심 대상을 가운데에`,
     ...entries.map((e, i) => `${i + 2}. ${e.text}`),
   ];
-  // 소제목이 4개보다 적으면 남은 장은 글 주제로 채운다
+  // 이미지 자리도 소제목도 모자라면 남은 장은 글 주제로 채운다
   for (let i = items.length; i < IMAGE_PROMPT_COUNT; i++) {
     items.push(`${i + 1}. 글 주제("${keyword}")와 관련된 다른 장면 (앞 이미지들과 겹치지 않게)`);
   }
+  const count = IMAGE_PROMPT_COUNT;
+  const filled = slots.length < BODY_IMAGE_COUNT;
 
   return [
-    `블로그 글에 넣을 이미지 ${IMAGE_PROMPT_COUNT}장을 만들어 주세요.`,
-    `이번 답변 하나에서 1번부터 ${IMAGE_PROMPT_COUNT}번까지 모두 연달아 생성해 주세요. 한 장마다 따로 생성하고, 중간에 확인을 묻거나 멈추지 마세요.`,
+    `블로그 글에 넣을 이미지 ${count}장을 만들어 주세요.`,
+    `이번 답변 하나에서 1번부터 ${count}번까지 모두 연달아 생성해 주세요. 한 장마다 따로 생성하고, 중간에 확인을 묻거나 멈추지 마세요.`,
     "",
     `글 주제: ${keyword}`,
     "",
     "[장면 정하기]",
-    "각 항목의 내용을 떠올리게 하는, 실제로 있을 법한 장면 하나를 정해서 그려 주세요. '사진 자리'는 적힌 장면 그대로 그려 주세요.",
+    "'대표 썸네일'과 '본문 이미지'는 적힌 장면 그대로 그려 주세요. 그 밖의 항목은 내용을 떠올리게 하는, 실제로 있을 법한 장면 하나를 정해서 그려 주세요.",
     "- 세금·제도·절차 같은 추상적인 내용은 그 상황에 놓인 사람이나 사물로 표현 (예: 집에서 노트북으로 서류를 정리하는 직장인, 계산기와 커피가 놓인 식탁)",
-    `- ${IMAGE_PROMPT_COUNT}장은 서로 다른 장면·구도로: 사물 가까이, 사람 상반신, 공간 전체를 섞기`,
+    `- ${count}장은 서로 다른 장면·구도로: 사물 가까이, 사람 상반신, 공간 전체를 섞기`,
     "",
     "[블로그 이미지 규칙]",
     ...IMAGE_PROMPT_STYLES[style].rules.map((r) => `- ${r}`),
@@ -187,7 +214,7 @@ export function buildImagePrompt({ title, keyword, body, style = "photo" }: Imag
     "",
     "[이미지 목록]",
     ...items,
-    "",
-    `${IMAGE_PROMPT_COUNT}장을 다 만든 뒤, 번호마다 '대체 텍스트(alt): 이미지를 한 문장으로 설명'을 적어 주세요.`,
+    // 본문 이미지는 초안에 alt가 있어서, 소제목·주제로 채운 장이 있을 때만 alt를 받는다
+    ...(filled ? ["", `${count}장을 다 만든 뒤, 번호마다 '대체 텍스트(alt): 이미지를 한 문장으로 설명'을 적어 주세요.`] : []),
   ].join("\n");
 }

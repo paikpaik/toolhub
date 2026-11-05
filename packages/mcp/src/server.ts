@@ -29,6 +29,9 @@ import {
   computeSaturation,
   draftOpening,
   DRAFT_STATUS_LABELS,
+  draftEditBlocked,
+  draftPlatform,
+  lengthFeedback,
   effectiveStatus,
   readDraftStatuses,
   draftsForKeyword,
@@ -126,8 +129,8 @@ const server = new McpServer(
       "글감 고르기: get_daily_keywords(또는 get_live_keywords)로 키워드를 보고, get_writing_rules(task=planning)의 규칙으로 판단한다. 상위 후보는 research_keyword로 검색 추이·포화도를 확인한다.",
       "주제로 글감 찾기: 사용자가 분야·주제(캠핑, 연말정산 등)로 쓸 글감을 찾으면 discover_keywords로 꾸준히 검색되는 정보형 키워드를 찾고, 추천 키워드 중 하나를 골라 research_keyword로 확인한다.",
       "키워드 목록·화면 캡처: 사용자가 네이버 크리에이터 어드바이저 트렌드 같은 캡처나 키워드 목록을 주면, 보이는 키워드를 모두 뽑아 analyze_keywords 한 번으로 분석하고 get_writing_rules(task=planning)의 기준으로 추천한다.",
-      "초안 쓰기: 먼저 list_drafts(keyword)로 같은 키워드의 초안이 있는지 확인해 있으면 사용자에게 알린다. get_writing_rules(task=writing, platform, type)로 규칙을 읽고, get_writing_brief로 브리프를 받아, 규칙대로 웹 검색으로 사실을 확인하며 쓴다. 이때 list_drafts가 보여 준 최근 초안들의 제목·도입 문장과 같은 패턴을 피한다. 사용자가 원하면 save_draft로 저장하고 open_web(page=drafts)으로 보여준다.",
-      "초안 고치기: read_draft로 읽고 고친 뒤 update_draft로 같은 파일에 저장한다 (이전 버전은 자동 보관). 새 초안은 save_draft로 만든다.",
+      "초안 쓰기: 먼저 list_drafts(keyword)로 같은 키워드의 초안이 있는지 확인해 있으면 사용자에게 알린다. get_writing_rules(task=writing, platform, type)로 규칙을 읽고, get_writing_brief로 브리프를 받아, 규칙대로 웹 검색으로 사실을 확인하며 쓴다. 이때 list_drafts가 보여 준 최근 초안들의 제목·도입 문장과 같은 패턴을 피한다. 사용자가 원하면 save_draft로 저장하고 open_web(page=drafts)으로 보여준다. save_draft·update_draft 결과에 본문 글자 수가 나오며, 목표보다 짧다고 하면 안내대로 보완해 update_draft로 다시 저장한다.",
+      "초안 고치기: read_draft로 읽고 고친 뒤 update_draft로 같은 파일에 저장한다 (이전 버전은 자동 보관). 새 초안은 save_draft로 만든다. 발행됨 초안은 고치지 않는다 (정책, update_draft가 거부함): list_drafts의 상태가 발행됨이면 고치려고 읽지도 않는다 (인스타 재가공처럼 읽기만 하는 건 괜찮다).",
       "글 유형: 상품·서비스 사용기는 review, 맛집·여행지·시설 방문기는 place, 그 밖에는 info. 리뷰 상품의 쇼핑 트렌드는 get_shopping_trend, 장소 정보는 search_places로 확인한다.",
       "사용자가 플랫폼을 말하지 않으면 티스토리(tistory)로 쓴다.",
       "인스타그램: 릴스 대본·캡션·카드뉴스·스토리·댓글/답글·블로그 글을 인스타 게시물로 바꾸기는 먼저 get_insta_rules(task)로 규칙과 계정 말투를 읽고 쓴다. 릴스 대본은 훅 후보 3개와 대본을 check_reel_script로, 캡션은 check_caption으로 점검해 고친 뒤 보여 준다. 게시·댓글·DM은 사람이 직접 한다 (자동으로 올리지 않음).",
@@ -499,8 +502,9 @@ server.registerTool(
       let file = path.join(DRAFTS_DIR, `${base}.md`);
       for (let n = 2; await exists(file); n++) file = path.join(DRAFTS_DIR, `${base}-${n}.md`);
       await writeFile(file, content.endsWith("\n") ? content : `${content}\n`);
+      const length = lengthFeedback(platform, parseDraft(content).body);
       return text(
-        `저장했습니다: ${file}\n웹에서 미리보기·복사하려면 open_web(page="drafts", draft="${path.basename(file)}")을 호출하세요.`,
+        `저장했습니다: ${file}\n${length ? `${length}\n` : ""}웹에서 미리보기·복사하려면 open_web(page="drafts", draft="${path.basename(file)}")을 호출하세요.`,
       );
     } catch (e) {
       return failure(e);
@@ -562,8 +566,12 @@ server.registerTool(
     annotations: { readOnlyHint: true },
   },
   async ({ draft }) => {
-    const content = await readDraftFile(DRAFTS_DIR, path.basename(draft));
-    return content === null ? failure(`초안을 찾을 수 없습니다: ${draft}. list_drafts로 파일 이름을 확인하세요.`) : text(content);
+    const file = path.basename(draft);
+    const content = await readDraftFile(DRAFTS_DIR, file);
+    if (content === null) return failure(`초안을 찾을 수 없습니다: ${draft}. list_drafts로 파일 이름을 확인하세요.`);
+    // 발행됨 초안은 읽기(인스타 재가공 등)는 되지만 고치지 않는다는 걸 앞에 알린다
+    const blocked = draftEditBlocked(file, (await readDraftStatuses(DATA_DIR))[file]);
+    return text(blocked ? `※ 발행됨 초안: 고치지 않는다 (update_draft가 거부함).\n\n${content}` : content);
   },
 );
 
@@ -572,7 +580,7 @@ server.registerTool(
   {
     title: "초안 고치기",
     description:
-      "이미 있는 초안 파일을 고친 전체 내용으로 덮어쓴다. 이전 버전은 drafts/.history/에 자동 보관된다. 없는 파일은 만들지 않으므로 새 초안은 save_draft를 쓴다. 일부만 고쳐도 content에는 초안 전체를 넣는다.",
+      "이미 있는 초안 파일을 고친 전체 내용으로 덮어쓴다. 발행됨 상태인 초안은 거부한다 (정책: 발행한 글은 고치지 않음, 먼저 list_drafts로 상태 확인). 이전 버전은 drafts/.history/에 자동 보관된다. 없는 파일은 만들지 않으므로 새 초안은 save_draft를 쓴다. 일부만 고쳐도 content에는 초안 전체를 넣는다.",
     inputSchema: {
       draft: draftFileSchema,
       content: z.string().min(1).describe("고친 초안 전체 (마크다운)"),
@@ -581,9 +589,13 @@ server.registerTool(
   },
   async ({ draft, content }) => {
     try {
-      const result = await updateDraftFile(DRAFTS_DIR, path.basename(draft), content);
+      const file = path.basename(draft);
+      const blocked = draftEditBlocked(file, (await readDraftStatuses(DATA_DIR))[file]);
+      if (blocked) return failure(blocked);
+      const result = await updateDraftFile(DRAFTS_DIR, file, content);
       if (!result) return failure(`초안을 찾을 수 없습니다: ${draft}. 새 초안이면 save_draft를 쓰세요.`);
-      return text(`고쳤습니다: ${result.file}\n이전 버전: ${result.backup}\n웹에서 보려면 open_web(page="drafts", draft="${result.file}")`);
+      const length = lengthFeedback(draftPlatform(file), parseDraft(content).body);
+      return text(`고쳤습니다: ${result.file}\n이전 버전: ${result.backup}\n${length ? `${length}\n` : ""}웹에서 보려면 open_web(page="drafts", draft="${result.file}")`);
     } catch (e) {
       return failure(e);
     }

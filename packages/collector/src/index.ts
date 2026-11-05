@@ -12,5 +12,6 @@ export * from "./batch.ts";
 export * from "./discover.ts";
 export * from "./image-prompt.ts";
 export * from "./draft-status.ts";
+export * from "./draft-length.ts";
 export * from "./draft-status-store.ts";
 export * from "./kin-answer.ts";

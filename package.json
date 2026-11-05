@@ -14,6 +14,7 @@
   "scripts": {
     "collect": "npm run collect -w @toolhub/collector --",
     "brief": "npm run --silent brief -w @toolhub/collector --",
+    "draft-length": "npm run --silent draft-length -w @toolhub/collector --",
     "web": "npm run dev -w @toolhub/web",
     "typecheck": "npm run typecheck --workspaces --if-present",
     "test": "node --test \"packages/*/src/**/*.test.ts\" \"apps/web/lib/**/*.test.ts\" \"extension/**/*.test.js\"",

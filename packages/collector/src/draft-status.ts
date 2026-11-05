@@ -38,6 +38,15 @@ export function effectiveStatus(entry: DraftStatusEntry | undefined): DraftStatu
   return status === "draft" ? "draft" : "published";
 }
 
+/**
+ * 정책: 발행됨 초안은 고치지 않는다. 발행한 글은 다시 쓰지 않아서, 고쳐도 토큰만 쓰고 쓸모가 없다.
+ * 고칠 수 없으면 이유(오류 메시지), 고칠 수 있으면 null
+ */
+export function draftEditBlocked(file: string, entry: DraftStatusEntry | undefined): string | null {
+  if (effectiveStatus(entry) !== "published") return null;
+  return `발행됨 초안은 고치지 않습니다 (정책): ${file}. 발행한 글은 다시 쓰지 않으므로 고치지 말고 작업을 멈추세요. 아직 발행 전인데 상태가 잘못된 거라면 사용자가 웹 초안 목록에서 상태를 초안으로 바꾼 뒤 고칩니다.`;
+}
+
 /** 초안 목록 순서: 발행됨 → 초안, 같은 상태끼리는 최근 수정 순 */
 export function sortDrafts<T extends { file: string; updatedAt: string }>(rows: T[], statuses: DraftStatusMap): T[] {
   const rank = (row: T) => (effectiveStatus(statuses[row.file]) === "published" ? 0 : 1);
