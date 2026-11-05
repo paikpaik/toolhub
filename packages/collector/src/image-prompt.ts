@@ -1,8 +1,9 @@
 /**
  * 초안으로 Gemini 같은 이미지 AI에 그대로 붙여넣을 이미지 요청문을 만든다 (초안 화면의 복사 버튼).
  *
- * 초안은 대표 썸네일 1개(본문 첫 줄 "[이미지: 대표 썸네일: …]") + 본문 이미지 5개를 둔다 (writing.md).
- * 요청문도 늘 6장: 1번 대표 썸네일, 2~6번은 본문 이미지 1~5번을 적힌 장면 그대로 요청해 초안과 1:1로 맞춘다.
+ * 초안은 대표 썸네일 1개(본문 첫 줄 "[이미지: 대표 썸네일 | …]") + 본문 이미지 5개를 둔다 (writing.md).
+ * 대표 썸네일은 사람이 썸네일 만들기로 직접 만들어서 요청문에 넣지 않는다.
+ * 요청문은 늘 5장: 1~5번이 본문 이미지 1~5번을 적힌 장면 그대로 요청해 초안과 번호까지 1:1로 맞춘다.
  * 예전 초안처럼 자리가 모자라면 이미지 자리가 없는 소제목으로 채우고, 화면·표·직접 만든 카드 자리는
  * AI가 그리면 사실과 다른 가짜가 되어 뺀다. 글자·화면·표는 넣지 않게 한다.
  */
@@ -10,8 +11,8 @@ import { MARKER_PATTERN } from "./drafts.ts";
 
 /** 본문 이미지 개수 (대표 썸네일 빼고) */
 export const BODY_IMAGE_COUNT = 5;
-/** 요청하는 장수: 대표 썸네일 1 + 본문 5 */
-export const IMAGE_PROMPT_COUNT = BODY_IMAGE_COUNT + 1;
+/** 요청하는 장수: 본문 이미지만 (대표 썸네일은 사람이 썸네일 만들기로 만든다) */
+export const IMAGE_PROMPT_COUNT = BODY_IMAGE_COUNT;
 
 /** 스타일별 규칙. 사진은 "AI 티"(과한 보정·광택·어색한 손)가 블로그 신뢰를 깎아서 스마트폰 사진처럼 요청한다 */
 export const IMAGE_PROMPT_STYLES = {
@@ -88,7 +89,7 @@ const INFO_SCENE = /화면|캡처|표|조항|서류|계약서|영수증|문구|�
 
 /**
  * 본문에서 AI로 만들 이미지 자리를 순서대로 (어느 소제목 아래인지, 몇 번째 자리인지와 함께).
- * 대표 썸네일 자리는 따로 돌려준다
+ * 대표 썸네일 자리는 따로 돌려준다 (예전 초안은 장면이 적혀 있고, 지금 초안은 장면 없이 "대표 썸네일"만)
  */
 export function photoSlots(body: string): { thumbnail: string | null; slots: ImageSlot[] } {
   const slots: ImageSlot[] = [];
@@ -150,13 +151,14 @@ export function sentencesWithoutNumbers(text: string) {
 }
 
 export interface ImagePromptInput {
+  /** 지금은 쓰지 않지만 부르는 쪽 모양을 그대로 둔다 */
   title: string;
   keyword: string;
   body: string | null;
   style?: ImagePromptStyle;
 }
 
-export function buildImagePrompt({ title, keyword, body, style = "photo" }: ImagePromptInput) {
+export function buildImagePrompt({ keyword, body, style = "photo" }: ImagePromptInput) {
   const all = bodySections(body ?? "");
   // 본문 이미지 자리 5개를 그대로 (많으면 고르게 5개), 모자라면 이미지 자리가 없는 소제목에서 고르게. 둘 다 본문 순서로 놓는다
   const found = photoSlots(body ?? "");
@@ -180,11 +182,7 @@ export function buildImagePrompt({ title, keyword, body, style = "photo" }: Imag
       return { at: order(s.heading), text: `${where(s.heading)} 부분${lead.length >= 10 ? ` (내용: ${lead})` : ""}` };
     }),
   ].sort((a, b) => a.at - b.at);
-  const thumbnail = found.thumbnail ? stripNumbers(found.thumbnail) : `글 전체("${stripNumbers(title)}")를 대표하는 장면`;
-  const items = [
-    `1. 대표 썸네일: ${thumbnail}. 정사각형으로 잘려도 보이도록 핵심 대상을 가운데에`,
-    ...entries.map((e, i) => `${i + 2}. ${e.text}`),
-  ];
+  const items = entries.map((e, i) => `${i + 1}. ${e.text}`);
   // 이미지 자리도 소제목도 모자라면 남은 장은 글 주제로 채운다
   for (let i = items.length; i < IMAGE_PROMPT_COUNT; i++) {
     items.push(`${i + 1}. 글 주제("${keyword}")와 관련된 다른 장면 (앞 이미지들과 겹치지 않게)`);
@@ -192,29 +190,37 @@ export function buildImagePrompt({ title, keyword, body, style = "photo" }: Imag
   const count = IMAGE_PROMPT_COUNT;
   const filled = slots.length < BODY_IMAGE_COUNT;
 
+  // Gemini가 장면 여러 개를 한 장(격자·콜라주)으로 합쳐 주는 일이 잦아서, 맨 앞과 맨 끝에 "따로 n장"을 못 박는다
   return [
-    `블로그 글에 넣을 이미지 ${count}장을 만들어 주세요.`,
-    `이번 답변 하나에서 1번부터 ${count}번까지 모두 연달아 생성해 주세요. 한 장마다 따로 생성하고, 중간에 확인을 묻거나 멈추지 마세요.`,
+    `블로그 글에 넣을 이미지 ${count}장을 만들어 주세요. 결과물은 서로 다른 이미지 파일 ${count}개입니다.`,
+    `이번 답변 하나에서 1번부터 ${count}번까지 모두 연달아 생성해 주세요. 중간에 확인을 묻거나 멈추지 마세요.`,
+    "",
+    "[가장 중요: 한 장에 장면 하나]",
+    `- 이미지 1장에는 목록의 장면 1개만 담아 주세요. ${count}개 장면을 한 장에 합치지 마세요.`,
+    "- 격자(2×2·3×2)·콜라주·분할 화면·여러 칸으로 나눈 이미지·좌우/상하 비교 이미지·스토리보드·연속 컷은 만들지 않기",
+    `- 1번을 생성해 1장을 보여 준 뒤, 2번을 새 이미지로 따로 생성하는 식으로 ${count}번까지 이미지를 ${count}번 생성해 주세요.`,
     "",
     `글 주제: ${keyword}`,
     "",
     "[장면 정하기]",
-    "'대표 썸네일'과 '본문 이미지'는 적힌 장면 그대로 그려 주세요. 그 밖의 항목은 내용을 떠올리게 하는, 실제로 있을 법한 장면 하나를 정해서 그려 주세요.",
+    "'본문 이미지'는 적힌 장면 그대로 그려 주세요. 그 밖의 항목은 내용을 떠올리게 하는, 실제로 있을 법한 장면 하나를 정해서 그려 주세요.",
     "- 세금·제도·절차 같은 추상적인 내용은 그 상황에 놓인 사람이나 사물로 표현 (예: 집에서 노트북으로 서류를 정리하는 직장인, 계산기와 커피가 놓인 식탁)",
     `- ${count}장은 서로 다른 장면·구도로: 사물 가까이, 사람 상반신, 공간 전체를 섞기`,
     "",
     "[블로그 이미지 규칙]",
     ...IMAGE_PROMPT_STYLES[style].rules.map((r) => `- ${r}`),
-    "- 모두 가로 4:3 비율, 한 글에 들어가니 색감과 분위기를 통일",
+    "- 한 장 한 장이 가로 4:3 비율의 단독 이미지. 한 글에 들어가니 색감과 분위기만 서로 맞추기",
     "- 한국을 배경으로, 사람이 나오면 한국인으로",
     "- 이미지 안에 글자·숫자·로고·워터마크를 넣지 않기 (한글이 깨지고 틀린 정보처럼 보임)",
     "- 노트북·휴대폰 화면이 보이면 화면은 흐리게 하거나 비스듬히 (글자가 보이지 않게)",
     "- 웹사이트 화면·서류 내용·표·영수증처럼 실제 정보를 흉내 낸 이미지는 만들지 않기",
     "- 실존 인물·브랜드·상표가 드러나지 않게",
     "",
-    "[이미지 목록]",
+    `[이미지 목록: 번호 하나 = 이미지 1장, 모두 ${count}장]`,
     ...items,
     // 본문 이미지는 초안에 alt가 있어서, 소제목·주제로 채운 장이 있을 때만 alt를 받는다
     ...(filled ? ["", `${count}장을 다 만든 뒤, 번호마다 '대체 텍스트(alt): 이미지를 한 문장으로 설명'을 적어 주세요.`] : []),
+    "",
+    `다시 한 번: 위 ${count}개 장면을 하나로 합친 이미지가 아니라, 장면 하나씩 담은 이미지를 1번부터 ${count}번까지 따로따로 ${count}장 만들어 주세요.`,
   ].join("\n");
 }

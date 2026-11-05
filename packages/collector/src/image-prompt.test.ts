@@ -104,62 +104,72 @@ describe("photoSlots (초안의 사진 자리)", () => {
     });
   });
 
-  it("본문 첫 줄의 대표 썸네일은 따로, 본문 이미지 번호에서 빼고 센다", () => {
+  it("본문 첫 줄의 대표 썸네일은 따로, 본문 이미지 번호에서 빼고 센다 (예전 장면 있는 형식도)", () => {
     const found = photoSlots(`[이미지: 대표 썸네일: 식탁에서 서류를 정리하는 직장인 | alt: a | 추천: AI 생성]\n\n■ 소제목\n\n[이미지: 은행 창구 앞 | alt: b | 추천: AI 생성]`);
     assert.equal(found.thumbnail, "식탁에서 서류를 정리하는 직장인");
     assert.deepEqual(found.slots, [{ heading: "소제목", scene: "은행 창구 앞", index: 1 }]);
+    const now = photoSlots(`[이미지: 대표 썸네일 | alt: a | 추천: 썸네일 만들기]\n\n■ 소제목\n\n[이미지: 은행 창구 앞 | alt: b | 추천: AI 생성]`);
+    assert.equal(now.thumbnail, "");
+    assert.deepEqual(now.slots, [{ heading: "소제목", scene: "은행 창구 앞", index: 1 }]);
   });
 });
 
 describe("buildImagePrompt", () => {
   it("초안의 사진 자리를 그 장면 그대로 넣고, 남은 장은 사진 자리가 없는 소제목으로. 본문 순서대로", () => {
     const prompt = buildImagePrompt({ title: "김장용 생새우", keyword: "김장용생새우", body: photoBody });
-    const items = prompt.split("[이미지 목록]\n")[1]!.split("\n\n")[0]!.split("\n");
-    assert.deepEqual(items.slice(1), [
-      "2. 본문 이미지 1번 (도입부): 생새우와 새우젓을 나란히 놓고 찍은 사진",
-      '3. "생새우와 새우젓, 뭐가 다를까요?" 부분 (내용: 생새우는 김장 양념에 시원한 맛을 더해 줘요.)',
-      '4. 본문 이미지 3번 ("신선한 생새우 고르는 법"): 신선한 생새우를 가까이서 찍은 사진 — 투명한 껍질',
-      '5. "색이 변했는데 써도 될까요?" 부분 (내용: 암모니아 냄새가 나면 버리는 게 맞아요.)',
-      '6. "시세는 어디서 보나요?" 부분 (내용: 수산시장 앱에서 오늘 시세를 볼 수 있어요.)',
+    const items = prompt.split(/\[이미지 목록[^\]]*\]\n/)[1]!.split("\n\n")[0]!.split("\n");
+    assert.deepEqual(items, [
+      "1. 본문 이미지 1번 (도입부): 생새우와 새우젓을 나란히 놓고 찍은 사진",
+      '2. "생새우와 새우젓, 뭐가 다를까요?" 부분 (내용: 생새우는 김장 양념에 시원한 맛을 더해 줘요.)',
+      '3. 본문 이미지 3번 ("신선한 생새우 고르는 법"): 신선한 생새우를 가까이서 찍은 사진 — 투명한 껍질',
+      '4. "색이 변했는데 써도 될까요?" 부분 (내용: 암모니아 냄새가 나면 버리는 게 맞아요.)',
+      '5. "시세는 어디서 보나요?" 부분 (내용: 수산시장 앱에서 오늘 시세를 볼 수 있어요.)',
     ]);
-    assert.match(prompt, /'대표 썸네일'과 '본문 이미지'는 적힌 장면 그대로/);
+    assert.match(prompt, /'본문 이미지'는 적힌 장면 그대로/);
   });
 
-  it("새 규칙 초안(대표 썸네일 + AI 생성 5개)은 6장이 초안과 1:1, 화면이란 말이 있어도 넣고 alt는 따로 받지 않는다", () => {
+  it("새 규칙 초안(대표 썸네일 + AI 생성 5개)은 본문 5장이 초안 번호와 1:1, 썸네일은 빼고, 화면이란 말이 있어도 넣고 alt는 따로 받지 않는다", () => {
     const scenes = ["식탁에서 노트북 화면을 보며 지출을 정리하는 직장인", "은행 창구 앞에서 번호표를 기다리는 사람", "카드 명세서와 계산기가 놓인 책상", "퇴근길 지하철에서 휴대폰을 보는 사람", "거실에서 서류를 나눠 정리하는 부부"];
     const body = [
-      "[이미지: 대표 썸네일: 따뜻한 조명 아래 서류를 정리하는 직장인 | alt: t | 추천: AI 생성]",
+      "[이미지: 대표 썸네일 | alt: t | 추천: 썸네일 만들기]",
       ...scenes.map((scene, i) => `■ 소제목 ${i + 1}\n\n본문 문장입니다 열 글자 넘게.\n\n[이미지: ${scene} | alt: a | 추천: AI 생성]`),
     ].join("\n\n");
     const prompt = buildImagePrompt({ title: "t", keyword: "연말정산", body });
-    const items = prompt.split("[이미지 목록]\n")[1]!.split("\n\n")[0]!.split("\n");
-    assert.equal(items.length, 6);
-    assert.match(prompt, /이미지 6장을 만들어/);
-    assert.match(items[0]!, /^1\. 대표 썸네일: 따뜻한 조명 아래 서류를 정리하는 직장인\./);
-    assert.equal(items[1], '2. 본문 이미지 1번 ("소제목 1"): 식탁에서 노트북 화면을 보며 지출을 정리하는 직장인');
-    assert.equal(items[5], '6. 본문 이미지 5번 ("소제목 5"): 거실에서 서류를 나눠 정리하는 부부');
+    const items = prompt.split(/\[이미지 목록[^\]]*\]\n/)[1]!.split("\n\n")[0]!.split("\n");
+    assert.equal(items.length, 5);
+    assert.match(prompt, /이미지 5장을 만들어/);
+    assert.doesNotMatch(prompt, /썸네일/);
+    assert.equal(items[0], '1. 본문 이미지 1번 ("소제목 1"): 식탁에서 노트북 화면을 보며 지출을 정리하는 직장인');
+    assert.equal(items[4], '5. 본문 이미지 5번 ("소제목 5"): 거실에서 서류를 나눠 정리하는 부부');
     assert.doesNotMatch(prompt, /대체 텍스트/);
   });
 
-  it("이미지 자리가 없는 예전 초안은 소제목, 모자라면 주제로 채워 항상 6장. 단서에 숫자가 남지 않는다", () => {
+  it("이미지 자리가 없는 예전 초안은 소제목, 모자라면 주제로 채워 항상 5장. 단서에 숫자가 남지 않는다", () => {
     const prompt = buildImagePrompt({ title: "연말정산 모의계산 6가지", keyword: "연말정산모의계산", body: naverBody });
-    const items = prompt.split("[이미지 목록]\n")[1]!.split("\n\n")[0]!.split("\n");
-    assert.equal(items.length, 6);
-    assert.match(items[0]!, /^1\. 대표 썸네일: 글 전체/);
-    assert.equal(items[1], '2. "연말정산 미리보기 메뉴가 사라졌어요" 부분 (내용: 사라진 게 아니라 기간에만 열리는 서비스예요.)');
-    assert.match(items[5]!, /^6\. 글 주제\("연말정산모의계산"\)/);
+    const items = prompt.split(/\[이미지 목록[^\]]*\]\n/)[1]!.split("\n\n")[0]!.split("\n");
+    assert.equal(items.length, 5);
+    assert.equal(items[0], '1. "연말정산 미리보기 메뉴가 사라졌어요" 부분 (내용: 사라진 게 아니라 기간에만 열리는 서비스예요.)');
+    assert.match(items[4]!, /^5\. 글 주제\("연말정산모의계산"\)/);
     assert.match(prompt, /대체 텍스트/);
-    assert.doesNotMatch(items.slice(1, 4).join("\n"), /\d{2,}/);
+    assert.doesNotMatch(items.slice(0, 3).join("\n"), /\d{2,}/);
   });
 
-  it("한 답변에 6장을 모두 요청하고, 블로그용 규칙(AI 티·화면 글자·구도)을 담는다", () => {
+  it("한 답변에 5장을 모두 요청하고, 블로그용 규칙(AI 티·화면 글자·구도)을 담는다", () => {
     const prompt = buildImagePrompt({ title: "t", keyword: "캠핑", body: null });
-    assert.match(prompt, /이번 답변 하나에서 1번부터 6번까지 모두/);
+    assert.match(prompt, /이번 답변 하나에서 1번부터 5번까지 모두/);
     assert.doesNotMatch(prompt, /"다음"/);
     assert.match(prompt, /스마트폰으로 직접 찍은 듯한/);
     assert.match(prompt, /화면은 흐리게/);
     assert.match(prompt, /서로 다른 장면·구도/);
     assert.match(prompt, /글자·숫자·로고·워터마크를 넣지 않기/);
+  });
+
+  it("장면 여러 개를 한 장(격자·콜라주)으로 합치지 말라고 맨 앞과 맨 끝에 적는다", () => {
+    const prompt = buildImagePrompt({ title: "t", keyword: "캠핑", body: null });
+    assert.match(prompt.split("\n")[0]!, /서로 다른 이미지 파일 5개/);
+    assert.match(prompt, /이미지 1장에는 목록의 장면 1개만/);
+    assert.match(prompt, /격자.*콜라주.*분할 화면/);
+    assert.match(prompt.trim().split("\n").at(-1)!, /따로따로 5장/);
   });
 
   it("일러스트 스타일은 사진 규칙 대신 일러스트 규칙", () => {

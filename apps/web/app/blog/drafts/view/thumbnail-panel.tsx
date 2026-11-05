@@ -36,7 +36,7 @@ export function ThumbnailPanel({ fonts, title }: { fonts: ThumbnailFont[]; title
     <details ref={ref} className="card thumbnail-panel" onToggle={(e) => e.currentTarget.open && setOpened(true)}>
       <summary>
         <h2>
-          썸네일 <small>추천 제목으로 채워져요 · 블로그 이름·색·글꼴은 기억돼요</small>
+          썸네일 <small>추천 제목으로 채워져요 · 부제·라벨·블로그 이름·색·글꼴은 기억돼요</small>
         </h2>
       </summary>
       {opened && <ThumbnailMaker fonts={fonts} initial={{ title, subtitle: "", label: "" }} />}
