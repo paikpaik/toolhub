@@ -157,7 +157,7 @@ toolhub 전체가 하나의 버전(`1.0.0` 형식)을 씁니다. 올릴 때는 �
 
 예약 발행 시간은 `apps/web/app/blog/schedule/`에 있습니다. 뽑은 시간과 조건은 `saved.ts`가 `localStorage`의 `toolhub:schedule-times`에 두고, 저장할 때 같은 탭에 `toolhub:schedule-times` 창 이벤트를 보냅니다 (`storage` 이벤트는 다른 탭에만 오므로). 사이드 메뉴 맨 아래의 `schedule-widget.tsx`가 이 값을 늘 보여 주고(1분마다 지남·다음 표시 갱신, `scheduleDate`로 실제 시각 계산), 같은 조건으로 다시 뽑거나 `지금부터`(바로 올린 시각만 `nowStart()`로 바꿈)로 뽑아 저장합니다. 예약 발행 화면(`schedule-picker.tsx`)은 열 때 기준 날짜가 오늘 이후면 저장된 값을 그대로 보여 주고, 이벤트를 받아 사이드 메뉴에서 다시 뽑은 시간으로 맞춥니다. 조건(바로 올린 시각·개수·간격)이 마지막으로 뽑거나 복원한 조건과 다를 때만 다시 뽑아서, 복원할 때 시간이 바뀌지 않습니다.
 
-초안 화면의 썸네일은 `/blog/thumbnail`의 `ThumbnailMaker`를 그대로 씁니다 (`apps/web/app/blog/drafts/view/thumbnail-panel.tsx`). 헤더의 버튼과 본문 열의 `<details>` 패널은 떨어져 있어서 창 이벤트(`toolhub:open-thumbnail`)로 열고 스크롤합니다. 캔버스와 글꼴은 처음 펼칠 때 그리기 시작하고, 접어도 언마운트하지 않아 고친 제목이 남습니다. 태그 **전체 복사**는 네이버면 화면에 보이는 `#태그 #태그`, 티스토리·Blogger면 쉼표로 잇습니다.
+초안 화면의 썸네일은 `/blog/thumbnail`의 `ThumbnailMaker`를 그대로 씁니다 (`apps/web/app/blog/drafts/view/thumbnail-panel.tsx`). 헤더의 버튼과 본문 열의 `<details>` 패널은 떨어져 있어서 창 이벤트(`toolhub:open-thumbnail`)로 열고 스크롤합니다. 부제·라벨·블로그 이름·스타일은 `localStorage`의 `toolhub:thumbnail-brand`에 기억하고(주소의 `subtitle`·`label`이 있으면 그 값이 먼저, 고치면 기억), 제목만 초안마다 새로 채웁니다. 캔버스와 글꼴은 처음 펼칠 때 그리기 시작하고, 접어도 언마운트하지 않아 고친 제목이 남습니다. 태그 **전체 복사**는 네이버면 화면에 보이는 `#태그 #태그`, 티스토리·Blogger면 쉼표로 잇습니다.
 
 ### 초안 상태 `data/draft-status.json`
 
@@ -172,7 +172,7 @@ toolhub 전체가 하나의 버전(`1.0.0` 형식)을 씁니다. 올릴 때는 �
 
 초안 목록 순서는 `sortDrafts`(발행됨 → 초안, 같은 상태끼리는 `updatedAt` 내림차순)로 서버에서 정합니다. 화면에서 상태를 바꿔도 줄이 튀지 않게 클라이언트에서는 다시 정렬하지 않습니다. MCP `list_drafts`는 최근 초안의 패턴을 피하려고 쓰므로 그대로 최근 수정 순입니다. 초안 화면의 이전·다음 버튼은 `adjacentDrafts`(같은 `sortDrafts` 순서에서 `effectiveStatus`가 초안인 글만)로 찾습니다. 이 버튼은 클라이언트 이동이라 화면의 클라이언트 컴포넌트가 다시 만들어지지 않으므로, 상태를 들고 있는 상태 카드·썸네일 패널·발행 할 일 버튼에는 `key={file}`를 줘서 앞 초안의 상태가 남지 않게 합니다.
 
-초안 목록의 작성일 거르기(`apps/web/app/blog/drafts/date-filter.tsx`)는 파일 이름의 날짜(`DraftSummary.date`)로 달력에 개수를 표시합니다. 상태 탭 개수는 고른 작성일 안에서, 달력의 날짜별 개수는 고른 상태 안에서 셉니다. 달력 칸 계산(`monthGrid`, `shiftMonth`)은 일정 캘린더와 함께 `@toolhub/tasks/model`에 있습니다.
+초안 목록의 작성일 거르기(`apps/web/app/blog/drafts/date-filter.tsx`)는 파일 이름의 날짜(`DraftSummary.date`)로 달력에 개수를 표시합니다. 상태 탭 개수는 고른 작성일 안에서, 달력의 날짜별 개수는 고른 상태 안에서 셉니다. 작성일은 여러 날을 고를 수 있고(`apps/web/lib/draft-dates.ts`의 `toggleDate`), 고른 날은 `localStorage`의 `toolhub:draft-dates`에 둡니다. 목록을 열 때 브라우저에서 읽고(서버 화면과 어긋나지 않게), `parseSavedDates`로 지금 초안이 있는 날만 남겨서 지운 초안의 날짜 때문에 목록이 비지 않게 합니다. 달력 칸 계산(`monthGrid`, `shiftMonth`)은 일정 캘린더와 함께 `@toolhub/tasks/model`에 있습니다.
 
 로직은 `packages/collector/src/draft-status.ts`(브라우저에서도 쓰는 순수 함수, `@toolhub/collector/draft-status`)와 `draft-status-store.ts`(파일 읽기·쓰기, 임시 파일 + rename, 같은 프로세스 안 쓰기는 차례로)에 있습니다. 웹은 `PUT /api/drafts/status`, `PUT /api/drafts/kin`으로 고치고, MCP `list_drafts`가 상태 열을 보여 줍니다.
 

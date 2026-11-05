@@ -4,10 +4,12 @@ import { useEffect, useRef, useState } from "react";
 import { COLOR_PRESETS, drawThumbnail, SIZES, TEMPLATES, type Colors, type SizeId, type TemplateId } from "./draw";
 import type { ThumbnailFont } from "./fonts";
 
-/** 블로그 이름·색·글꼴·템플릿·크기는 브라우저에 기억해 썸네일 스타일을 통일한다 */
+/** 부제·라벨·블로그 이름·색·글꼴·템플릿·크기는 브라우저에 기억해 썸네일 스타일을 통일한다 */
 const BRAND_KEY = "toolhub:thumbnail-brand";
 
 interface Brand {
+  subtitle: string;
+  label: string;
   blogName: string;
   template: TemplateId;
   size: SizeId;
@@ -16,6 +18,8 @@ interface Brand {
 }
 
 const DEFAULT_BRAND: Brand = {
+  subtitle: "",
+  label: "",
   blogName: "",
   template: "center",
   size: "1200x630",
@@ -48,16 +52,17 @@ export function ThumbnailMaker({
 }) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const [title, setTitle] = useState(initial.title || "썸네일 *제목*을 입력하세요");
-  const [subtitle, setSubtitle] = useState(initial.subtitle);
-  const [label, setLabel] = useState(initial.label);
   const [brand, setBrand] = useState<Brand>(DEFAULT_BRAND);
   const [loaded, setLoaded] = useState(false);
   const [status, setStatus] = useState("");
+  const { subtitle, label } = brand;
 
   useEffect(() => {
-    setBrand(loadBrand());
+    // 주소로 넘어온 부제·라벨이 있으면 그것부터 보여 준다 (고치면 그때 기억)
+    const saved = loadBrand();
+    setBrand({ ...saved, subtitle: initial.subtitle || saved.subtitle, label: initial.label || saved.label });
     setLoaded(true);
-  }, []);
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   const updateBrand = (patch: Partial<Brand>) => {
     const next = { ...brand, ...patch };
@@ -161,12 +166,12 @@ export function ThumbnailMaker({
           <textarea rows={3} value={title} onChange={(e) => setTitle(e.target.value)} />
         </label>
         <label>
-          부제 <small>선택</small>
-          <input value={subtitle} onChange={(e) => setSubtitle(e.target.value)} placeholder="예: 2026년 기준 총정리" />
+          부제 <small>선택 · 기억됨</small>
+          <input value={subtitle} onChange={(e) => updateBrand({ subtitle: e.target.value })} placeholder="예: 2026년 기준 총정리" />
         </label>
         <label>
-          라벨 <small>선택</small>
-          <input value={label} onChange={(e) => setLabel(e.target.value)} placeholder="예: 정보, 리뷰, 맛집" />
+          라벨 <small>선택 · 기억됨</small>
+          <input value={label} onChange={(e) => updateBrand({ label: e.target.value })} placeholder="예: 정보, 리뷰, 맛집" />
         </label>
         <label>
           블로그 이름 <small>기억됨</small>

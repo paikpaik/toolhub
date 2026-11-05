@@ -3874,6 +3874,12 @@ td.related {
   animation: toast-in 0.12s ease;
 }
 
+.date-filter-actions {
+  display: flex;
+  justify-content: space-between;
+  gap: 8px;
+}
+
 .date-filter-popover .calendar-nav {
   display: flex;
   align-items: center;

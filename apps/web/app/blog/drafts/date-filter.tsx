@@ -2,6 +2,7 @@
 
 import { monthGrid, shiftMonth, WEEKDAY_NAMES, weekday } from "@toolhub/tasks/model";
 import { useEffect, useRef, useState } from "react";
+import { toggleDate } from "../../../lib/draft-dates";
 import { Icon } from "../../icons";
 
 const WEEK_HEADER = ["월", "화", "수", "목", "금", "토", "일"];
@@ -9,14 +10,17 @@ const WEEK_HEADER = ["월", "화", "수", "목", "금", "토", "일"];
 /** 2026-11-03 → 11월 3일(화) */
 export const dateLabel = (date: string) => `${Number(date.slice(5, 7))}월 ${Number(date.slice(8))}일(${WEEKDAY_NAMES[weekday(date)]})`;
 
+/** 고른 날들 → "11월 3일(화)" 또는 "11월 3일(화) 외 2일" */
+export const datesLabel = (dates: string[]) => `${dateLabel(dates[0]!)}${dates.length > 1 ? ` 외 ${dates.length - 1}일` : ""}`;
+
 /**
- * 작성일 고르기: 버튼을 누르면 달력이 열리고, 초안이 있는 날에는 개수가 보인다. 날을 누르면 그날 초안만 보인다.
+ * 작성일 고르기: 버튼을 누르면 달력이 열리고, 초안이 있는 날에는 개수가 보인다. 날을 누를 때마다 고르고 풀어서 여러 날을 함께 볼 수 있다.
  * counts는 지금 상태 탭으로 거른 초안 기준이라, 상태와 함께 걸러 볼 수 있다
  */
-export function DateFilter({ counts, value, onChange }: { counts: Map<string, number>; value: string | null; onChange: (date: string | null) => void }) {
+export function DateFilter({ counts, value, onChange }: { counts: Map<string, number>; value: string[]; onChange: (dates: string[]) => void }) {
   const [open, setOpen] = useState(false);
   const latest = [...counts.keys()].sort().at(-1);
-  const [month, setMonth] = useState((value ?? latest ?? new Date().toISOString()).slice(0, 7));
+  const [month, setMonth] = useState((value.at(-1) ?? latest ?? new Date().toISOString()).slice(0, 7));
   const ref = useRef<HTMLDivElement>(null);
 
   // 바깥을 누르거나 Esc면 닫는다
@@ -34,24 +38,31 @@ export function DateFilter({ counts, value, onChange }: { counts: Map<string, nu
   }, [open]);
 
   const toggle = () => {
-    // 열 때는 고른 날(없으면 가장 최근 초안)의 달부터
-    if (!open) setMonth((value ?? latest ?? month).slice(0, 7));
+    // 열 때는 마지막으로 고른 날(없으면 가장 최근 초안)의 달부터
+    if (!open) setMonth((value.at(-1) ?? latest ?? month).slice(0, 7));
     setOpen(!open);
   };
-  const pick = (date: string | null) => {
-    onChange(date);
+  const clear = () => {
+    onChange([]);
     setOpen(false);
   };
+  const on = value.length > 0;
   const monthTotal = [...counts].filter(([d]) => d.startsWith(month)).reduce((sum, [, n]) => sum + n, 0);
 
   return (
     <div className="date-filter" ref={ref}>
-      <button type="button" className={`date-filter-button${value ? " on" : ""}`} onClick={toggle} aria-expanded={open}>
+      <button
+        type="button"
+        className={`date-filter-button${on ? " on" : ""}`}
+        onClick={toggle}
+        aria-expanded={open}
+        title={value.length > 1 ? value.map(dateLabel).join(", ") : undefined}
+      >
         <Icon name="calendar" size={14} />
-        작성일 {value ? dateLabel(value) : "전체"}
+        작성일 {on ? datesLabel(value) : "전체"}
       </button>
-      {value && (
-        <button type="button" className="date-filter-clear" onClick={() => pick(null)} aria-label="작성일 거르기 풀기" title="전체 기간">
+      {on && (
+        <button type="button" className="date-filter-clear" onClick={clear} aria-label="작성일 거르기 풀기" title="전체 기간">
           <Icon name="close" size={12} />
         </button>
       )}
@@ -76,18 +87,32 @@ export function DateFilter({ counts, value, onChange }: { counts: Map<string, nu
             ))}
             {monthGrid(month).map((date) => {
               const count = counts.get(date) ?? 0;
-              const classes = ["mini-day", date.startsWith(month) ? "" : "outside", count ? "has" : "", date === value ? "selected" : ""].filter(Boolean).join(" ");
+              const selected = value.includes(date);
+              const classes = ["mini-day", date.startsWith(month) ? "" : "outside", count ? "has" : "", selected ? "selected" : ""].filter(Boolean).join(" ");
               return (
-                <button key={date} type="button" className={classes} disabled={!count} onClick={() => pick(date)} title={count ? `${dateLabel(date)} · ${count}개` : undefined}>
+                <button
+                  key={date}
+                  type="button"
+                  className={classes}
+                  disabled={!count && !selected}
+                  aria-pressed={selected}
+                  onClick={() => onChange(toggleDate(value, date))}
+                  title={`${dateLabel(date)} · ${count}개 · 눌러서 ${selected ? "빼기" : "더하기"}`}
+                >
                   {Number(date.slice(8))}
                   {count > 0 && <small>{count}</small>}
                 </button>
               );
             })}
           </div>
-          <button type="button" className="button small" onClick={() => pick(null)}>
-            전체 기간
-          </button>
+          <div className="date-filter-actions">
+            <button type="button" className="button small" onClick={clear}>
+              전체 기간
+            </button>
+            <button type="button" className="button small primary" onClick={() => setOpen(false)}>
+              {on ? `${value.length}일 보기` : "닫기"}
+            </button>
+          </div>
         </div>
       )}
     </div>
