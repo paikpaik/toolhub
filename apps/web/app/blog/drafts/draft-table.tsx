@@ -4,9 +4,37 @@ import { DRAFT_STATUS_LABELS, DRAFT_STATUSES, effectiveStatus, type DraftStatus,
 import Link from "next/link";
 import { Fragment, useEffect, useState } from "react";
 import { DRAFT_DATES_KEY, parseSavedDates } from "../../../lib/draft-dates";
+import { cycleSort, DRAFT_SORT_KEY, parseSavedSort, sortByRules, type SortColumn, type SortRule } from "../../../lib/draft-sort";
 import { DateFilter, datesLabel } from "./date-filter";
 import { KinPanel } from "./kin-panel";
 import { DraftStatusControl, StatusBadge } from "./status-control";
+
+const COLUMNS: { column: SortColumn; label: string }[] = [
+  { column: "keyword", label: "키워드" },
+  { column: "status", label: "상태" },
+  { column: "answers", label: "지식iN" },
+  { column: "platform", label: "플랫폼" },
+  { column: "date", label: "작성일" },
+  { column: "updatedAt", label: "마지막 수정" },
+];
+const COLUMN_LABEL = Object.fromEntries(COLUMNS.map((c) => [c.column, c.label])) as Record<SortColumn, string>;
+const ARROW = { asc: "↑", desc: "↓" } as const;
+
+/** 기억한 값을 읽고 쓴다. 못 읽거나 못 써도 이번 화면에서는 동작한다 */
+function remember(key: string, value: unknown) {
+  try {
+    localStorage.setItem(key, JSON.stringify(value));
+  } catch {
+    // 그대로 둔다
+  }
+}
+function recall(key: string) {
+  try {
+    return localStorage.getItem(key);
+  } catch {
+    return null;
+  }
+}
 
 export interface DraftRow {
   file: string;
@@ -22,22 +50,20 @@ export function DraftTable({ rows, statuses: initial }: { rows: DraftRow[]; stat
   const [filter, setFilter] = useState<DraftStatus | "all">("all");
   const [open, setOpen] = useState<string | null>(null);
   const [dates, setDates] = useState<string[]>([]);
+  const [sort, setSort] = useState<SortRule[]>([]);
 
-  // 고른 작성일은 다른 화면에 다녀와도 기억한다 (브라우저에서 읽어서 서버 화면과 어긋나지 않게)
+  // 고른 작성일·정렬은 다른 화면에 다녀와도 기억한다 (브라우저에서 읽어서 서버 화면과 어긋나지 않게)
   useEffect(() => {
-    try {
-      setDates(parseSavedDates(localStorage.getItem(DRAFT_DATES_KEY), new Set(rows.flatMap((r) => (r.date ? [r.date] : [])))));
-    } catch {
-      // 기억을 못 읽으면 전체
-    }
+    setDates(parseSavedDates(recall(DRAFT_DATES_KEY), new Set(rows.flatMap((r) => (r.date ? [r.date] : [])))));
+    setSort(parseSavedSort(recall(DRAFT_SORT_KEY)));
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
   const changeDates = (next: string[]) => {
     setDates(next);
-    try {
-      localStorage.setItem(DRAFT_DATES_KEY, JSON.stringify(next));
-    } catch {
-      // 기억 못 해도 이번 화면에서는 동작한다
-    }
+    remember(DRAFT_DATES_KEY, next);
+  };
+  const changeSort = (next: SortRule[]) => {
+    setSort(next);
+    remember(DRAFT_SORT_KEY, next);
   };
 
   const statusOf = (file: string) => effectiveStatus(statuses[file]);
@@ -47,7 +73,15 @@ export function DraftTable({ rows, statuses: initial }: { rows: DraftRow[]; stat
   const counts = Object.fromEntries(DRAFT_STATUSES.map((s) => [s, inDate.filter((r) => statusOf(r.file) === s).length])) as Record<DraftStatus, number>;
   const dateCounts = new Map<string, number>();
   for (const r of rows) if (r.date && matchesStatus(r)) dateCounts.set(r.date, (dateCounts.get(r.date) ?? 0) + 1);
-  const shown = inDate.filter(matchesStatus);
+  // 상태·답변 수 정렬은 화면을 연 때의 값으로 (펼친 줄에서 상태를 바꿔도 줄이 튀지 않게)
+  const shown = sortByRules(
+    inDate.filter(matchesStatus).map((r) => ({
+      ...r,
+      statusRank: DRAFT_STATUSES.indexOf(effectiveStatus(initial[r.file])),
+      answers: initial[r.file]?.answers?.length ?? 0,
+    })),
+    sort,
+  );
   const update = (file: string) => (entry: DraftStatusEntry) => setStatuses((prev) => ({ ...prev, [file]: entry }));
 
   return (
@@ -61,17 +95,41 @@ export function DraftTable({ rows, statuses: initial }: { rows: DraftRow[]; stat
           ))}
         </div>
         <DateFilter counts={dateCounts} value={dates} onChange={changeDates} />
+        {sort.length > 0 && (
+          <div className="draft-sort-summary">
+            <span title="칼럼 머리를 누른 순서가 우선순위예요">정렬 {sort.map((r) => `${COLUMN_LABEL[r.column]} ${ARROW[r.dir]}`).join(" › ")}</span>
+            <button type="button" className="button small" onClick={() => changeSort([])} title="기본 순서(발행됨 → 초안, 최근 수정 순)로">
+              정렬 풀기
+            </button>
+          </div>
+        )}
       </div>
       <div className="table-wrap">
         <table className="draft-table">
           <thead>
             <tr>
-              <th>키워드</th>
-              <th>상태</th>
-              <th>지식iN</th>
-              <th>플랫폼</th>
-              <th>작성일</th>
-              <th>마지막 수정</th>
+              {COLUMNS.map(({ column, label }) => {
+                const index = sort.findIndex((r) => r.column === column);
+                const rule = sort[index];
+                return (
+                  <th key={column} aria-sort={index === 0 ? (rule!.dir === "asc" ? "ascending" : "descending") : undefined}>
+                    <button
+                      type="button"
+                      className={`sort-head${rule ? " on" : ""}`}
+                      onClick={() => changeSort(cycleSort(sort, column))}
+                      title={rule ? `정렬 ${index + 1}순위 · 누르면 방향 바꾸기, 한 번 더 누르면 빼기` : `누르면 정렬 ${sort.length + 1}순위로 더해요`}
+                    >
+                      {label}
+                      {rule && (
+                        <small>
+                          {sort.length > 1 && index + 1}
+                          {ARROW[rule.dir]}
+                        </small>
+                      )}
+                    </button>
+                  </th>
+                );
+              })}
             </tr>
           </thead>
           <tbody>

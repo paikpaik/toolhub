@@ -3817,6 +3817,38 @@ td.related {
   margin: 0;
 }
 
+/* 고른 정렬 우선순위는 필터 아래 한 줄로 */
+.draft-sort-summary {
+  flex-basis: 100%;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 13px;
+  color: var(--muted);
+}
+
+.draft-table .sort-head {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  padding: 0;
+  border: 0;
+  background: none;
+  color: inherit;
+  font: inherit;
+  cursor: pointer;
+}
+
+.draft-table .sort-head:hover,
+.draft-table .sort-head.on {
+  color: var(--accent);
+}
+
+.draft-table .sort-head small {
+  font-size: 11px;
+  font-variant-numeric: tabular-nums;
+}
+
 .date-filter {
   position: relative;
   display: inline-flex;
