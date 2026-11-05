@@ -1,8 +1,14 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
-import { formatScheduleTime, pickScheduleTimes, scheduleDate } from "./schedule-times.ts";
+import { formatScheduleTime, nowStart, pickScheduleTimes, scheduleDate } from "./schedule-times.ts";
 
 describe("예약 발행 시간 뽑기", () => {
+  it("지금부터는 지금 다음의 10분 단위, 밤늦게는 23:50까지", () => {
+    assert.deepEqual(nowStart(new Date(2026, 10, 5, 14, 3)), { date: "2026-11-05", start: "14:10", minutes: 850 });
+    assert.equal(nowStart(new Date(2026, 10, 5, 14, 10)).start, "14:20");
+    assert.equal(nowStart(new Date(2026, 10, 5, 23, 55)).start, "23:50");
+  });
+
   it("개수만큼, 10분 단위로, 첫 예약부터 기준 시각(10분 올림) 뒤로 간격 3~4시간", () => {
     for (let run = 0; run < 200; run++) {
       const times = pickScheduleTimes({ start: 9 * 60 + 7, count: 4 });

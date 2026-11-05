@@ -1,10 +1,11 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { formatScheduleTime, pickScheduleTimes, scheduleDate, SCHEDULE_STEP_MIN } from "../../../lib/schedule-times";
+import { formatScheduleTime, nowStart, pickScheduleTimes, scheduleDate } from "../../../lib/schedule-times";
 import { readSaved, SAVED_EVENT, writeSaved, type SavedSchedule } from "./saved";
 
-const pad = (n: number) => String(n).padStart(2, "0");
+/** 뽑은 게 없을 때 조건: 예약 4개, 3~4시간 간격 (예약 발행 화면의 기본값과 같게) */
+const DEFAULT_CONDITION = { count: 4, minGap: 3, maxGap: 4, times: [] };
 
 /** 사이드 메뉴 아래에 늘 보이는 예약 발행 시간. 누르면 그 시각(22:10)을 복사한다 */
 export function ScheduleWidget() {
@@ -39,18 +40,17 @@ export function ScheduleWidget() {
   const stale = items.length === 0 || items.at(-1)!.at < now - 24 * 60 * 60 * 1000;
   const next = items.findIndex((item) => item.at > now);
 
-  // 같은 조건(바로 올린 시각·개수·간격)으로 다시 뽑는다. 뽑은 게 없거나 지난 것이면 지금부터 기본 조건(4개, 3~4시간)으로
-  const redraw = () => {
-    let base = saved && !stale ? saved : null;
-    if (!base) {
-      const at = new Date();
-      const next = Math.min(Math.ceil((at.getHours() * 60 + at.getMinutes() + 1) / SCHEDULE_STEP_MIN) * SCHEDULE_STEP_MIN, 23 * 60 + 50);
-      const date = `${at.getFullYear()}-${pad(at.getMonth() + 1)}-${pad(at.getDate())}`;
-      base = { date, start: `${pad(Math.floor(next / 60))}:${pad(next % 60)}`, count: 4, minGap: 3, maxGap: 4, times: [] };
-    }
+  const drawFrom = (base: SavedSchedule) => {
     const start = Number(base.start.slice(0, 2)) * 60 + Number(base.start.slice(3, 5));
     writeSaved({ ...base, times: pickScheduleTimes({ start, count: base.count, minGapMin: base.minGap * 60, maxGapMin: base.maxGap * 60 }) });
   };
+  // 지금부터: 바로 올린 시각만 지금(다음 10분 단위)으로, 개수·간격은 그대로 (없으면 기본 4개, 3~4시간)
+  const fromNow = () => {
+    const { date, start } = nowStart();
+    drawFrom({ ...(saved ?? DEFAULT_CONDITION), date, start });
+  };
+  // 같은 조건(바로 올린 시각·개수·간격)으로 다시 뽑는다. 뽑은 게 없거나 지난 것이면 지금부터
+  const redraw = () => (saved && !stale ? drawFrom(saved) : fromNow());
 
   const copy = async (i: number, text: string) => {
     try {
@@ -66,9 +66,16 @@ export function ScheduleWidget() {
     <section className="side-schedule" aria-label="예약 발행 시간">
       <div className="side-schedule-head">
         예약 발행
-        <button type="button" className="side-schedule-redraw" onClick={redraw} title="같은 조건으로 다시 뽑아요. 조건은 예약 발행 화면에서 바꿔요">
-          {stale ? "뽑기" : "다시 뽑기"}
-        </button>
+        <div className="side-schedule-actions">
+          {!stale && (
+            <button type="button" className="side-schedule-redraw" onClick={fromNow} title="바로 올린 시각을 지금으로 바꾸고 다시 뽑아요">
+              지금부터
+            </button>
+          )}
+          <button type="button" className="side-schedule-redraw" onClick={redraw} title="같은 조건으로 다시 뽑아요. 조건은 예약 발행 화면에서 바꿔요">
+            {stale ? "뽑기" : "다시 뽑기"}
+          </button>
+        </div>
       </div>
       {stale ? (
         <p className="side-empty">아직 뽑은 시간이 없어요</p>

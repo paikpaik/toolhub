@@ -3457,6 +3457,11 @@ td.related {
   margin-bottom: 6px;
 }
 
+.side-schedule-actions {
+  display: flex;
+  gap: 2px;
+}
+
 .side-schedule .side-schedule-redraw {
   width: auto;
   padding: 2px 6px;

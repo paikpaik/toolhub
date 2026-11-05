@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import { formatScheduleTime, pickScheduleTimes, SCHEDULE_STEP_MIN } from "../../../lib/schedule-times";
+import { formatScheduleTime, nowStart, pickScheduleTimes, SCHEDULE_STEP_MIN } from "../../../lib/schedule-times";
 import { Icon } from "../../icons";
 import { CopyButton } from "../copy-button";
 import { readSaved, SAVED_EVENT, writeSaved, type SavedSchedule } from "./saved";
@@ -10,7 +10,6 @@ const COUNTS = [1, 2, 3, 4, 5, 6, 7, 8];
 /** 간격으로 고를 수 있는 시간 (30분 단위) */
 const GAP_HOURS = [1, 1.5, 2, 2.5, 3, 3.5, 4, 4.5, 5, 6, 8];
 const pad = (n: number) => String(n).padStart(2, "0");
-const toClock = (minutes: number) => `${pad(Math.floor(minutes / 60))}:${pad(minutes % 60)}`;
 const gapLabel = (minutes: number) => `${Math.floor(minutes / 60)}시간${minutes % 60 ? ` ${minutes % 60}분` : ""}`;
 const todayString = (now: Date) => `${now.getFullYear()}-${pad(now.getMonth() + 1)}-${pad(now.getDate())}`;
 
@@ -38,12 +37,11 @@ export function SchedulePicker() {
 
   // 지금 시각을 바로 올린 시각으로 (분은 다음 10분 단위로)
   const resetToNow = () => {
-    const now = new Date();
-    setDate(todayString(now));
-    const next = Math.min(Math.ceil((now.getHours() * 60 + now.getMinutes() + 1) / SCHEDULE_STEP_MIN) * SCHEDULE_STEP_MIN, 23 * 60 + 50);
-    setStart(toClock(next));
+    const now = nowStart();
+    setDate(now.date);
+    setStart(now.start);
     // 바로 올린 시각이 그대로면 위의 다시 뽑기가 안 돌아서 여기서 뽑는다
-    setTimes(pickScheduleTimes({ start: next, count, minGapMin: minGap * 60, maxGapMin: maxGap * 60 }));
+    setTimes(pickScheduleTimes({ start: now.minutes, count, minGapMin: minGap * 60, maxGapMin: maxGap * 60 }));
   };
 
   const restore = (saved: SavedSchedule) => {

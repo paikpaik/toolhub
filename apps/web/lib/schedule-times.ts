@@ -42,6 +42,17 @@ export function formatScheduleTime(date: string, minutes: number) {
   return `${day.getUTCMonth() + 1}월 ${day.getUTCDate()}일(${WEEKDAYS[day.getUTCDay()]}) ${hh}:${mm}`;
 }
 
+/** "지금부터": 오늘 날짜와 지금 다음의 10분 단위 시각 (그날 23:50을 넘기지 않는다) */
+export function nowStart(now = new Date()) {
+  const pad = (n: number) => String(n).padStart(2, "0");
+  const next = Math.min(Math.ceil((now.getHours() * 60 + now.getMinutes() + 1) / SCHEDULE_STEP_MIN) * SCHEDULE_STEP_MIN, 23 * 60 + 50);
+  return {
+    date: `${now.getFullYear()}-${pad(now.getMonth() + 1)}-${pad(now.getDate())}`,
+    start: `${pad(Math.floor(next / 60))}:${pad(next % 60)}`,
+    minutes: next,
+  };
+}
+
 /** 기준 날짜(YYYY-MM-DD) + 분 → 실제 시각 (지금 시간대 기준. 지난 예약·다음 예약을 가리는 데 쓴다) */
 export function scheduleDate(date: string, minutes: number) {
   const [y, m, d] = date.split("-").map(Number);
