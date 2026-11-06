@@ -86,7 +86,7 @@ describe("parseDraft", () => {
 
   it("메타 설명·태그·본문(언어)·스레드 글", () => {
     assert.equal(d.meta, "국민연금 수령나이는 출생연도에 따라 다릅니다.");
-    assert.deepEqual(d.tags, ["국민연금", "국민연금 수령나이", "노령연금"]);
+    assert.deepEqual(d.tags, ["국민연금", "국민연금수령나이", "노령연금"]);
     assert.equal(d.bodyLang, "html");
     assert.match(d.body ?? "", /^<h2>/);
     assert.match(d.body ?? "", /## 코드 블록 안의/, "코드 블록 안의 ##으로 섹션이 끊기지 않는다");
@@ -113,6 +113,11 @@ describe("parseDraft", () => {
 
   it("#태그 공백 구분, 형식 없는 초안", () => {
     assert.deepEqual(parseDraft("## 태그\n#기초연금 #기초연금신청 #노인복지").tags, ["기초연금", "기초연금신청", "노인복지"]);
+    assert.deepEqual(
+      parseDraft("## 태그\n국민연금 수령나이, 국민연금, #노후 준비 #국민연금수령나이").tags,
+      ["국민연금수령나이", "국민연금", "노후준비"],
+      "태그 안의 띄어쓰기는 지우고, 그래서 겹치면 하나만",
+    );
     const raw = parseDraft("그냥 메모\n[이미지: 아무거나]");
     assert.equal(raw.body, null);
     assert.equal(raw.markers.length, 1, "본문이 없으면 전체에서 자리를 찾는다");

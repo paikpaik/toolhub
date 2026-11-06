@@ -190,11 +190,16 @@ export function parseDraft(markdown: string): ParsedDraft {
   const meta = (metaCode ?? metaSection ?? "").replace(/^>\s*/gm, "").trim() || null;
 
   const tagSource = codeBlocks(tagSection ?? "")[0]?.code ?? tagSection ?? "";
-  const tags = tagSource
-    // 쉼표·줄바꿈 구분, 또는 "#태그1 #태그2"처럼 공백 + # 구분
-    .split(/[,\n]|\s+(?=#)/)
-    .map((t) => t.replace(/^\s*(?:[-*]\s+)?#?/, "").replace(/\*\*/g, "").trim())
-    .filter(Boolean);
+  const tags = [
+    ...new Set(
+      tagSource
+        // 쉼표·줄바꿈 구분, 또는 "#태그1 #태그2"처럼 공백 + # 구분
+        .split(/[,\n]|\s+(?=#)/)
+        // 태그는 붙여 쓴다. 네이버는 띄어쓰기에서 태그가 끊겨 "#국민연금 수령나이"가 "국민연금"만 남는다
+        .map((t) => t.replace(/^\s*(?:[-*]\s+)?#?/, "").replace(/\*\*/g, "").replace(/\s+/g, ""))
+        .filter(Boolean),
+    ),
+  ];
 
   const bodyBlock = codeBlocks(bodySection ?? "")[0];
   const body = bodyBlock?.code ?? null;
