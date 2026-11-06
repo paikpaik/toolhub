@@ -242,3 +242,52 @@ export async function fetchShoppingTrend(config: HubConfig, keyword: string, cat
   });
   return toPoints(data);
 }
+
+/** 한 번에 비교할 수 있는 키워드 묶음 수 (데이터랩 keywordGroups 최대 5개) */
+const TREND_GROUPS_PER_REQUEST = 5;
+
+export interface DailyPoint {
+  /** YYYY-MM-DD */
+  date: string;
+  ratio: number;
+}
+
+/**
+ * 최근 days일의 일간 검색 추이 (어제까지). 키워드 5개씩 한 요청으로 묶어 호출을 줄인다.
+ * 값은 묶음 안의 최댓값 기준 상대값이지만, 쓰는 곳(summarizeSurge)은 키워드마다 자기 안의 비율만 봐서 상관없다.
+ * 실패한 묶음의 키워드는 결과에서 빠진다
+ */
+export async function fetchDailyTrends(config: HubConfig, keywords: string[], days = 35, today = new Date()) {
+  const end = new Date(Date.UTC(today.getUTCFullYear(), today.getUTCMonth(), today.getUTCDate() - 1));
+  const start = new Date(end.getTime() - (days - 1) * 86_400_000);
+  const range = { startDate: start.toISOString().slice(0, 10), endDate: end.toISOString().slice(0, 10) };
+  const result = new Map<string, DailyPoint[]>();
+  const unique = [...new Set(keywords)];
+  const batches = Array.from({ length: Math.ceil(unique.length / TREND_GROUPS_PER_REQUEST) }, (_, i) =>
+    unique.slice(i * TREND_GROUPS_PER_REQUEST, (i + 1) * TREND_GROUPS_PER_REQUEST),
+  );
+  await Promise.all(
+    batches.map(async (batch) => {
+      try {
+        const data = await request<TrendResponse>(config, "/search-trend/v1/search", {
+          body: { ...range, timeUnit: "date", keywordGroups: batch.map((k, i) => ({ groupName: `g${i}`, keywords: [k] })) },
+        });
+        batch.forEach((k, i) => {
+          const group = data.results.find((r) => r.title === `g${i}`);
+          // 데이터랩은 검색이 없는 날을 빼고 주므로, 빈 날을 0으로 채워 7일·28일 구간이 실제 날짜와 맞게 한다
+          const byDate = new Map((group?.data ?? []).map((d) => [d.period, d.ratio]));
+          result.set(
+            k,
+            Array.from({ length: days }, (_, d) => {
+              const date = new Date(start.getTime() + d * 86_400_000).toISOString().slice(0, 10);
+              return { date, ratio: byDate.get(date) ?? 0 };
+            }),
+          );
+        });
+      } catch {
+        // 묶음 하나가 실패해도 나머지는 쓴다
+      }
+    }),
+  );
+  return result;
+}

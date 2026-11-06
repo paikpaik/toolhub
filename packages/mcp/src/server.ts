@@ -27,6 +27,14 @@ import {
   enrichDayWithStats,
   fetchKeywordInsight,
   computeSaturation,
+  fetchDailyTrends,
+  findPivots,
+  formatPivotTable,
+  hasOpenPivot,
+  formatSaturation,
+  formatSurge,
+  needsPivot,
+  summarizeSurge,
   draftOpening,
   DRAFT_STATUS_LABELS,
   draftEditBlocked,
@@ -126,10 +134,11 @@ const server = new McpServer(
   {
     instructions: [
       "toolhub는 블로그 글감을 찾기 위한 한국어 키워드 도구다.",
-      "글감 고르기: get_daily_keywords(또는 get_live_keywords)로 키워드를 보고, get_writing_rules(task=planning)의 규칙으로 판단한다. 상위 후보는 research_keyword로 검색 추이·포화도를 확인한다.",
+      "글감 고르기: 전략은 매일 5편, 지금 뜨는 이슈로 홈판(네이버 메인)과 검색을 함께 노리는 것이다. 반짝 이슈도 제외하지 않는다. get_daily_keywords(또는 get_live_keywords)로 키워드를 보고, get_writing_rules(task=planning)의 규칙으로 5개를 고른다. 후보는 analyze_keywords(여러 개)·research_keyword(하나)로 최근 7일(급상승)·포화도를 확인한다.",
+      "연관어로 돌리기: 글이 적은 블로그는 대표 키워드(블로그 문서 수 수만~수십만, 포화도 보통·높음)로는 상위 노출이 어렵다. 포화도가 보통·높음이면 그 키워드로 바로 쓰지 말고 find_pivot_keywords로 검색량은 적당하고 경쟁 글이 적은 연관어를 골라 그 연관어를 메인 키워드로 쓴다. 광고 경쟁도(낮음·중간·높음)는 검색광고 입찰 경쟁이라 블로그 경쟁 판단에 쓰지 않는다.",
       "주제로 글감 찾기: 사용자가 분야·주제(캠핑, 연말정산 등)로 쓸 글감을 찾으면 discover_keywords로 꾸준히 검색되는 정보형 키워드를 찾고, 추천 키워드 중 하나를 골라 research_keyword로 확인한다.",
-      "키워드 목록·화면 캡처: 사용자가 네이버 크리에이터 어드바이저 트렌드 같은 캡처나 키워드 목록을 주면, 보이는 키워드를 모두 뽑아 analyze_keywords 한 번으로 분석하고 get_writing_rules(task=planning)의 기준으로 추천한다.",
-      "초안 쓰기: 먼저 list_drafts(keyword)로 같은 키워드의 초안이 있는지 확인해 있으면 사용자에게 알린다. get_writing_rules(task=writing, platform, type)로 규칙을 읽고, get_writing_brief로 브리프를 받아, 규칙대로 웹 검색으로 사실을 확인하며 쓴다. 이때 list_drafts가 보여 준 최근 초안들의 제목·도입 문장과 같은 패턴을 피한다. 사용자가 원하면 save_draft로 저장하고 open_web(page=drafts)으로 보여준다. save_draft·update_draft 결과에 본문 글자 수가 나오며, 목표보다 짧다고 하면 안내대로 보완해 update_draft로 다시 저장한다.",
+      "키워드 목록·화면 캡처: 사용자가 네이버 크리에이터 어드바이저(검색 유입 트렌드·메인 유입 트렌드·주제별 트렌드) 같은 캡처나 키워드 목록을 주면, 보이는 키워드를 모두 뽑아 analyze_keywords 한 번으로 분석하고 get_writing_rules(task=planning)의 기준으로 추천한다. 최근 7일이 급상승·상승인 키워드를 우선하고, 포화도가 보통·높음인 키워드는 find_pivot_keywords로 연관어를 찾아 함께 제안한다.",
+      "초안 쓰기: 먼저 list_drafts(keyword)로 같은 키워드의 초안이 있는지 확인해 있으면 사용자에게 알린다. get_writing_rules(task=writing, platform, type)로 규칙을 읽고, get_writing_brief로 브리프를 받는다. 브리프에 '경쟁 판단'과 '추천 타깃 키워드'가 있으면 그중 하나(검색 의도가 글로 답하기 좋은 것)를 골라 사용자에게 알리고, 그 키워드로 get_writing_brief를 다시 받아 그 키워드를 메인 키워드로 쓴다 (save_draft의 keyword도 그 키워드). 그다음 규칙대로 웹 검색으로 사실을 확인하며 쓴다. 이때 list_drafts가 보여 준 최근 초안들의 제목·도입 문장과 같은 패턴을 피한다. 사용자가 원하면 save_draft로 저장하고 open_web(page=drafts)으로 보여준다. save_draft·update_draft 결과에 본문 글자 수가 나오며, 목표보다 짧다고 하면 안내대로 보완해 update_draft로 다시 저장한다.",
       "초안 고치기: read_draft로 읽고 고친 뒤 update_draft로 같은 파일에 저장한다 (이전 버전은 자동 보관). 새 초안은 save_draft로 만든다. 발행됨 초안은 고치지 않는다 (정책, update_draft가 거부함): list_drafts의 상태가 발행됨이면 고치려고 읽지도 않는다 (인스타 재가공처럼 읽기만 하는 건 괜찮다).",
       "글 유형: 상품·서비스 사용기는 review, 맛집·여행지·시설 방문기는 place, 그 밖에는 info. 리뷰 상품의 쇼핑 트렌드는 get_shopping_trend, 장소 정보는 search_places로 확인한다.",
       "사용자가 플랫폼을 말하지 않으면 티스토리(tistory)로 쓴다.",
@@ -280,7 +289,7 @@ server.registerTool(
   {
     title: "글쓰기 브리프 조회",
     description:
-      "키워드·플랫폼·유형으로 [글쓰기 브리프]를 만든다. 검색량·경쟁도·연관 키워드에 더해, 키가 있으면 검색 추이·블로그 문서 수(포화도)·실제 질문(지식iN)·상위 블로그 글·카페 글(리뷰·장소)·장소 정보(장소)가 들어간다. 초안 작성의 입력으로 쓴다.",
+      "키워드·플랫폼·유형으로 [글쓰기 브리프]를 만든다. 검색량·광고 경쟁도·연관 키워드에 더해, 키가 있으면 검색 추이·최근 7일 검색·블로그 문서 수(포화도)·실제 질문(지식iN)·상위 블로그 글·카페 글(리뷰·장소)·장소 정보(장소)가 들어간다. 대표 키워드 경쟁이 세면(포화도 보통·높음) '경쟁 판단'과 '추천 타깃 키워드'(연관어로 돌리기)가 붙으니, 그중 하나로 브리프를 다시 받아 쓴다. 초안 작성의 입력으로 쓴다.",
     inputSchema: {
       keyword: z.string().min(1).describe("글을 쓸 키워드"),
       platform: platformSchema.default("tistory"),
@@ -304,7 +313,7 @@ server.registerTool(
   {
     title: "키워드 묶음 분석",
     description:
-      "키워드 여러 개(최대 50개)의 네이버 월간 검색량·경쟁도·검색 추이·블로그 문서 수·포화도와 초안 작성 여부를 한 번에 조회해, 포화도 '기회' → 보통 → 높음 순의 표로 돌려준다. 사용자가 붙여넣은 네이버 크리에이터 어드바이저(검색 유입·주제별 트렌드) 같은 화면 캡처나 키워드 목록에서 쓸 만한 글감을 고를 때 쓴다. 캡처 속 키워드를 그대로 뽑아 넣으면 순위 번호·변동 표시·중복은 알아서 정리한다.",
+      "키워드 여러 개(최대 50개)의 네이버 월간 검색량·광고 경쟁도·검색 추이·최근 7일 검색(급상승 여부)·블로그 문서 수·포화도와 초안 작성 여부를 한 번에 조회해, 포화도 '기회' → 보통 → 높음 순의 표로 돌려준다. 사용자가 붙여넣은 네이버 크리에이터 어드바이저(검색 유입·메인 유입·주제별 트렌드) 같은 화면 캡처나 키워드 목록에서 쓸 만한 글감을 고를 때 쓴다. 포화도 보통·높음인 키워드는 find_pivot_keywords로 연관어를 찾는다. 캡처 속 키워드를 그대로 뽑아 넣으면 순위 번호·변동 표시·중복은 알아서 정리한다.",
     inputSchema: {
       keywords: z.array(z.string()).min(1).max(200).describe("분석할 키워드 목록. 50개를 넘으면 앞의 50개만 분석"),
     },
@@ -322,7 +331,7 @@ server.registerTool(
       );
       const notes = [
         keywords.length === MAX_BATCH_KEYWORDS && `한 번에 ${MAX_BATCH_KEYWORDS}개까지라 앞의 ${MAX_BATCH_KEYWORDS}개만 분석했습니다. 나머지는 다시 호출하세요.`,
-        !sources.searchAd && "네이버 검색광고 키가 없어 검색량·경쟁도·포화도는 표시되지 않습니다.",
+        !sources.searchAd && "네이버 검색광고 키가 없어 검색량·광고 경쟁도·포화도는 표시되지 않습니다.",
         !sources.hub && HUB_MISSING,
         error && `검색량 조회 실패: ${error}`,
       ].filter(Boolean);
@@ -338,7 +347,7 @@ server.registerTool(
   {
     title: "주제로 키워드 찾기",
     description:
-      "주제(캠핑, 연말정산 등 최대 3개)의 네이버 연관 키워드 중 주제가 들어가고 월 300~5만 회 검색되는 키워드를 골라, 검색 추이·블로그 문서 수·포화도를 조회해 추천(포화도 기회 + 하락세·반짝 이슈 아님) 순의 표로 돌려준다. 실시간 이슈가 아니라 꾸준히 검색되는 정보형 글감을 찾을 때 쓴다. 웹의 키워드 찾기 화면과 같은 결과이며 최근 주제에 남는다.",
+      "주제(캠핑, 연말정산 등 최대 3개)의 네이버 연관 키워드 중 주제가 들어가고 월 300~5만 회 검색되는 키워드를 골라, 검색 추이·최근 7일·블로그 문서 수·포화도를 조회해 추천(포화도 기회 + 하락세가 아니거나 최근 7일 상승) 순의 표로 돌려준다. 실시간 이슈가 모자랄 때 주제 안에서 쓸 글감을 찾는 데 쓴다. 웹의 키워드 찾기 화면과 같은 결과이며 최근 주제에 남는다.",
     inputSchema: {
       topics: z.array(z.string()).min(1).max(10).describe(`찾을 주제. ${MAX_TOPICS}개를 넘으면 앞의 ${MAX_TOPICS}개만`),
     },
@@ -362,11 +371,54 @@ server.registerTool(
 );
 
 server.registerTool(
+  "find_pivot_keywords",
+  {
+    title: "연관어로 돌리기",
+    description:
+      "대표 키워드가 경쟁이 셀 때(블로그 문서 수만~수십만, 포화도 보통·높음) 그 키워드를 품은 연관 키워드 중 월 300~3만 회 검색되면서 경쟁 글(블로그 문서 수)이 적은 키워드를 찾아, 검색량 대비 경쟁 글이 적은 순(최근 7일 급상승이면 가산)으로 돌려준다. 예: 절임배추(월 87,100·문서 62만) → 절임배추 20kg 몇포기(월 11,780·문서 5,280). 글이 적은 블로그가 상위에 오를 타깃 키워드를 고를 때 쓴다.",
+    inputSchema: { keyword: z.string().min(1).describe("경쟁이 센 대표 키워드") },
+    annotations: { readOnlyHint: true, openWorldHint: true },
+  },
+  async ({ keyword }) => {
+    const { searchAd, hub } = briefSources();
+    if (!searchAd) return failure("네이버 검색광고 키가 없습니다. apps/web/.env.local을 설정하세요.");
+    try {
+      const [insight, blog] = await Promise.all([
+        fetchKeywordInsight(searchAd, keyword).catch(() => null),
+        hub ? researchKeyword(hub, keyword).then((r) => r.blog?.total ?? null).catch(() => null) : null,
+      ]);
+      const pivots = await findPivots({ searchAd, hub }, keyword, { related: insight?.related });
+      const saturation = computeSaturation(insight?.self?.totalSearches, blog);
+      const lines = [
+        `# ${keyword} → 연관어로 돌리기`,
+        `- 대표 키워드: 월 ${formatSearchCount(insight?.self?.totalSearches)}회 · 블로그 문서 ${blog === null ? "-" : blog.toLocaleString("ko-KR")}개 · 포화도 ${formatSaturation(saturation)}`,
+        ...(hub ? [] : [HUB_MISSING, "그래서 문서 수·최근 7일을 몰라 검색량 순으로만 보여줍니다."]),
+        "",
+        pivots.length
+          ? formatPivotTable(pivots)
+          : "조건(대표 키워드를 품고 월 300~3만 회)에 맞는 연관어가 없습니다. 제목을 구체적인 상황·대상으로 좁혀 쓰세요.",
+        ...(pivots.length
+          ? [
+              "",
+              hasOpenPivot(pivots)
+                ? "포화도 기회인 키워드 중 하나를 골라 get_writing_brief를 받아 메인 키워드로 씁니다. 상품·지역 이름이 든 키워드는 글로 답할 수 있는지(정보형인지) 함께 봅니다."
+                : "연관어도 모두 경쟁이 셉니다(포화도 기회 없음). 사용자에게 알리고, 쓴다면 경쟁 글이 가장 적은 키워드로 제목을 구체적인 상황·대상으로 좁힙니다.",
+            ]
+          : []),
+      ];
+      return text(lines.join("\n"));
+    } catch (e) {
+      return failure(e);
+    }
+  },
+);
+
+server.registerTool(
   "research_keyword",
   {
     title: "키워드 조사",
     description:
-      "키워드의 24개월 네이버 검색 추이(시즌·급등 이력·상승세 등 해석 포함), 블로그 문서 수와 포화도(문서 수 ÷ 월간 검색량), 지식iN 질문, 상위 블로그 글, 최신 뉴스, 카페 글을 한 번에 조사한다. 글감이 오래 검색될지, 경쟁이 심한지 판단할 때 쓴다.",
+      "키워드의 24개월 네이버 검색 추이(시즌·급등 이력·상승세 등 해석 포함), 최근 7일 검색 변화(급상승 여부), 블로그 문서 수와 포화도(문서 수 ÷ 월간 검색량, 문서 2만·10만 개 이상이면 단계를 올림), 지식iN 질문, 상위 블로그 글, 최신 뉴스, 카페 글을 한 번에 조사한다. 글감이 오래 검색될지, 경쟁이 심한지 판단할 때 쓴다.",
     inputSchema: { keyword: z.string().min(1).describe("조사할 키워드") },
     annotations: { readOnlyHint: true, openWorldHint: true },
   },
@@ -375,10 +427,13 @@ server.registerTool(
     if (!hub) return failure(HUB_MISSING);
     try {
       const searchAd = searchAdConfigFromEnv();
-      const [research, insight] = await Promise.all([
+      const [research, insight, daily] = await Promise.all([
         researchKeyword(hub, keyword),
         searchAd ? fetchKeywordInsight(searchAd, keyword).catch(() => null) : null,
+        fetchDailyTrends(hub, [keyword]).catch(() => null),
       ]);
+      const points = daily?.get(keyword);
+      const surge = points ? summarizeSurge(points) : null;
       const monthly = insight?.self?.totalSearches;
       const saturation = computeSaturation(monthly, research.blog?.total);
       const { trend, blog, kin, news, cafe, errors } = research;
@@ -389,11 +444,11 @@ server.registerTool(
         lines.push(`- 검색 추이: ${trend.label} — ${trend.reason}`);
         lines.push(`  월별 상대값(최고=100): ${trend.points.map((p) => `${p.month} ${p.ratio}`).join(", ")}`);
       }
+      if (surge && surge.label !== "데이터 부족") lines.push(`- 최근 7일 검색: ${formatSurge(surge)} (직전 4주 평균 대비)`);
       if (blog) {
-        lines.push(
-          `- 블로그 문서 수: ${blog.total.toLocaleString("ko-KR")}${saturation ? ` (검색량의 ${saturation.ratio}배 · 포화도 ${saturation.level})` : ""}`,
-        );
+        lines.push(`- 블로그 문서 수: ${blog.total.toLocaleString("ko-KR")}${saturation ? ` · 포화도 ${formatSaturation(saturation)}` : ""}`);
       }
+      if (needsPivot(saturation)) lines.push("- 경쟁 판단: 대표 키워드라 경쟁이 셉니다. find_pivot_keywords로 연관어를 찾아 그 키워드로 쓰세요.");
       if (kin?.length) lines.push("", "## 실제 질문 (지식iN)", ...kin.map((q) => `- ${q.title}`));
       if (blog?.items.length) lines.push("", "## 상위 블로그 글", ...blog.items.map((b) => `- ${b.title} — ${b.blogger} (${b.date}) ${b.link}`));
       if (news?.length) lines.push("", "## 최신 뉴스", ...news.map((n) => `- ${n.title} (${n.date.slice(0, 10)}) ${n.link}`));

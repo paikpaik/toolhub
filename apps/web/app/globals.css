@@ -830,19 +830,37 @@ h1 small {
   margin-bottom: 6px;
 }
 
+/* 색 조합 6칸 + 랜덤 조합을 한 줄로. 폭이 좁으면 줄바꿈 대신 칸이 함께 작아진다 */
 .swatches {
   display: flex;
   gap: 6px;
-  flex-wrap: wrap;
+  flex-wrap: nowrap;
 }
 
 .swatch {
-  width: 36px;
-  height: 36px;
+  flex: 0 1 36px;
+  min-width: 0;
+  aspect-ratio: 1;
+  padding: 0;
   border: 2px solid;
   border-radius: 8px;
   font-weight: 700;
   cursor: pointer;
+}
+
+/* 랜덤 조합: 색 칸과 같은 크기, 점선 테두리로 "뽑기" 칸임을 구분 */
+.swatch.swatch-random {
+  display: inline-grid;
+  place-items: center;
+  padding: 0;
+  border: 2px dashed var(--border);
+  background: var(--surface);
+  color: var(--muted);
+}
+
+.swatch.swatch-random:hover {
+  border-color: var(--accent);
+  color: var(--accent);
 }
 
 .color-inputs {

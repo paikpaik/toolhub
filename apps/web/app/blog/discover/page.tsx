@@ -1,5 +1,6 @@
 import {
   discoverKeywords,
+  formatSurge,
   formatTrendCell,
   hubConfigFromEnv,
   indexDraftsByKeyword,
@@ -21,7 +22,7 @@ import { formatSearches, SearchAdNotice } from "../search-ad";
 
 export const dynamic = "force-dynamic";
 
-const PICK_HELP = "포화도 기회(검색량 대비 글이 적음)이면서 검색 추이가 하락세·반짝 이슈가 아닌 키워드";
+const PICK_HELP = "포화도 기회(검색량 대비 글이 적고 문서도 2만 개 아래)이면서, 검색 추이가 하락세가 아니거나 최근 7일 오르는 중인 키워드 (반짝 이슈도 포함)";
 
 const discoverHref = (topics: string) => `/blog/discover?q=${encodeURIComponent(topics)}`;
 
@@ -99,6 +100,7 @@ export default async function DiscoverPage({ searchParams }: { searchParams: Pro
                       <th>키워드</th>
                       <th className="num">월간 검색량</th>
                       <th>검색 추이</th>
+                      <th title="최근 7일 검색 ÷ 그 전 4주 평균 (일간 추이)">최근 7일</th>
                       <th className="num">블로그 문서 수</th>
                       <th>포화도</th>
                       <th>초안</th>
@@ -125,10 +127,11 @@ export default async function DiscoverPage({ searchParams }: { searchParams: Pro
                             </span>
                           )}
                         </td>
+                        <td>{formatSurge(r.surge)}</td>
                         <td className="num">{r.blogTotal?.toLocaleString() ?? "-"}</td>
                         <td>
                           {r.saturation ? (
-                            <span className={`saturation ${r.saturation.level}`}>
+                            <span className={`saturation ${r.saturation.level}`} title={r.saturation.cap ?? undefined}>
                               {r.saturation.level} <small>{r.saturation.ratio}배</small>
                             </span>
                           ) : (

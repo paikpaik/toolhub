@@ -8,6 +8,7 @@ export * from "./brief.ts";
 export * from "./drafts.ts";
 export * from "./naver-hub.ts";
 export * from "./research.ts";
+export * from "./pivot.ts";
 export * from "./batch.ts";
 export * from "./discover.ts";
 export * from "./image-prompt.ts";

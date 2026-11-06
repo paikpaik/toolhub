@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
-import { computeSaturation, seasonAlertDate, summarizeTrend } from "./research.ts";
+import { computeSaturation, formatSaturation, formatSurge, seasonAlertDate, summarizeSurge, summarizeTrend } from "./research.ts";
 
 /** 2024-10부터 24개월, 값은 f(인덱스, 월) */
 const series = (f: (i: number, month: number) => number) =>
@@ -52,16 +52,42 @@ describe("seasonAlertDate", () => {
 
 describe("computeSaturation", () => {
   it("문서 수 ÷ 검색량 기준 10배·50배 (실측 기반)", () => {
-    assert.deepEqual(computeSaturation(58_080, 126_419), { ratio: 2.2, level: "기회" });
+    assert.deepEqual(computeSaturation(5_000, 12_000), { ratio: 2.4, level: "기회" });
     assert.equal(computeSaturation(1000, 10_000)?.level, "기회");
     assert.equal(computeSaturation(1000, 39_000)?.level, "보통");
     assert.equal(computeSaturation(1000, 50_000)?.level, "보통");
     assert.equal(computeSaturation(1000, 67_000)?.level, "높음");
   });
 
+  it("비율이 낮아도 문서가 2만 개 이상이면 보통, 10만 개 이상이면 높음 (대표 키워드)", () => {
+    assert.deepEqual(computeSaturation(87_100, 620_270), { ratio: 7.1, level: "높음", cap: "문서 10만 개 이상" });
+    assert.deepEqual(computeSaturation(13_740, 20_092), { ratio: 1.5, level: "보통", cap: "문서 2만 개 이상" });
+    assert.deepEqual(computeSaturation(11_780, 5_280), { ratio: 0.4, level: "기회" });
+    assert.equal(computeSaturation(1000, 67_000)?.cap, undefined, "비율로 이미 높음이면 그대로");
+    assert.equal(formatSaturation(computeSaturation(87_100, 620_270)), "높음 (7.1배 · 문서 10만 개 이상)");
+  });
+
   it("검색량이 없거나 10 미만(0)이면 계산하지 않는다", () => {
     assert.equal(computeSaturation(null, 100), null);
     assert.equal(computeSaturation(0, 100), null);
     assert.equal(computeSaturation(1000, undefined), null);
+  });
+});
+
+describe("summarizeSurge (최근 7일 ÷ 직전 4주)", () => {
+  const days = (before: number, recent: number) => [...Array(28).fill(before), ...Array(7).fill(recent)].map((ratio) => ({ ratio }));
+
+  it("2배 이상 급상승, 1.3배 이상 상승, 0.7배 이하 하락", () => {
+    assert.deepEqual(summarizeSurge(days(10, 25)), { ratio: 2.5, label: "급상승" });
+    assert.deepEqual(summarizeSurge(days(10, 14)), { ratio: 1.4, label: "상승" });
+    assert.deepEqual(summarizeSurge(days(10, 10)), { ratio: 1, label: "보통" });
+    assert.deepEqual(summarizeSurge(days(10, 6)), { ratio: 0.6, label: "하락" });
+    assert.equal(formatSurge(summarizeSurge(days(10, 25))), "급상승 ×2.5");
+  });
+
+  it("데이터가 모자라거나 전에 검색이 없었으면", () => {
+    assert.equal(summarizeSurge(days(10, 10).slice(0, 10)).label, "데이터 부족");
+    assert.deepEqual(summarizeSurge(days(0, 5)), { ratio: null, label: "급상승" });
+    assert.equal(formatSurge(summarizeSurge(days(0, 0))), "-");
   });
 });

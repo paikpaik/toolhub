@@ -104,8 +104,16 @@ describe("추천과 정렬", () => {
     row("국민연금신청방법", { saturation: { ratio: 20, level: "보통" } }),
   ].map((r) => toDiscoverRow(r, today));
 
-  it("포화도 기회여도 하락세·급등 이력이면 추천하지 않는다", () => {
+  it("포화도 기회여도 하락세면 추천하지 않는다", () => {
     assert.deepEqual(rows.filter((r) => r.pick).map((r) => r.keyword), ["연말정산모의계산"]);
+  });
+
+  it("반짝 이슈(급등 이력)도 추천, 하락세라도 최근 7일 오르면 추천", () => {
+    const more = [
+      row("반짝이슈", { trend: trend("급등 이력"), saturation: { ratio: 3, level: "기회" } }),
+      row("하락인데지금뜸", { trend: trend("하락세"), saturation: { ratio: 4, level: "기회" }, surge: { ratio: 2.5, label: "급상승" } }),
+    ].map((r) => toDiscoverRow(r, today));
+    assert.deepEqual(more.filter((r) => r.pick).map((r) => r.keyword), ["반짝이슈", "하락인데지금뜸"]);
   });
 
   it("추천 → 기회 → 보통(정보형 먼저) → 높음", () => {

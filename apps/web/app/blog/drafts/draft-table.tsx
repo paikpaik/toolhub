@@ -7,6 +7,7 @@ import { DRAFT_DATES_KEY, parseSavedDates } from "../../../lib/draft-dates";
 import { cycleSort, DRAFT_SORT_KEY, parseSavedSort, sortByRules, type SortColumn, type SortRule } from "../../../lib/draft-sort";
 import { DateFilter, datesLabel } from "./date-filter";
 import { KinPanel } from "./kin-panel";
+import { PromptCopyButton } from "./prompt-copy-button";
 import { DraftStatusControl, StatusBadge } from "./status-control";
 
 const COLUMNS: { column: SortColumn; label: string }[] = [
@@ -130,6 +131,7 @@ export function DraftTable({ rows, statuses: initial }: { rows: DraftRow[]; stat
                   </th>
                 );
               })}
+              <th title="이미지 5장 프롬프트 (Gemini용)">프롬프트</th>
             </tr>
           </thead>
           <tbody>
@@ -141,8 +143,8 @@ export function DraftTable({ rows, statuses: initial }: { rows: DraftRow[]; stat
                   <tr
                     className={`draft-row${isOpen ? " open" : ""}`}
                     onClick={(e) => {
-                      // 키워드 링크(초안 열기)는 그대로 이동
-                      if ((e.target as HTMLElement).closest("a")) return;
+                      // 키워드 링크(초안 열기)·프롬프트 복사 버튼은 줄을 펼치지 않는다
+                      if ((e.target as HTMLElement).closest("a, button")) return;
                       setOpen(isOpen ? null : d.file);
                     }}
                     aria-expanded={isOpen}
@@ -160,10 +162,13 @@ export function DraftTable({ rows, statuses: initial }: { rows: DraftRow[]; stat
                     <td>{d.platform ?? "-"}</td>
                     <td>{d.date ?? "-"}</td>
                     <td>{new Date(d.updatedAt).toLocaleString("ko-KR", { timeZone: "Asia/Seoul" })}</td>
+                    <td>
+                      <PromptCopyButton file={d.file} />
+                    </td>
                   </tr>
                   {isOpen && (
                     <tr className="draft-detail">
-                      <td colSpan={6}>
+                      <td colSpan={COLUMNS.length + 1}>
                         <DraftStatusControl file={d.file} entry={entry} onChange={update(d.file)} />
                         <KinPanel file={d.file} keyword={d.keyword} entry={entry} onChange={update(d.file)} />
                       </td>

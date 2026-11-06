@@ -116,17 +116,64 @@ export interface Saturation {
   /** 블로그 문서 수 ÷ 월간 검색량 */
   ratio: number;
   level: SaturationLevel;
+  /** 문서 수가 많아 비율과 상관없이 단계를 올렸으면 그 이유 (예: "문서 10만 개 이상") */
+  cap?: string | null;
 }
 
 /**
+ * 경쟁 글 수의 절대 기준. 비율만 보면 검색량이 큰 대표 키워드는 문서가 60만 개여도 "기회"로 나와서,
+ * 글이 몇 개 없는 블로그가 상위에 오를 수 없는 키워드를 추천하게 된다 (2026-11 실측: 초안 15개가 모두 대표 키워드,
+ * 문서 5만~200만 개인데 전부 "기회" → 글당 조회수 30~100).
+ * 반면 "절임배추 20kg 몇포기"(월 11,780회·문서 5,280개)처럼 연관어는 검색량 대비 경쟁 글이 훨씬 적다.
+ */
+export const SATURATION_DOCS = { high: 100_000, medium: 20_000 } as const;
+
+/**
  * 검색량 대비 블로그 글이 얼마나 많은지. 낮을수록 새 글이 노출될 여지가 크다.
- * 블로그 문서 수는 지금까지 쌓인 전체 글 수라 비율이 크게 나온다. 기준은 실제 키워드 측정값으로 잡았다
+ * 블로그 문서 수는 지금까지 쌓인 전체 글 수라 비율이 크게 나온다. 비율 기준은 실제 키워드 측정값으로 잡았다
  * (2026-10: 롱테일 정보 키워드 2~10배, 중간 39배, 넓은 주제어 67~800배).
+ * 여기에 문서 수 절대 기준을 더해, 문서 2만 개 이상은 "보통"부터, 10만 개 이상은 "높음"으로 본다.
  */
 export function computeSaturation(monthlySearches: number | null | undefined, blogTotal: number | null | undefined): Saturation | null {
   if (!monthlySearches || blogTotal === null || blogTotal === undefined) return null;
   const ratio = Math.round((blogTotal / monthlySearches) * 10) / 10;
-  return { ratio, level: ratio <= 10 ? "기회" : ratio <= 50 ? "보통" : "높음" };
+  const byRatio: SaturationLevel = ratio <= 10 ? "기회" : ratio <= 50 ? "보통" : "높음";
+  if (blogTotal >= SATURATION_DOCS.high && byRatio !== "높음") return { ratio, level: "높음", cap: "문서 10만 개 이상" };
+  if (blogTotal >= SATURATION_DOCS.medium && byRatio === "기회") return { ratio, level: "보통", cap: "문서 2만 개 이상" };
+  return { ratio, level: byRatio };
+}
+
+/** 표·브리프용: "높음 (7.1배 · 문서 10만 개 이상)" */
+export function formatSaturation(saturation: Saturation | null) {
+  return saturation ? `${saturation.level} (${saturation.ratio}배${saturation.cap ? ` · ${saturation.cap}` : ""})` : "-";
+}
+
+export type SurgeLabel = "급상승" | "상승" | "보통" | "하락" | "데이터 부족";
+
+export interface Surge {
+  /** 최근 7일 평균 ÷ 그 전 28일 평균 */
+  ratio: number | null;
+  label: SurgeLabel;
+}
+
+/**
+ * 최근 7일 검색이 그 전 4주보다 얼마나 늘었는지 (일간 추이). 크리에이터 어드바이저의 "검색 유입 트렌드"처럼
+ * 지금 오르고 있는 키워드를 잡는 용도. 월간 추이는 지난달까지만 봐서 이번 주의 변화를 놓친다.
+ * 급상승 2배 이상, 상승 1.3배 이상, 하락 0.7배 이하
+ */
+export function summarizeSurge(points: { ratio: number }[]): Surge {
+  if (points.length < 14) return { ratio: null, label: "데이터 부족" };
+  const recent = average(points.slice(-7).map((p) => p.ratio));
+  const before = average(points.slice(-35, -7).map((p) => p.ratio));
+  if (before === 0) return recent > 0 ? { ratio: null, label: "급상승" } : { ratio: null, label: "데이터 부족" };
+  const ratio = Math.round((recent / before) * 10) / 10;
+  return { ratio, label: ratio >= 2 ? "급상승" : ratio >= 1.3 ? "상승" : ratio <= 0.7 ? "하락" : "보통" };
+}
+
+/** 표 칸용: "급상승 ×2.4" */
+export function formatSurge(surge: Surge | null | undefined) {
+  if (!surge || surge.label === "데이터 부족") return "-";
+  return surge.ratio === null ? surge.label : `${surge.label} ×${surge.ratio}`;
 }
 
 export interface KeywordResearch {

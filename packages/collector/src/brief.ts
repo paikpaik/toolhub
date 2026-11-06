@@ -2,7 +2,7 @@
  * claude.ai 프로젝트(docs/prompts)에 붙여넣을 [글쓰기 브리프]를 만든다.
  * 형식은 docs/prompts/writing.md의 "입력 형식"과 맞춰야 한다.
  */
-import type { HubConfig } from "./naver-hub.ts";
+import { fetchDailyTrends, type HubConfig } from "./naver-hub.ts";
 import { fetchRelatedKeywords, toHintKeyword, type KeywordStat, type SearchAdConfig } from "./naver-searchad.ts";
 import {
   PLATFORM_LABELS,
@@ -13,7 +13,8 @@ import {
   type Structure,
   type WritingType,
 } from "./platforms.ts";
-import { computeSaturation, researchKeyword, type KeywordResearch } from "./research.ts";
+import { findPivots, formatPivotTable, hasOpenPivot, needsPivot, type PivotRow } from "./pivot.ts";
+import { computeSaturation, formatSaturation, formatSurge, researchKeyword, summarizeSurge, type KeywordResearch, type Surge } from "./research.ts";
 import { normalizeKeyword, SOURCE_LABELS } from "./sources.ts";
 import type { DayKeyword } from "./types.ts";
 
@@ -72,6 +73,10 @@ export interface WritingBriefInput {
   related?: KeywordStat[];
   /** NAVER API HUB 조사 결과 (키가 없으면 생략) */
   research?: KeywordResearch | null;
+  /** 최근 7일 검색 변화 (일간 추이) */
+  surge?: Surge | null;
+  /** 대표 키워드 경쟁이 셀 때 돌릴 연관어 (점수순). undefined = 조회하지 않음 */
+  pivots?: PivotRow[];
   note?: string;
 }
 
@@ -86,6 +91,8 @@ export function formatWritingBrief({
   self,
   related = [],
   research,
+  surge,
+  pivots,
   note,
 }: WritingBriefInput) {
   const stats =
@@ -93,7 +100,7 @@ export function formatWritingBrief({
       ? "조회하지 않음"
       : self === null
         ? "데이터 없음"
-        : `${formatSearchCount(self.totalSearches)} (PC ${formatSearchCount(self.pcSearches)} / 모바일 ${formatSearchCount(self.mobileSearches)}) · 경쟁도: ${self.competition}`;
+        : `${formatSearchCount(self.totalSearches)} (PC ${formatSearchCount(self.pcSearches)} / 모바일 ${formatSearchCount(self.mobileSearches)}) · 광고 경쟁도: ${self.competition}`;
 
   const lines = [
     "[글쓰기 브리프]",
@@ -107,18 +114,38 @@ export function formatWritingBrief({
   if (research?.trend && research.trend.label !== "데이터 부족") {
     lines.push(`검색 추이: ${research.trend.label} — ${research.trend.reason}`);
   }
+  const saturation = research?.blog ? computeSaturation(self?.totalSearches, research.blog.total) : null;
   if (research?.blog) {
-    const saturation = computeSaturation(self?.totalSearches, research.blog.total);
     lines.push(
-      `블로그 문서 수: ${research.blog.total.toLocaleString("ko-KR")}${saturation ? ` (검색량의 ${saturation.ratio}배 · 포화도 ${saturation.level})` : ""}`,
+      `블로그 문서 수: ${research.blog.total.toLocaleString("ko-KR")}${saturation ? ` · 포화도 ${formatSaturation(saturation)} (문서 수 ÷ 검색량)` : ""}`,
     );
+  }
+  if (surge && surge.label !== "데이터 부족") lines.push(`최근 7일 검색: ${formatSurge(surge)} (직전 4주 평균 대비)`);
+  // 대표 키워드 경쟁이 세면 연관어로 돌리라고 브리프 앞쪽에서 알린다 (writing.md "경쟁 판단")
+  if (pivots !== undefined && needsPivot(saturation)) {
+    const why = `포화도 ${formatSaturation(saturation)}`;
+    if (hasOpenPivot(pivots)) {
+      lines.push(
+        `경쟁 판단: 대표 키워드라 경쟁이 셉니다 (${why}). 글이 적은 블로그는 상위 노출이 어려우니, 아래 추천 타깃 키워드 중 포화도 기회인 하나를 메인 키워드로 골라 그 키워드로 브리프를 다시 받아 쓰세요.`,
+        "추천 타깃 키워드 (연관어로 돌리기, 검색량 대비 경쟁 글이 적은 순):",
+        formatPivotTable(pivots),
+      );
+    } else if (pivots.length > 0) {
+      lines.push(
+        `경쟁 판단: 대표 키워드라 경쟁이 셉니다 (${why}). 연관어도 모두 경쟁이 세서(포화도 기회 없음) 돌려도 나아지지 않습니다. 사용자에게 알리고, 쓴다면 아래 중 경쟁 글이 가장 적은 키워드로 제목을 구체적인 상황·대상으로 좁힙니다.`,
+        "연관어 (검색량 대비 경쟁 글이 적은 순):",
+        formatPivotTable(pivots),
+      );
+    } else {
+      lines.push(`경쟁 판단: 대표 키워드라 경쟁이 셉니다 (${why}). 돌릴 만한 연관어를 찾지 못했으니, 제목을 구체적인 상황·대상으로 좁혀 쓰세요.`);
+    }
   }
 
   const top = related.slice(0, BRIEF_RELATED_COUNT);
   if (top.length > 0) {
     lines.push(
       "연관 키워드 (관련 높은 순):",
-      "| 키워드 | 월간 검색량 | 경쟁도 |",
+      "| 키워드 | 월간 검색량 | 광고 경쟁도 |",
       "|---|---|---|",
       ...top.map((r) => `| ${r.keyword} | ${formatSearchCount(r.totalSearches)} | ${r.competition} |`),
     );
@@ -203,18 +230,26 @@ export async function buildWritingBrief(
   platform: Platform,
   { type = "info", structure, note }: { type?: WritingType; structure?: Structure; note?: string } = {},
 ) {
-  const [insight, research] = await Promise.all([
+  const [insight, research, daily] = await Promise.all([
     searchAd ? fetchKeywordInsight(searchAd, keyword) : null,
     hub ? researchKeyword(hub, keyword).catch(() => null) : null,
+    hub ? fetchDailyTrends(hub, [keyword]).catch(() => null) : null,
   ]);
+  const related = insight ? rankByRelevance(insight.related, insight.tokens) : [];
+  // 대표 키워드 경쟁이 셀 때만 연관어 후보의 문서 수·추이를 더 조회한다 (API 호출이 늘어서)
+  const saturation = computeSaturation(insight?.self?.totalSearches, research?.blog?.total);
+  const pivots = searchAd && needsPivot(saturation) ? await findPivots({ searchAd, hub }, keyword, { related: insight?.related }).catch(() => []) : undefined;
+  const points = daily?.get(keyword);
   return formatWritingBrief({
     platform,
     type,
     structure,
     keyword,
     self: insight?.self,
-    related: insight ? rankByRelevance(insight.related, insight.tokens) : [],
+    related,
     research,
+    surge: points ? summarizeSurge(points) : null,
+    pivots,
     note,
   });
 }

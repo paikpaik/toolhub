@@ -66,9 +66,18 @@ describe("묶음 분석 표", () => {
   it("요약에는 초안이 없는 기회 키워드만, 표에는 시즌 달·초안 표시", () => {
     const text = formatBatchTable(rows);
     assert.match(text.split("\n")[0]!, /: 기초연금 신청방법$/);
-    assert.match(text, /\| 국민연금 수령나이 \| 58,080 \| 중간 \| - \| 126,419 \| 기회 \(2\.2배\) \| ✓ 1개 \|/);
+    assert.match(text, /\| 국민연금 수령나이 \| 58,080 \| 중간 \| - \| - \| 126,419 \| 기회 \(2\.2배\) \| ✓ 1개 \|/);
+    assert.match(text, /경쟁이 센 키워드.*find_pivot_keywords.*: 연말정산, 다이어트$/m, "초안 없는 보통·높음은 연관어로 돌리라고");
+    assert.match(text, /광고 경쟁도는 검색광고 입찰 경쟁/);
     assert.match(text, /\| 연말정산 \| 22,600 \| 높음 \| 시즌\(1월\) \|/);
     assert.match(text, /\| 문장형 뉴스 키워드 \| 데이터 없음 \|/);
+  });
+
+  it("최근 7일 칸과 문서 수 기준으로 올린 포화도 표시", () => {
+    const text = formatBatchTable([
+      row("절임배추", { stats: stat(87_100), blogTotal: 620_270, saturation: { ratio: 7.1, level: "높음", cap: "문서 10만 개 이상" }, surge: { ratio: 1.8, label: "상승" } }),
+    ]);
+    assert.match(text, /\| 절임배추 \| 87,100 \| 낮음 \| - \| 상승 ×1\.8 \| 620,270 \| 높음 \(7\.1배 · 문서 10만 개 이상\) \|  \|/);
   });
 
   it("검색광고 키가 없으면 검색량 칸은 -", () => {

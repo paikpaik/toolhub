@@ -1,7 +1,13 @@
 import {
   briefKey,
   computeSaturation,
+  fetchDailyTrends,
   fetchKeywordInsight,
+  findPivots,
+  formatSurge,
+  hasOpenPivot,
+  needsPivot,
+  summarizeSurge,
   formatWritingBrief,
   hubConfigFromEnv,
   kstNow,
@@ -13,6 +19,8 @@ import {
   WRITING_TYPES,
   type KeywordResearch,
   type KeywordStat,
+  type PivotRow,
+  type Saturation,
 } from "@toolhub/collector";
 import Link from "next/link";
 import { AddTaskPopover } from "../../add-task-popover";
@@ -25,7 +33,10 @@ export const dynamic = "force-dynamic";
 /** 연관 키워드가 천 개 넘게 오기도 해서 상위만 보여준다 */
 const MAX_RELATED = 100;
 
-const SATURATION_HELP = "블로그 문서 수 ÷ 월간 검색량. 10배 이하 기회, 50배 이하 보통, 그 이상 높음 (참고용 기준)";
+const SATURATION_HELP =
+  "블로그 문서 수 ÷ 월간 검색량. 10배 이하 기회, 50배 이하 보통, 그 이상 높음. 비율과 상관없이 문서 2만 개 이상은 보통부터, 10만 개 이상은 높음 (글이 적은 블로그 기준)";
+const SURGE_HELP = "최근 7일 검색 ÷ 그 전 4주 평균 (일간 추이). 2배 이상 급상승, 1.3배 이상 상승";
+const AD_COMPETITION_HELP = "검색광고 입찰 경쟁입니다. 블로그 노출 경쟁은 블로그 문서 수·포화도로 봅니다";
 
 export default async function KeywordPage({ searchParams }: { searchParams: Promise<{ q?: string }> }) {
   const { q = "" } = await searchParams;
@@ -39,23 +50,31 @@ export default async function KeywordPage({ searchParams }: { searchParams: Prom
   let tokens: string[] = [];
   let error: string | null = null;
   let research: KeywordResearch | null = null;
+  let daily: Awaited<ReturnType<typeof fetchDailyTrends>> | null = null;
   if (keyword) {
     // 검색광고와 API HUB를 동시에 조회한다
-    const [insight, hubResult] = await Promise.all([
+    const [insight, hubResult, dailyResult] = await Promise.all([
       searchAd ? fetchKeywordInsight(searchAd, keyword).catch((e: unknown) => (e instanceof Error ? e.message : String(e))) : null,
       hub ? researchKeyword(hub, keyword).catch(() => null) : null,
+      hub ? fetchDailyTrends(hub, [keyword]).catch(() => null) : null,
     ]);
     if (typeof insight === "string") error = insight;
     else if (insight) ({ self, related: others, tokens } = insight);
     research = hubResult;
+    daily = dailyResult;
   }
   const saturation = computeSaturation(self?.totalSearches, research?.blog?.total);
+  const points = daily?.get(keyword);
+  const surge = points ? summarizeSurge(points) : null;
+  // 대표 키워드 경쟁이 세면 연관어로 돌릴 후보를 찾는다 (경쟁 글 수까지 조회해서 조금 더 걸린다)
+  const pivots: PivotRow[] | undefined =
+    searchAd && needsPivot(saturation) ? await findPivots({ searchAd, hub }, keyword, { related: others }).catch(() => []) : undefined;
 
   // 플랫폼·유형을 바꿔도 바로 복사되도록 모든 조합의 브리프를 미리 만들어 둔다
   const ranked = rankByRelevance(others, tokens);
   const briefs = Object.fromEntries(
     PLATFORMS.flatMap((platform) =>
-      WRITING_TYPES.map((type) => [briefKey(platform, type), formatWritingBrief({ platform, type, keyword, self, related: ranked, research })]),
+      WRITING_TYPES.map((type) => [briefKey(platform, type), formatWritingBrief({ platform, type, keyword, self, related: ranked, research, surge, pivots })]),
     ),
   );
 
@@ -108,20 +127,17 @@ export default async function KeywordPage({ searchParams }: { searchParams: Prom
           {searchAd && !error && (
             <>
               <StatCard label="월간 검색량" value={self ? formatSearches(self.totalSearches) : "-"} />
-              <StatCard label="경쟁도" value={self ? <CompetitionBadge value={self.competition} /> : "-"} />
+              <StatCard label="광고 경쟁도" hint={AD_COMPETITION_HELP} value={self ? <CompetitionBadge value={self.competition} /> : "-"} />
             </>
           )}
           {research?.trend && <StatCard label="검색 추이" value={research.trend.label} />}
+          {surge && surge.label !== "데이터 부족" && <StatCard label="최근 7일" hint={SURGE_HELP} value={formatSurge(surge)} />}
           {research?.blog && <StatCard label="블로그 문서 수" value={research.blog.total.toLocaleString()} />}
           {saturation && (
             <StatCard
               label="포화도"
               hint={SATURATION_HELP}
-              value={
-                <span className={`saturation ${saturation.level}`}>
-                  {saturation.level} <small>{saturation.ratio}배</small>
-                </span>
-              }
+              value={<SaturationBadge saturation={saturation} />}
             />
           )}
           {searchAd && !error && self && (
@@ -132,6 +148,8 @@ export default async function KeywordPage({ searchParams }: { searchParams: Prom
           )}
         </div>
       )}
+
+      {pivots && <PivotSection keyword={keyword} pivots={pivots} />}
 
       {research && <ResearchSections research={research} keyword={keyword} />}
 
@@ -153,7 +171,7 @@ export default async function KeywordPage({ searchParams }: { searchParams: Prom
                     <th className="num">합계</th>
                     <th className="num">PC</th>
                     <th className="num">모바일</th>
-                    <th>경쟁도</th>
+                    <th title={AD_COMPETITION_HELP}>광고 경쟁도</th>
                     <th className="num">월평균 클릭</th>
                   </tr>
                 </thead>
@@ -181,6 +199,60 @@ export default async function KeywordPage({ searchParams }: { searchParams: Prom
         </section>
       )}
     </main>
+  );
+}
+
+function SaturationBadge({ saturation }: { saturation: Saturation }) {
+  return (
+    <span className={`saturation ${saturation.level}`} title={saturation.cap ?? undefined}>
+      {saturation.level} <small>{saturation.ratio}배</small>
+    </span>
+  );
+}
+
+/** 대표 키워드 경쟁이 셀 때: 검색량은 적당하고 경쟁 글이 적은 연관어 (누르면 그 키워드로 다시 분석) */
+function PivotSection({ keyword, pivots }: { keyword: string; pivots: PivotRow[] }) {
+  return (
+    <section>
+      <h2>
+        연관어로 돌리기{" "}
+        <small>
+          {hasOpenPivot(pivots)
+            ? `“${keyword}”는 경쟁 글이 많아요. 포화도 기회인 연관어를 메인 키워드로 쓰면 글이 적은 블로그도 상위에 오르기 쉬워요`
+            : pivots.length
+              ? "연관어도 모두 경쟁이 세요. 쓴다면 경쟁 글이 가장 적은 키워드로 제목을 구체적으로 좁혀요"
+              : "돌릴 만한 연관어를 찾지 못했어요 (건강·의료 키워드는 검색광고가 연관어를 거의 주지 않아요)"}
+        </small>
+      </h2>
+      {pivots.length > 0 && (
+        <div className="table-wrap">
+          <table>
+            <thead>
+              <tr>
+                <th>키워드</th>
+                <th className="num">월간 검색량</th>
+                <th className="num">블로그 문서 수</th>
+                <th title={SATURATION_HELP}>포화도</th>
+                <th title={SURGE_HELP}>최근 7일</th>
+              </tr>
+            </thead>
+            <tbody>
+              {pivots.map((p) => (
+                <tr key={p.keyword}>
+                  <td className="keyword">
+                    <Link href={keywordHref(p.keyword)}>{p.keyword}</Link>
+                  </td>
+                  <td className="num">{formatSearches(p.searches)}</td>
+                  <td className="num">{p.blogTotal === null ? "-" : p.blogTotal.toLocaleString()}</td>
+                  <td>{p.saturation ? <SaturationBadge saturation={p.saturation} /> : "-"}</td>
+                  <td>{formatSurge(p.surge)}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
+    </section>
   );
 }
 

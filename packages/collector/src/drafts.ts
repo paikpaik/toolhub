@@ -18,21 +18,26 @@ export interface DraftSummary {
 
 const FILE_NAME = /^(\d{4}-\d{2}-\d{2})-(.+?)-(tistory|blogger|naver)(?:-\d+)?\.md$/;
 
+/** 파일 이름에서 작성일·키워드·플랫폼 */
+export function draftNameInfo(file: string): Omit<DraftSummary, "file" | "updatedAt"> {
+  const match = FILE_NAME.exec(file);
+  const platform = match?.[3];
+  return {
+    date: match?.[1] ?? null,
+    keyword: match?.[2]?.replace(/-/g, " ") ?? file.replace(/\.md$/, ""),
+    platform: isPlatform(platform) ? platform : null,
+  };
+}
+
 /** 최근에 수정한 순 */
 export async function listDrafts(dir: string): Promise<DraftSummary[]> {
   const files = (await readdir(dir).catch(() => [] as string[])).filter((f) => f.endsWith(".md"));
   const drafts = await Promise.all(
-    files.map(async (file) => {
-      const match = FILE_NAME.exec(file);
-      const platform = match?.[3];
-      return {
-        file,
-        date: match?.[1] ?? null,
-        keyword: match?.[2]?.replace(/-/g, " ") ?? file.replace(/\.md$/, ""),
-        platform: isPlatform(platform) ? platform : null,
-        updatedAt: (await stat(path.join(dir, file))).mtime.toISOString(),
-      };
-    }),
+    files.map(async (file) => ({
+      file,
+      ...draftNameInfo(file),
+      updatedAt: (await stat(path.join(dir, file))).mtime.toISOString(),
+    })),
   );
   return drafts.sort((a, b) => b.updatedAt.localeCompare(a.updatedAt));
 }

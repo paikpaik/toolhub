@@ -2,6 +2,8 @@
 
 import { useEffect, useRef, useState } from "react";
 import { COLOR_PRESETS, drawThumbnail, SIZES, TEMPLATES, type Colors, type SizeId, type TemplateId } from "./draw";
+import { randomColors } from "../../../lib/random-colors";
+import { Icon } from "../../icons";
 import type { ThumbnailFont } from "./fonts";
 
 /** 부제·라벨·블로그 이름·색·글꼴·템플릿·크기는 브라우저에 기억해 썸네일 스타일을 통일한다 */
@@ -225,6 +227,16 @@ export function ThumbnailMaker({
                 가
               </button>
             ))}
+            {/* 누를 때마다 새 조합. 마음에 들면 그대로 두면 기억된다 */}
+            <button
+              type="button"
+              className="swatch swatch-random"
+              onClick={() => updateBrand({ colors: randomColors() })}
+              title="랜덤 조합: 누를 때마다 어울리는 색 조합을 새로 뽑아요"
+              aria-label="랜덤 조합"
+            >
+              <Icon name="repeat" size={16} />
+            </button>
           </div>
           <div className="color-inputs">
             {(["bg", "text", "accent"] as const).map((key) => (

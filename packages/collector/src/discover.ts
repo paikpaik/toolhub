@@ -12,7 +12,7 @@ import { analyzeKeywords, cleanKeywordList, formatTrendCell, type BatchRow } fro
 import { formatSearchCount } from "./brief.ts";
 import type { HubConfig } from "./naver-hub.ts";
 import { fetchRelatedKeywords, SearchAdError, toHintKeyword, type KeywordStat, type SearchAdConfig } from "./naver-searchad.ts";
-import { computeSaturation, type TrendSummary } from "./research.ts";
+import { computeSaturation, formatSaturation, formatSurge, type TrendSummary } from "./research.ts";
 import { normalizeKeyword } from "./sources.ts";
 
 export const MAX_TOPICS = 3;
@@ -30,7 +30,7 @@ const INTENT_WORDS = [
   "환급", "뜻", "종류", "장단점", "주의", "팁", "정리", "레시피", "만들기", "효과", "효능", "부작용",
 ];
 /** 특정 사이트를 찾아가는 검색어는 블로그 글이 읽히지 않는다 */
-const NAVIGATIONAL_WORDS = ["홈페이지", "사이트", "로그인", "고객센터", "전화번호", "바로가기", "포털", "공단"];
+export const NAVIGATIONAL_WORDS = ["홈페이지", "사이트", "로그인", "고객센터", "전화번호", "바로가기", "포털", "공단"];
 
 export const hasIntent = (keyword: string) => INTENT_WORDS.some((w) => keyword.includes(w));
 
@@ -62,7 +62,7 @@ export function pickCandidates(stats: KeywordStat[], topics: string[]) {
 }
 
 /** 주제마다 연관 키워드를 받는다. 의도 힌트가 거부되면(400) 주제만으로 다시 받는다 */
-async function fetchTopicKeywords(config: SearchAdConfig, topics: string[]) {
+export async function fetchTopicKeywords(config: SearchAdConfig, topics: string[]) {
   const all: KeywordStat[] = [];
   for (const topic of topics) {
     const hint = toHintKeyword(topic);
@@ -78,7 +78,7 @@ async function fetchTopicKeywords(config: SearchAdConfig, topics: string[]) {
 
 export interface DiscoverRow extends BatchRow {
   intent: boolean;
-  /** 추천: 포화도 기회이면서 하락세·반짝 이슈가 아닌 키워드 */
+  /** 추천: 포화도 기회(문서 2만 개 아래)이면서, 하락세가 아니거나 최근 7일 오르는 중인 키워드 (반짝 이슈도 지금 뜨면 추천) */
   pick: boolean;
   /** 시즌 정점이 1~3달 뒤라 지금 쓰면 시즌에 맞춰 노출될 키워드 */
   seasonSoon: boolean;
@@ -92,7 +92,9 @@ export function isSeasonSoon(trend: TrendSummary | null, today: string) {
 }
 
 export function toDiscoverRow(row: BatchRow, today: string): DiscoverRow {
-  const steady = row.trend !== null && row.trend.label !== "하락세" && row.trend.label !== "급등 이력";
+  // 반짝 이슈(급등 이력)는 빼지 않는다: 매일 이슈를 빠르게 쓰는 전략이라 지금 뜨는 게 더 중요하다 (2026-11-06)
+  const rising = row.surge?.label === "급상승" || row.surge?.label === "상승";
+  const steady = row.trend !== null && (row.trend.label !== "하락세" || rising);
   return {
     ...row,
     intent: hasIntent(row.keyword),
@@ -145,10 +147,10 @@ export function formatDiscoverTable({ topics, rows, matched }: DiscoverResult) {
     `주제 ${topics.join(", ")}: 연관 키워드 중 조건(주제 포함, 월 ${MIN_SEARCHES.toLocaleString("ko-KR")}~${MAX_SEARCHES.toLocaleString("ko-KR")}회)에 맞는 ${matched}개${
       matched > rows.length ? ` 중 정보형 우선 상위 ${rows.length}개` : ""
     } 분석.`,
-    `추천(포화도 기회 + 하락세·반짝 이슈 아님, 초안 없음): ${picks.length ? picks.map((r) => r.keyword).join(", ") : "없음"}`,
+    `추천(포화도 기회 + 하락세 아님 또는 최근 7일 상승, 초안 없음): ${picks.length ? picks.map((r) => r.keyword).join(", ") : "없음"}`,
     "",
-    "| 추천 | 키워드 | 월간 검색량 | 검색 추이 | 블로그 문서 수 | 포화도 | 초안 |",
-    "|---|---|---|---|---|---|---|",
+    "| 추천 | 키워드 | 월간 검색량 | 검색 추이 | 최근 7일 | 블로그 문서 수 | 포화도 | 초안 |",
+    "|---|---|---|---|---|---|---|---|",
     ...rows.map((r) =>
       [
         "",
@@ -156,8 +158,9 @@ export function formatDiscoverTable({ topics, rows, matched }: DiscoverResult) {
         r.keyword,
         r.stats ? formatSearchCount(r.stats.totalSearches) : "-",
         formatTrendCell(r.trend) + (r.seasonSoon ? " · 곧 시즌" : ""),
+        formatSurge(r.surge),
         r.blogTotal === null ? "-" : r.blogTotal.toLocaleString("ko-KR"),
-        r.saturation ? `${r.saturation.level} (${r.saturation.ratio}배)` : "-",
+        formatSaturation(r.saturation),
         r.drafts.length ? `✓ ${r.drafts.length}개` : "",
         "",
       ]

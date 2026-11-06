@@ -62,9 +62,10 @@ describe("formatWritingBrief", () => {
     const brief = formatWritingBrief({ ...base, type: "info", structure: "B", related: [stat("국민연금", 287_000)], research });
     const lines = brief.split("\n");
     assert.deepEqual(lines.slice(0, 4), ["[글쓰기 브리프]", "플랫폼: 티스토리", "유형: 정보", "구성: B (결론 먼저형)"]);
-    assert.match(brief, /월간 검색량: 58,080 \(PC 14,520 \/ 모바일 43,560\) · 경쟁도: 중간/);
+    assert.match(brief, /월간 검색량: 58,080 \(PC 14,520 \/ 모바일 43,560\) · 광고 경쟁도: 중간/);
     assert.match(brief, /검색 추이: 꾸준함/);
-    assert.match(brief, /블로그 문서 수: 126,419 \(검색량의 2\.2배 · 포화도 기회\)/);
+    assert.match(brief, /블로그 문서 수: 126,419 · 포화도 높음 \(2\.2배 · 문서 10만 개 이상\)/);
+    assert.doesNotMatch(brief, /경쟁 판단/, "연관어를 조회하지 않았으면(pivots 없음) 경쟁 판단도 없다");
     assert.match(brief, /\| 국민연금 \| 287,000 \| 낮음 \|/);
     assert.match(brief, /- 1968년생 언제 받나요\?/);
     assert.match(brief, /- 국민연금 \/ 총정리 \(2026-09-12\)/, "표·목록을 깨는 | 는 / 로 바꾼다");
@@ -87,6 +88,26 @@ describe("formatWritingBrief", () => {
   it("구성을 주지 않으면 A~D 중 하나를 고른다", () => {
     const line = formatWritingBrief({ platform: "blogger", type: "place", keyword: "x" }).split("\n")[3]!;
     assert.ok(Object.keys(STRUCTURE_NAMES.place).some((s) => line === structureLine("place", s as "A")), line);
+  });
+
+  it("대표 키워드 경쟁이 세면 최근 7일과 함께 추천 타깃 키워드(연관어로 돌리기)를 앞쪽에", () => {
+    const pivot = {
+      keyword: "국민연금 수령나이 조회",
+      searches: 3_000,
+      blogTotal: 2_000,
+      saturation: { ratio: 0.7, level: "기회" as const, cap: null },
+      surge: { ratio: 2.4, label: "급상승" as const },
+      intent: true,
+      score: 1.5,
+    };
+    const brief = formatWritingBrief({ ...base, research, related: [stat("국민연금", 287_000)], surge: { ratio: 1.8, label: "상승" }, pivots: [pivot] });
+    assert.match(brief, /최근 7일 검색: 상승 ×1\.8/);
+    assert.match(brief, /경쟁 판단: 대표 키워드라 경쟁이 셉니다/);
+    assert.match(brief, /\| 국민연금 수령나이 조회 \| 3,000 \| 2,000 \| 기회 \(0\.7배\) \| 급상승 ×2\.4 \|/);
+    assert.ok(brief.indexOf("추천 타깃 키워드") < brief.indexOf("연관 키워드 (관련 높은 순)"), "연관 키워드 표보다 앞에");
+    assert.match(formatWritingBrief({ ...base, research, pivots: [] }), /돌릴 만한 연관어를 찾지 못했으니/);
+    const crowded = { ...pivot, saturation: { ratio: 60, level: "높음" as const } };
+    assert.match(formatWritingBrief({ ...base, research, pivots: [crowded] }), /연관어도 모두 경쟁이 세서/);
   });
 
   it("참고 메모", () => {
