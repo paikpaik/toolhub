@@ -83,3 +83,34 @@ describe("mergeSettings", () => {
     assert.deepEqual(mergeSettings(undefined), DEFAULT_SETTINGS);
   });
 });
+
+describe("크리에이터 어드바이저 트렌드", () => {
+  const { isTrendMarker, trendChange, mergeAdvisorTrends, formatAdvisorTrends } = globalThis.ToolhubLib;
+
+  it("줄 끝의 변동 표시: new, 숫자(기호 포함), -", () => {
+    for (const ok of ["new", "NEW", "1", "40", "▲ 3", "▼10", "-"]) assert.equal(isTrendMarker(ok), true, ok);
+    for (const no of ["권성준 식당 가격", "2026", "", "--"]) assert.equal(isTrendMarker(no), false, no);
+  });
+
+  it("▲▼가 글자에 없으면 숫자 색으로 상승(빨강)·하락(파랑)", () => {
+    assert.deepEqual(trendChange("new"), { kind: "new", amount: null });
+    assert.deepEqual(trendChange("-"), { kind: "same", amount: null });
+    assert.deepEqual(trendChange("▲ 3"), { kind: "up", amount: 3 });
+    assert.deepEqual(trendChange("14", "rgb(240, 64, 52)"), { kind: "up", amount: 14 });
+    assert.deepEqual(trendChange("3", "rgb(36, 112, 236)"), { kind: "down", amount: 3 });
+    assert.deepEqual(trendChange("5", "rgb(80, 80, 80)"), { kind: "unknown", amount: 5 });
+  });
+
+  it("탭별로 모으고 날짜가 바뀌면 새로, 카드마다 한 줄로 정리", () => {
+    const search = [{ title: "맛집", items: [{ keyword: "권성준 식당 가격", kind: "new", amount: null }, { keyword: "한정선", kind: "up", amount: 1 }] }];
+    const main = [{ title: "40-44세 남자", items: [{ keyword: "미국 중간선거", kind: "same", amount: null }, { keyword: "오봉집", kind: "down", amount: 3 }] }];
+    let stored = mergeAdvisorTrends(null, "2026. 11. 05.", "검색 유입 트렌드", search);
+    stored = mergeAdvisorTrends(stored, "2026. 11. 05.", "메인 유입 트렌드", main);
+    const text = formatAdvisorTrends(stored);
+    assert.match(text, /^\[크리에이터 어드바이저 트렌드 · 2026\. 11\. 05\.\]/);
+    assert.match(text, /\(키워드 4개\)/);
+    assert.match(text, /## 검색 유입 트렌드 \(카드 1개\)\n- 맛집: 권성준 식당 가격 \(new\), 한정선 \(▲1\)/);
+    assert.match(text, /## 메인 유입 트렌드 \(카드 1개\)\n- 40-44세 남자: 미국 중간선거, 오봉집 \(▼3\)/);
+    assert.deepEqual(Object.keys(mergeAdvisorTrends(stored, "2026. 11. 06.", "메인 유입 트렌드", main).tabs), ["메인 유입 트렌드"]);
+  });
+});

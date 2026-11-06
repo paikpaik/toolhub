@@ -87,5 +87,71 @@ globalThis.ToolhubLib = (() => {
     return `toolhub-${stamp}.${MIME_EXTENSIONS[mime] ?? "png"}`;
   }
 
-  return { FONT_SIZES, DEFAULT_SETTINGS, parseColor, nearestColor, mergeSettings, MAX_SHELF, dataUrlMime, bytesToDataUrl, addToShelf, isLargeImage, imageFileName };
+  // ── 크리에이터 어드바이저 트렌드 (advisor.js가 화면에서 읽은 카드를 정리해 복사) ──
+
+  /** 키워드 줄 끝의 변동 표시: new, 숫자(▲▼ 기호가 붙기도), 변동 없음 "-" */
+  const TREND_MARKER = /^(?:new|[▲▼△▽↑↓+]?\s*\d{1,3}|-)$/i;
+  const isTrendMarker = (text) => TREND_MARKER.test(String(text ?? "").trim());
+
+  /**
+   * 변동 표시를 해석한다. ▲▼는 아이콘이라 글자에 없을 때가 많아 숫자 색으로 본다 (상승 빨강, 하락 파랑).
+   * { kind: "new" | "up" | "down" | "same" | "unknown", amount }
+   */
+  function trendChange(marker, color) {
+    const text = String(marker ?? "").trim();
+    if (/^new$/i.test(text)) return { kind: "new", amount: null };
+    if (text === "-") return { kind: "same", amount: null };
+    const amount = Number(text.replace(/\D/g, "")) || null;
+    if (/[▲△↑+]/.test(text)) return { kind: "up", amount };
+    if (/[▼▽↓]/.test(text)) return { kind: "down", amount };
+    const rgb = parseColor(color);
+    if (rgb && rgb[0] - rgb[2] > 40) return { kind: "up", amount };
+    if (rgb && rgb[2] - rgb[0] > 40) return { kind: "down", amount };
+    return { kind: "unknown", amount };
+  }
+
+  const trendLabel = ({ kind, amount }) =>
+    kind === "new" ? " (new)" : kind === "up" ? ` (▲${amount ?? ""})` : kind === "down" ? ` (▼${amount ?? ""})` : "";
+
+  /**
+   * 탭(검색 유입·메인 유입)마다 읽은 카드를 모은다. 날짜가 바뀌면 새로 시작해, 두 탭에서 차례로 누르면 함께 복사된다.
+   * cards: [{ title, items: [{ keyword, kind, amount }] }]
+   */
+  function mergeAdvisorTrends(stored, date, tab, cards) {
+    const base = stored && stored.date === date ? stored : { date, tabs: {} };
+    return { date, tabs: { ...base.tabs, [tab]: cards } };
+  }
+
+  /** Claude 앱에 그대로 붙여넣을 글. 카드마다 한 줄, 키워드 뒤에 변동 표시 */
+  function formatAdvisorTrends(stored) {
+    const tabs = Object.entries(stored?.tabs ?? {});
+    const total = tabs.reduce((sum, [, cards]) => sum + cards.reduce((n, c) => n + c.items.length, 0), 0);
+    const lines = [
+      `[크리에이터 어드바이저 트렌드${stored?.date ? ` · ${stored.date}` : ""}]`,
+      `이 키워드들로 오늘 쓸 글 5개를 골라줘. new·▲ 상승 키워드를 우선하고, analyze_keywords는 50개씩 나눠 조회해줘. (키워드 ${total}개)`,
+    ];
+    for (const [tab, cards] of tabs) {
+      lines.push("", `## ${tab} (카드 ${cards.length}개)`);
+      for (const card of cards) lines.push(`- ${card.title}: ${card.items.map((i) => i.keyword + trendLabel(i)).join(", ")}`);
+    }
+    return lines.join("\n");
+  }
+
+  return {
+    FONT_SIZES,
+    DEFAULT_SETTINGS,
+    parseColor,
+    nearestColor,
+    mergeSettings,
+    MAX_SHELF,
+    dataUrlMime,
+    bytesToDataUrl,
+    addToShelf,
+    isLargeImage,
+    imageFileName,
+    isTrendMarker,
+    trendChange,
+    mergeAdvisorTrends,
+    formatAdvisorTrends,
+  };
 })();

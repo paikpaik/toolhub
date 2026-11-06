@@ -22,7 +22,8 @@ export function cleanKeywordList(input: string[]) {
   for (const raw of input.flatMap((s) => s.split(/[\n,]/))) {
     const keyword = raw
       .replace(/^\s*(?:[-*•·]\s*)?(?:\d{1,3}\s*[.)위](?!\d)\s*)?/, "")
-      .replace(/\s*(?:[▲▼↑↓]\s*\d*|\(?(?:NEW|new|신규)\)?)\s*$/, "")
+      // 끝의 변동 표시: ▲3, ▼2, NEW, 신규, 확장 프로그램이 복사한 "(▲1)"·"(new)"
+      .replace(/\s*(?:\(\s*[▲▼↑↓]\s*\d*\s*\)|[▲▼↑↓]\s*\d*|\(?(?:NEW|new|신규)\)?)\s*$/, "")
       .replace(/^["'“”]+|["'“”]+$/g, "")
       .trim();
     const key = normalizeKeyword(keyword);

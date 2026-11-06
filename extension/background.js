@@ -7,6 +7,8 @@
 importScripts("lib.js");
 
 const MENU_ID = "toolhub-add-image";
+const ADVISOR_MENU_ID = "toolhub-advisor-trends";
+const ADVISOR_PAGES = ["https://creator-advisor.naver.com/*"];
 
 // 확장 아이콘을 누르면 사이드 패널(이미지 모음)을 연다. 패널 위치(왼쪽·오른쪽)는 크롬 설정 › 모양 › 사이드 패널에서 정한다
 chrome.sidePanel.setPanelBehavior({ openPanelOnActionClick: true }).catch(() => {});
@@ -19,6 +21,12 @@ chrome.commands.onCommand.addListener((command, tab) => {
 
 chrome.runtime.onInstalled.addListener(() => {
   chrome.contextMenus.create({ id: MENU_ID, title: "toolhub 패널에 담기", contexts: ["image"] });
+  chrome.contextMenus.create({
+    id: ADVISOR_MENU_ID,
+    title: "toolhub: 트렌드 키워드 복사",
+    contexts: ["page", "selection", "link"],
+    documentUrlPatterns: ADVISOR_PAGES,
+  });
 });
 
 /**
@@ -153,4 +161,58 @@ chrome.runtime.onMessage.addListener((message, sender) => {
       collect(message.url, tab?.id, undefined, hostOf(tab?.url ?? message.url));
     });
   }
+});
+
+/**
+ * 크리에이터 어드바이저 트렌드: 화면의 카드별 키워드를 읽어(advisor.js) 탭별로 모아 두고, 지금까지 모은 것을 복사한다.
+ * 검색 유입 트렌드에서 한 번, 메인 유입 트렌드에서 한 번 누르면 둘이 함께 복사된다 (같은 날짜끼리, 브라우저를 닫으면 비워짐)
+ */
+async function copyAdvisorTrends(tabId) {
+  const show = (text, ok) =>
+    chrome.scripting
+      .executeScript({
+        target: { tabId },
+        args: [text, ok],
+        func: async (message, copy) => {
+          // 클립보드는 페이지 안에서 쓴다. 메뉴를 누른 직후라 막히면 숨긴 입력칸으로 한 번 더
+          if (copy) {
+            try {
+              await navigator.clipboard.writeText(copy);
+            } catch {
+              const area = Object.assign(document.createElement("textarea"), { value: copy });
+              document.body.append(area);
+              area.select();
+              document.execCommand("copy");
+              area.remove();
+            }
+          }
+          const toast = Object.assign(document.createElement("div"), { textContent: message });
+          Object.assign(toast.style, {
+            position: "fixed", left: "50%", bottom: "32px", transform: "translateX(-50%)", zIndex: 2147483647,
+            maxWidth: "min(560px, 90vw)", padding: "12px 16px", borderRadius: "10px", background: "#1f2430", color: "#fff",
+            font: "14px/1.5 -apple-system, sans-serif", boxShadow: "0 6px 24px rgba(0,0,0,.25)", whiteSpace: "pre-line",
+          });
+          document.body.append(toast);
+          setTimeout(() => toast.remove(), 4000);
+        },
+      })
+      .catch(() => {});
+
+  try {
+    const [{ result }] = await chrome.scripting.executeScript({ target: { tabId }, files: ["lib.js", "advisor.js"] });
+    if (!result || result.error) return show(result?.error ?? "키워드를 읽지 못했어요.", null);
+    const { advisorTrends } = await chrome.storage.session.get("advisorTrends");
+    const merged = ToolhubLib.mergeAdvisorTrends(advisorTrends, result.date, result.tab, result.cards);
+    await chrome.storage.session.set({ advisorTrends: merged });
+    const count = result.cards.reduce((n, c) => n + c.items.length, 0);
+    const tabs = Object.keys(merged.tabs);
+    const next = tabs.includes("메인 유입 트렌드") ? "" : "\n메인 유입 트렌드 탭에서 한 번 더 누르면 함께 복사돼요.";
+    await show(`${result.tab}: 카드 ${result.cards.length}개 · 키워드 ${count}개를 읽었어요.\n복사한 탭: ${tabs.join(", ")} — Claude 앱에 붙여넣으세요.${next}`, ToolhubLib.formatAdvisorTrends(merged));
+  } catch (e) {
+    show(`키워드를 읽지 못했어요: ${e?.message ?? e}`, null);
+  }
+}
+
+chrome.contextMenus.onClicked.addListener((info, tab) => {
+  if (info.menuItemId === ADVISOR_MENU_ID && tab?.id) copyAdvisorTrends(tab.id);
 });
