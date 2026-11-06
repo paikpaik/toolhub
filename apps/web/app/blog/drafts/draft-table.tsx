@@ -6,6 +6,7 @@ import { Fragment, useEffect, useState } from "react";
 import { DRAFT_DATES_KEY, parseSavedDates } from "../../../lib/draft-dates";
 import { cycleSort, DRAFT_SORT_KEY, parseSavedSort, sortByRules, type SortColumn, type SortRule } from "../../../lib/draft-sort";
 import { DateFilter, datesLabel } from "./date-filter";
+import { DeleteDraftsButton } from "./delete-draft-button";
 import { KinPanel } from "./kin-panel";
 import { PromptCopyButton } from "./prompt-copy-button";
 import { DraftStatusControl, StatusBadge } from "./status-control";
@@ -46,8 +47,11 @@ export interface DraftRow {
 }
 
 /** 초안 목록. 줄을 누르면 아래로 펼쳐져 상태를 바꾸고, 그 키워드의 지식iN 질문에 답변을 준비한다 */
-export function DraftTable({ rows, statuses: initial }: { rows: DraftRow[]; statuses: DraftStatusMap }) {
+export function DraftTable({ rows: allRows, statuses: initial }: { rows: DraftRow[]; statuses: DraftStatusMap }) {
   const [statuses, setStatuses] = useState(initial);
+  // 지운 초안은 서버 화면을 다시 불러오지 않고 목록에서 바로 뺀다
+  const [deleted, setDeleted] = useState<Set<string>>(new Set());
+  const rows = deleted.size ? allRows.filter((r) => !deleted.has(r.file)) : allRows;
   const [filter, setFilter] = useState<DraftStatus | "all">("all");
   const [open, setOpen] = useState<string | null>(null);
   const [dates, setDates] = useState<string[]>([]);
@@ -85,6 +89,23 @@ export function DraftTable({ rows, statuses: initial }: { rows: DraftRow[]; stat
   );
   const update = (file: string) => (entry: DraftStatusEntry) => setStatuses((prev) => ({ ...prev, [file]: entry }));
 
+  // 삭제할 초안 고르기. 지금 보이는 줄만 지운다 (거르기를 바꿔 안 보이게 된 줄이 함께 지워지지 않게)
+  const [selected, setSelected] = useState<Set<string>>(new Set());
+  const picked = shown.filter((d) => selected.has(d.file));
+  const allPicked = shown.length > 0 && picked.length === shown.length;
+  const toggle = (file: string) =>
+    setSelected((prev) => {
+      const next = new Set(prev);
+      if (!next.delete(file)) next.add(file);
+      return next;
+    });
+  const toggleAll = () => setSelected(allPicked ? new Set() : new Set(shown.map((d) => d.file)));
+  const removeRows = (files: string[]) => {
+    setDeleted((prev) => new Set([...prev, ...files]));
+    setSelected((prev) => new Set([...prev].filter((f) => !files.includes(f))));
+    if (open && files.includes(open)) setOpen(null);
+  };
+
   return (
     <>
       <div className="draft-filters">
@@ -95,7 +116,14 @@ export function DraftTable({ rows, statuses: initial }: { rows: DraftRow[]; stat
             </button>
           ))}
         </div>
-        <DateFilter counts={dateCounts} value={dates} onChange={changeDates} />
+        {/* 선택 삭제는 늘 같은 자리에 둔다 (고를 때 나타나면 표가 밀려 누르던 줄이 움직인다). 고른 게 없으면 눌리지 않는다 */}
+        <div className="draft-select-actions">
+          <DeleteDraftsButton
+            targets={picked.map((d) => ({ file: d.file, keyword: d.keyword, published: statusOf(d.file) === "published" }))}
+            onDeleted={removeRows}
+          />
+          <DateFilter counts={dateCounts} value={dates} onChange={changeDates} />
+        </div>
         {sort.length > 0 && (
           <div className="draft-sort-summary">
             <span title="칼럼 머리를 누른 순서가 우선순위예요">정렬 {sort.map((r) => `${COLUMN_LABEL[r.column]} ${ARROW[r.dir]}`).join(" › ")}</span>
@@ -109,6 +137,9 @@ export function DraftTable({ rows, statuses: initial }: { rows: DraftRow[]; stat
         <table className="draft-table">
           <thead>
             <tr>
+              <th className="select">
+                <input type="checkbox" checked={allPicked} onChange={toggleAll} aria-label="보이는 초안 모두 고르기" title="보이는 초안 모두 고르기" />
+              </th>
               {COLUMNS.map(({ column, label }) => {
                 const index = sort.findIndex((r) => r.column === column);
                 const rule = sort[index];
@@ -143,12 +174,22 @@ export function DraftTable({ rows, statuses: initial }: { rows: DraftRow[]; stat
                   <tr
                     className={`draft-row${isOpen ? " open" : ""}`}
                     onClick={(e) => {
-                      // 키워드 링크(초안 열기)·프롬프트 복사 버튼은 줄을 펼치지 않는다
-                      if ((e.target as HTMLElement).closest("a, button")) return;
+                      // 키워드 링크(초안 열기)·프롬프트 복사 버튼·고르기 칸은 줄을 펼치지 않는다
+                      if ((e.target as HTMLElement).closest("a, button, .select")) return;
                       setOpen(isOpen ? null : d.file);
                     }}
                     aria-expanded={isOpen}
                   >
+                    {/* 칸 전체를 눌러도 고르기 (체크박스만 누르기는 작다) */}
+                    <td className="select" onClick={() => toggle(d.file)}>
+                      <input
+                        type="checkbox"
+                        checked={selected.has(d.file)}
+                        onChange={() => toggle(d.file)}
+                        onClick={(e) => e.stopPropagation()}
+                        aria-label={`${d.keyword} 고르기`}
+                      />
+                    </td>
                     <td className="keyword">
                       <span className="row-chevron" aria-hidden="true">
                         {isOpen ? "▾" : "▸"}
@@ -168,7 +209,7 @@ export function DraftTable({ rows, statuses: initial }: { rows: DraftRow[]; stat
                   </tr>
                   {isOpen && (
                     <tr className="draft-detail">
-                      <td colSpan={COLUMNS.length + 1}>
+                      <td colSpan={COLUMNS.length + 2}>
                         <DraftStatusControl file={d.file} entry={entry} onChange={update(d.file)} />
                         <KinPanel file={d.file} keyword={d.keyword} entry={entry} onChange={update(d.file)} />
                       </td>

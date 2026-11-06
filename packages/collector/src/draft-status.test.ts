@@ -4,7 +4,7 @@ import { tmpdir } from "node:os";
 import path from "node:path";
 import { describe, it } from "node:test";
 import { adjacentDrafts, applyStatusPatch, draftEditBlocked, effectiveStatus, normalizePostUrl, sortDrafts, toggleKinAnswer } from "./draft-status.ts";
-import { readDraftStatuses, setDraftStatus, setKinAnswered } from "./draft-status-store.ts";
+import { readDraftStatuses, removeDraftStatus, setDraftStatus, setKinAnswered } from "./draft-status-store.ts";
 
 describe("초안 상태", () => {
   it("기록이 없으면 초안, 예전에 저장한 예약됨은 발행됨으로 본다", () => {
@@ -92,6 +92,10 @@ describe("상태 파일", () => {
       assert.match(await readFile(path.join(dir, "draft-status.json"), "utf-8"), /"drafts"/);
       await assert.rejects(setDraftStatus(dir, "../evil.md", { status: "draft" }));
       await assert.rejects(setDraftStatus(dir, "a-naver.md", { url: "naver" }), /https/);
+      // 초안을 지우면 상태·답변 기록도 함께 지운다
+      await removeDraftStatus(dir, "a-naver.md");
+      assert.deepEqual(Object.keys(await readDraftStatuses(dir)), ["b-naver.md"]);
+      await assert.rejects(removeDraftStatus(dir, "../evil.md"));
     } finally {
       await rm(dir, { recursive: true, force: true });
     }

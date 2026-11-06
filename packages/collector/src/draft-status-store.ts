@@ -17,12 +17,14 @@ export async function readDraftStatuses(dataDir: string): Promise<DraftStatusMap
 /** 같은 프로세스 안에서 동시에 고쳐도 빠지지 않게 차례로 쓴다 */
 let queue: Promise<unknown> = Promise.resolve();
 
-function update(dataDir: string, draftFile: string, change: (entry: DraftStatusEntry | undefined) => DraftStatusEntry | string) {
+/** change가 문자열이면 오류, null이면 그 초안의 기록을 지운다 */
+function update<T extends DraftStatusEntry | null>(dataDir: string, draftFile: string, change: (entry: DraftStatusEntry | undefined) => T | string) {
   const run = queue.then(async () => {
     const drafts = await readDraftStatuses(dataDir);
     const next = change(drafts[draftFile]);
     if (typeof next === "string") throw new Error(next);
-    drafts[draftFile] = next;
+    if (next === null) delete drafts[draftFile];
+    else drafts[draftFile] = next;
     await mkdir(dataDir, { recursive: true });
     const file = path.join(dataDir, FILE);
     await writeFile(`${file}.tmp`, JSON.stringify({ drafts }, null, 2));
@@ -41,6 +43,12 @@ const checkName = (draftFile: string) => {
 export async function setDraftStatus(dataDir: string, draftFile: string, patch: DraftStatusPatch) {
   checkName(draftFile);
   return update(dataDir, draftFile, (entry) => applyStatusPatch(entry, patch));
+}
+
+/** 초안을 지울 때 상태·발행 주소·지식iN 답변 기록도 함께 지운다 */
+export async function removeDraftStatus(dataDir: string, draftFile: string) {
+  checkName(draftFile);
+  return update(dataDir, draftFile, () => null);
 }
 
 export async function setKinAnswered(dataDir: string, draftFile: string, question: { link: string; title: string }, answered: boolean) {

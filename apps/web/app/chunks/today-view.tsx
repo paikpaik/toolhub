@@ -15,6 +15,7 @@ import {
   setDayEnd,
   removeChunk,
   shiftDay,
+  TIME_MAX,
   updateChunk,
   updateGoal,
   weekdayOf,
@@ -151,7 +152,7 @@ export function TodayView({ state, today, actions, onGoWeek }: { state: ChunkSta
       <section aria-label="하루 기록">
         <h2>덩어리</h2>
         <div className="chunk-blocks">
-          {chunks.map(({ done, note, group }, i) => {
+          {chunks.map(({ done, note, group, time }, i) => {
             const slot = i + 1;
             return (
               <div key={slot} className="chunk-block" style={groupColor(state, group)}>
@@ -177,7 +178,23 @@ export function TodayView({ state, today, actions, onGoWeek }: { state: ChunkSta
                   <CheckMark />
                 </button>
                 <div>
-                  <label htmlFor={`chunk-note-${slot}`}>덩어리 {slot}</label>
+                  <div className="chunk-slot-head">
+                    <label htmlFor={`chunk-note-${slot}`}>덩어리 {slot}</label>
+                    {/* 시간은 글자 그대로 적어 두는 라벨 (예: 9-12시, 오후) */}
+                    <input
+                      className="chunk-time"
+                      type="text"
+                      maxLength={TIME_MAX}
+                      autoComplete="off"
+                      placeholder="+ 시간"
+                      value={time ?? ""}
+                      size={Math.max(5, (time ?? "").length + 1)}
+                      onChange={(e) => actions.editChunk(selected, slot, { time: e.target.value })}
+                      onKeyDown={(e) => e.key === "Enter" && e.currentTarget.blur()}
+                      onBlur={() => actions.flush(selected)}
+                      aria-label={`덩어리 ${slot} 시간`}
+                    />
+                  </div>
                   <input
                     id={`chunk-note-${slot}`}
                     type="text"
@@ -241,7 +258,8 @@ export function TodayView({ state, today, actions, onGoWeek }: { state: ChunkSta
                           (c, i) =>
                             c.done && (
                               <span key={i}>
-                                <b style={groupColor(state, c.group)}>덩어리 {i + 1}</b> {c.note || <span className="muted">메모 없음</span>}
+                                <b style={groupColor(state, c.group)}>덩어리 {i + 1}</b> {c.time && <span className="muted">{c.time}</span>}{" "}
+                                {c.note || <span className="muted">메모 없음</span>}
                               </span>
                             ),
                         )}

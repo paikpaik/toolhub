@@ -150,6 +150,16 @@ export function ThumbnailMaker({
           <button type="button" className="button" onClick={copyImage}>
             이미지 복사
           </button>
+          {/* 누를 때마다 새 조합. 미리보기 바로 아래에 두어 보면서 계속 누를 수 있게. 마음에 들면 그대로 두면 기억된다 */}
+          <button
+            type="button"
+            className="button icon-text"
+            onClick={() => updateBrand({ colors: randomColors() })}
+            title="랜덤 조합: 누를 때마다 어울리는 색 조합을 새로 뽑아요"
+          >
+            <Icon name="repeat" size={14} />
+            랜덤 조합
+          </button>
           {status && <small>{status}</small>}
         </div>
         {/* next/font의 @font-face가 페이지에 포함되도록 각 글꼴을 한 번씩 쓴다 */}
@@ -227,16 +237,6 @@ export function ThumbnailMaker({
                 가
               </button>
             ))}
-            {/* 누를 때마다 새 조합. 마음에 들면 그대로 두면 기억된다 */}
-            <button
-              type="button"
-              className="swatch swatch-random"
-              onClick={() => updateBrand({ colors: randomColors() })}
-              title="랜덤 조합: 누를 때마다 어울리는 색 조합을 새로 뽑아요"
-              aria-label="랜덤 조합"
-            >
-              <Icon name="repeat" size={16} />
-            </button>
           </div>
           <div className="color-inputs">
             {(["bg", "text", "accent"] as const).map((key) => (

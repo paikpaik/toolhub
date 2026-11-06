@@ -19,6 +19,11 @@ import {
   updateGoal,
   removeGoal,
   addChunk,
+  addPlanItem,
+  moveGoal,
+  removePlanItem,
+  setWeekTitle,
+  updatePlanItem,
   dayChunks,
   weekdayOf,
   writeGoalToSlot,
@@ -198,6 +203,55 @@ describe("주간 목표", () => {
 
     const one = { ...empty(), groups: [{ id: "g1", name: "공방", c: 0 }] };
     assert.deepEqual(removeGroup(one, "g1").changed, []);
+  });
+});
+
+describe("목표 순서와 주간 계획", () => {
+  const goal = (id: string, g: string, d = -1) => ({ id, t: id, g, d, done: false });
+
+  it("목표를 다른 목표 앞·뒤로 옮기고, 다른 그룹 카드 위에 놓으면 그룹도 바뀐다", () => {
+    const state: ChunkState = { ...empty(), weeks: { "2026-11-02": [goal("a", "g1"), goal("b", "g1"), goal("c", "g1"), goal("x", "g2", 3)] } };
+    const ids = (s: ChunkState) => s.weeks["2026-11-02"]!.map((g) => g.id);
+    assert.deepEqual(ids(moveGoal(state, "2026-11-02", "c", "a", "before").state), ["c", "a", "b", "x"]);
+    assert.deepEqual(ids(moveGoal(state, "2026-11-02", "a", "b", "after").state), ["b", "a", "c", "x"]);
+    const c = moveGoal(state, "2026-11-02", "a", "x", "after", { g: "g2", d: 3 });
+    assert.deepEqual(ids(c.state), ["b", "c", "x", "a"]);
+    assert.deepEqual(c.state.weeks["2026-11-02"]!.at(-1), { id: "a", t: "a", g: "g2", d: 3, done: false });
+    assert.deepEqual(c.changed, ["w-2026-11-02"]);
+    assert.deepEqual(moveGoal(state, "2026-11-02", "a", "a", "before").changed, []);
+    assert.deepEqual(moveGoal(state, "2026-11-02", "a", "없음", "before").changed, []);
+  });
+
+  it("덩어리에서 생긴 카드는 순서는 바뀌고, 그룹은 그날 덩어리를 고쳐서 바뀐다", () => {
+    let state = updateChunk(empty(), "2026-11-04", 1, { note: "촬영", group: "g3" }).state;
+    state = addGoal(state, "2026-11-02", { t: "청소", g: "g2", d: -1 }).state;
+    const other = state.weeks["2026-11-02"]![1]!.id;
+    const c = moveGoal(state, "2026-11-02", "c-2026-11-04-1", other, "after", { g: "g2" });
+    assert.deepEqual(c.state.weeks["2026-11-02"]!.map((g) => g.id), [other, "c-2026-11-04-1"]);
+    assert.equal(c.state.days["2026-11-04"]!.chunks[0]!.group, "g2");
+    assert.deepEqual(c.changed.sort(), ["2026-11-04", "w-2026-11-02"]);
+  });
+
+  it("주간 큰 목표와 상세 계획 체크리스트를 주 문서에 함께 저장한다", () => {
+    let state = setWeekTitle(empty(), "2026-11-02", "  겨울 신상 3종 출시  ").state;
+    assert.deepEqual(setWeekTitle(state, "2026-11-02", "겨울 신상 3종 출시").changed, []);
+    state = addPlanItem(state, "2026-11-02", "도안 확정").state;
+    state = addPlanItem(state, "2026-11-02", "샘플 촬영").state;
+    assert.deepEqual(addPlanItem(state, "2026-11-02", "  ").changed, []);
+    const [first, second] = state.plans["2026-11-02"]!.items;
+    state = updatePlanItem(state, "2026-11-02", first!.id, { done: true }).state;
+    assert.deepEqual(updatePlanItem(state, "2026-11-02", first!.id, { t: " " }).changed, []);
+    state = removePlanItem(state, "2026-11-02", second!.id).state;
+    assert.deepEqual(docOf(state, "w-2026-11-02"), { goals: [], title: "겨울 신상 3종 출시", plan: [{ id: first!.id, t: "도안 확정", done: true }] });
+    // 다시 읽으면 같다. 목표가 없는 주도 계획은 남는다
+    assert.deepEqual(docsToState({ "w-2026-11-02": docOf(state, "w-2026-11-02") }).plans, state.plans);
+  });
+
+  it("덩어리 시간 라벨은 적었을 때만 저장한다", () => {
+    const state = updateChunk(empty(), "2026-11-04", 1, { time: " 9-12시 " }).state;
+    const doc = docOf(state, "2026-11-04");
+    assert.deepEqual(doc, { chunks: [{ done: false, note: "", group: "", link: "", time: "9-12시" }, { done: false, note: "", group: "", link: "" }] });
+    assert.equal(docsToState({ "2026-11-04": doc }).days["2026-11-04"]!.chunks[0]!.time, "9-12시");
   });
 });
 

@@ -3,7 +3,7 @@
  * 파일 이름: YYYY-MM-DD-<키워드>-<플랫폼>[-n].md
  * 내용 형식은 docs/prompts/writing.md의 "출력 형식"을 따른다.
  */
-import { copyFile, mkdir, readdir, readFile, stat, writeFile } from "node:fs/promises";
+import { copyFile, mkdir, readdir, readFile, rm, stat, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { isPlatform, type Platform } from "./platforms.ts";
 import { normalizeKeyword } from "./sources.ts";
@@ -63,6 +63,23 @@ export async function updateDraftFile(dir: string, file: string, content: string
   await copyFile(path.join(dir, file), backup);
   await writeFile(path.join(dir, file), content.endsWith("\n") ? content : `${content}\n`);
   return { file, backup };
+}
+
+/**
+ * 초안 파일과 .history의 이전 버전들을 지운다. 없는 파일이면 null.
+ * 이전 버전 이름은 `<이름>.<ISO 시각>.md`라서 "…-naver-2.md"의 것이 "…-naver.md"와 섞이지 않는다.
+ * 상태 기록(data/draft-status.json)은 removeDraftStatus로 따로 지운다
+ */
+export async function deleteDraftFile(dir: string, file: string) {
+  if (!isDraftFileName(file) || (await readDraftFile(dir, file)) === null) return null;
+  const historyDir = path.join(dir, ".history");
+  const base = file.replace(/\.md$/, "");
+  const backups = (await readdir(historyDir).catch(() => [] as string[])).filter(
+    (f) => f.startsWith(`${base}.`) && /^\d{4}-\d{2}-\d{2}T[\d-]+Z\.md$/.test(f.slice(base.length + 1)),
+  );
+  await rm(path.join(dir, file));
+  await Promise.all(backups.map((f) => rm(path.join(historyDir, f), { force: true })));
+  return { file, backups: backups.length };
 }
 
 /** 같은 키워드(공백·구두점 무시)로 쓴 초안 */

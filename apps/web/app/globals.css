@@ -785,6 +785,12 @@ h1 small {
   margin-top: 12px;
 }
 
+.thumbnail-actions .icon-text {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
 .thumbnail-actions small {
   color: var(--muted);
 }
@@ -830,7 +836,7 @@ h1 small {
   margin-bottom: 6px;
 }
 
-/* 색 조합 6칸 + 랜덤 조합을 한 줄로. 폭이 좁으면 줄바꿈 대신 칸이 함께 작아진다 */
+/* 색 조합 칸을 한 줄로. 폭이 좁으면 줄바꿈 대신 칸이 함께 작아진다 */
 .swatches {
   display: flex;
   gap: 6px;
@@ -848,20 +854,6 @@ h1 small {
   cursor: pointer;
 }
 
-/* 랜덤 조합: 색 칸과 같은 크기, 점선 테두리로 "뽑기" 칸임을 구분 */
-.swatch.swatch-random {
-  display: inline-grid;
-  place-items: center;
-  padding: 0;
-  border: 2px dashed var(--border);
-  background: var(--surface);
-  color: var(--muted);
-}
-
-.swatch.swatch-random:hover {
-  border-color: var(--accent);
-  color: var(--accent);
-}
 
 .color-inputs {
   display: flex;
@@ -2655,10 +2647,41 @@ td.related {
 
 .chunk-block label {
   display: block;
-  margin-bottom: 6px;
   font-size: 11.5px;
   font-weight: 600;
   color: var(--muted);
+}
+
+/* "덩어리 1" + 시간 라벨 (오른쪽 위 × 버튼과 겹치지 않게 오른쪽 여백) */
+.chunk-slot-head {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-bottom: 6px;
+  padding-right: 24px;
+}
+
+.chunk-block input.chunk-time {
+  width: auto;
+  min-width: 0;
+  padding: 1px 8px;
+  font-size: 11.5px;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+  border: 1px dashed var(--border);
+  border-radius: 999px;
+  background: none;
+  color: var(--muted);
+}
+
+.chunk-block input.chunk-time:not(:placeholder-shown) {
+  border-style: solid;
+  background: var(--surface-2);
+  color: var(--text);
+}
+
+.chunk-block input.chunk-time::placeholder {
+  color: var(--faint);
 }
 
 .chunk-block input {
@@ -3016,16 +3039,110 @@ td.related {
   font-variant-numeric: tabular-nums;
 }
 
+/* 이번 주 큰 목표 + 상세 계획 체크리스트 */
+.chunk-plan {
+  margin-bottom: 12px;
+  padding: 12px 14px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+}
+
+.chunk-plan-head {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-variant-numeric: tabular-nums;
+}
+
+.chunk-plan input {
+  font: inherit;
+  border: 0;
+  background: none;
+  color: var(--text);
+  outline: none;
+}
+
+.chunk-plan .chunk-plan-title {
+  flex: 1;
+  min-width: 0;
+  padding: 2px 0;
+  font-size: 17px;
+  font-weight: 700;
+}
+
+.chunk-plan-title::placeholder {
+  font-weight: 600;
+  color: var(--faint);
+}
+
+.chunk-plan-items {
+  display: grid;
+  gap: 2px;
+  margin: 8px 0 0;
+  padding: 0;
+  list-style: none;
+}
+
+.chunk-plan-items li {
+  display: grid;
+  grid-template-columns: 16px minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 10px;
+  padding: 3px 0;
+}
+
+.chunk-plan-items .chunk-tick {
+  margin-top: 0;
+}
+
+.chunk-plan-items input {
+  width: 100%;
+  padding: 2px 0;
+}
+
+.chunk-plan-items li.done input {
+  color: var(--faint);
+  text-decoration: line-through;
+}
+
+.chunk-plan-items .icon-button {
+  opacity: 0;
+}
+
+.chunk-plan-items li:hover .icon-button,
+.chunk-plan-items .icon-button:focus-visible {
+  opacity: 1;
+}
+
+.chunk-plan-add {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-top: 6px;
+  color: var(--faint);
+}
+
+.chunk-plan-add input {
+  flex: 1;
+  min-height: 28px;
+}
+
 .chunk-addbar {
   display: flex;
   flex-wrap: wrap;
   align-items: center;
   gap: 8px;
-  padding: 4px 4px 4px 12px;
+  padding: 4px;
   background: var(--surface);
   border: 1px solid var(--border);
   border-radius: 10px;
   color: var(--muted);
+}
+
+.chunk-addbar select {
+  border-color: var(--gc, var(--border));
+  font-weight: 600;
 }
 
 .chunk-addbar input {
@@ -3187,10 +3304,33 @@ td.related {
 }
 
 .chunk-card {
+  position: relative;
   user-select: none;
 }
 
-.chunk-card.scheduled {
+/* 끌어 온 카드를 놓을 자리: 카드 위·아래 선 */
+.chunk-card.drop-before::before,
+.chunk-card.drop-after::after {
+  content: "";
+  position: absolute;
+  left: 0;
+  right: 0;
+  height: 2px;
+  border-radius: 2px;
+  background: var(--accent);
+  pointer-events: none;
+}
+
+.chunk-card.drop-before::before {
+  top: -5px;
+}
+
+.chunk-card.drop-after::after {
+  bottom: -5px;
+}
+
+/* 끝낸 목표만 흐리게 (요일을 정한 것만으로는 흐리지 않는다) */
+.chunk-card.done {
   opacity: 0.55;
 }
 
@@ -3865,6 +4005,36 @@ td.related {
 .draft-table .sort-head small {
   font-size: 11px;
   font-variant-numeric: tabular-nums;
+}
+
+/* 맨 앞 고르기 칸: 좁게, 칸 전체를 눌러도 고르기 */
+.draft-table .select {
+  width: 32px;
+  padding-right: 0;
+  text-align: center;
+  cursor: pointer;
+}
+
+.draft-table .select input {
+  margin: 0;
+  cursor: pointer;
+}
+
+/* 필터 줄 오른쪽: 선택 삭제 + 작성일 */
+.draft-select-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.draft-select-actions .button.danger:not(:disabled) {
+  border-color: var(--p1);
+  color: var(--p1);
+}
+
+.draft-select-actions .button.danger:disabled {
+  color: var(--faint);
+  cursor: default;
 }
 
 .date-filter {

@@ -3,7 +3,7 @@ import { mkdtemp, readdir, readFile, rm, writeFile } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import { after, before, describe, it } from "node:test";
-import { draftOpening, draftsForKeyword, listDrafts, parseDraft, readDraftFile, updateDraftFile } from "./drafts.ts";
+import { deleteDraftFile, draftOpening, draftsForKeyword, listDrafts, parseDraft, readDraftFile, updateDraftFile } from "./drafts.ts";
 
 const TISTORY_DRAFT = `<details><summary>글쓰기 브리프</summary>
 
@@ -173,5 +173,21 @@ describe("초안 파일", () => {
     assert.equal(await updateDraftFile(dir, "없는파일.md", "x"), null);
     assert.equal(await updateDraftFile(dir, "../밖.md", "x"), null);
     assert.equal((await readdir(path.join(dir, ".history"))).length, 1);
+  });
+
+  it("지우면 이전 버전도 함께 지우고, 이름이 비슷한 다른 초안의 이전 버전은 남긴다", async () => {
+    await writeFile(path.join(dir, "2026-11-01-가습기-naver.md"), "원본\n");
+    await writeFile(path.join(dir, "2026-11-01-가습기-naver-2.md"), "원본\n");
+    await updateDraftFile(dir, "2026-11-01-가습기-naver.md", "고침 1");
+    await updateDraftFile(dir, "2026-11-01-가습기-naver-2.md", "고침");
+    const before = (await readdir(path.join(dir, ".history"))).length;
+    assert.deepEqual(await deleteDraftFile(dir, "2026-11-01-가습기-naver.md"), { file: "2026-11-01-가습기-naver.md", backups: 1 });
+    assert.equal(await readDraftFile(dir, "2026-11-01-가습기-naver.md"), null);
+    assert.ok(await readDraftFile(dir, "2026-11-01-가습기-naver-2.md"));
+    const history = await readdir(path.join(dir, ".history"));
+    assert.equal(history.length, before - 1);
+    assert.ok(history.some((f) => f.startsWith("2026-11-01-가습기-naver-2.")));
+    assert.equal(await deleteDraftFile(dir, "없는파일.md"), null);
+    assert.equal(await deleteDraftFile(dir, "../밖.md"), null);
   });
 });

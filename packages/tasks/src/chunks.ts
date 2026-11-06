@@ -5,9 +5,10 @@
  * - 덩어리에 메모와 그룹을 적으면 그 주 보드의 해당 요일에 카드가 자동으로 생긴다
  *
  * 저장 문서 (data/chunks.json에 "문서 id → 데이터")
- * - YYYY-MM-DD: { chunks: [{ done, note, group, link }] } 덩어리별 완료·메모·그룹 id·연결된 목표 id
+ * - YYYY-MM-DD: { chunks: [{ done, note, group, link, time? }] } 덩어리별 완료·메모·그룹 id·연결된 목표 id·시간 라벨(자유 글자)
  *   (예전 모양 { b1, b2, n1, n2, g1, g2, l1, l2 }도 읽는다. 고쳐 저장하면 새 모양이 된다)
- * - w-<월요일 YYYY-MM-DD>: { goals: [{ id, t, g, d, done }] } d는 0~6 = 월~일, -1 = 요일 미배정
+ * - w-<월요일 YYYY-MM-DD>: { goals: [{ id, t, g, d, done }], title?, plan?: [{ id, t, done }] }
+ *   d는 0~6 = 월~일, -1 = 요일 미배정. 목표 배열 순서가 화면 순서. title·plan은 그 주의 큰 목표와 상세 계획 체크리스트
  * - cfg: { groups: [{ id, name, c }], dayEnd } c는 GROUP_COLORS 번호, dayEnd는 하루 끝 시각(0=자정). 없으면 DEFAULT_GROUPS·0
  */
 
@@ -18,6 +19,8 @@ export interface ChunkEntry {
   group: string;
   /** "배정된 목표"에서 가져왔으면 그 목표 id */
   link: string;
+  /** 시간 라벨 (예: "9-12시"). 글자 그대로 보여 주기만 한다 */
+  time?: string;
 }
 
 export interface ChunkDay {
@@ -40,10 +43,24 @@ export interface ChunkGroup {
   c: number;
 }
 
+export interface PlanItem {
+  id: string;
+  t: string;
+  done: boolean;
+}
+
+/** 한 주의 큰 목표(제목)와 상세 계획 체크리스트 */
+export interface WeekPlan {
+  title: string;
+  items: PlanItem[];
+}
+
 export interface ChunkState {
   days: Record<string, ChunkDay>;
   /** 월요일 날짜 → 그 주 목표 */
   weeks: Record<string, WeekGoal[]>;
+  /** 월요일 날짜 → 그 주 큰 목표와 상세 계획 (없으면 빈 것) */
+  plans: Record<string, WeekPlan>;
   groups: ChunkGroup[];
   /** 하루가 끝나는 시각(0~DAY_END_MAX시). 이 시각 전까지는 전날 기록 */
   dayEnd: number;
@@ -64,7 +81,10 @@ export const BASE_CHUNKS = 2;
 export const MAX_CHUNKS = 6;
 
 export const NOTE_MAX = 60;
+export const TIME_MAX = 16;
 export const GOAL_MAX = 80;
+export const WEEK_TITLE_MAX = 60;
+export const PLAN_ITEM_MAX = 80;
 export const GROUP_NAME_MAX = 12;
 /** 0=월 … 6=일 (주간 보드) */
 export const WEEKDAYS = ["월", "화", "수", "목", "금", "토", "일"] as const;
@@ -129,7 +149,7 @@ const str = (v: unknown) => (typeof v === "string" ? v : "");
 
 /** 저장된 문서들을 상태로. 모양이 다른 값은 기본값으로 바꾼다 */
 export function docsToState(docs: Record<string, unknown>): ChunkState {
-  const state: ChunkState = { days: {}, weeks: {}, groups: DEFAULT_GROUPS.map((g) => ({ ...g })), dayEnd: 0 };
+  const state: ChunkState = { days: {}, weeks: {}, plans: {}, groups: DEFAULT_GROUPS.map((g) => ({ ...g })), dayEnd: 0 };
   for (const [id, raw] of Object.entries(docs)) {
     const data = (raw && typeof raw === "object" ? raw : {}) as Record<string, unknown>;
     if (id === "cfg") {
@@ -151,13 +171,23 @@ export function docsToState(docs: Record<string, unknown>): ChunkState {
           done: !!g.done,
         }));
       }
+      const items = Array.isArray(data.plan)
+        ? (data.plan as Record<string, unknown>[]).filter((p) => p && typeof p === "object").map((p) => ({ id: String(p.id), t: str(p.t), done: !!p.done }))
+        : [];
+      if (str(data.title) || items.length) state.plans[id.slice(2)] = { title: str(data.title), items };
     } else if (isChunkDocId(id)) {
-      const raw = Array.isArray(data.chunks)
+      const raw: Record<string, unknown>[] = Array.isArray(data.chunks)
         ? (data.chunks as Record<string, unknown>[])
         : // 예전 모양: b1·n1·g1·l1, b2·n2·g2·l2
           [1, 2].map((n) => ({ done: data[`b${n}`], note: data[`n${n}`], group: data[`g${n}`], link: data[`l${n}`] }));
       state.days[id] = {
-        chunks: raw.slice(0, MAX_CHUNKS).map((c) => ({ done: !!c?.done, note: str(c?.note), group: str(c?.group), link: str(c?.link) })),
+        chunks: raw.slice(0, MAX_CHUNKS).map((c) => ({
+          done: !!c?.done,
+          note: str(c?.note),
+          group: str(c?.group),
+          link: str(c?.link),
+          ...(str(c?.time) ? { time: str(c?.time) } : {}),
+        })),
       };
     }
   }
@@ -167,8 +197,18 @@ export function docsToState(docs: Record<string, unknown>): ChunkState {
 /** 저장할 문서 하나 */
 export function docOf(state: ChunkState, id: string): Record<string, unknown> {
   if (id === "cfg") return { groups: state.groups.map(({ id, name, c }) => ({ id, name, c })), dayEnd: state.dayEnd };
-  if (id.startsWith("w-")) return { goals: (state.weeks[id.slice(2)] ?? []).map(({ id, t, g, d, done }) => ({ id, t, g, d, done })) };
-  return { chunks: dayChunks(state.days[id]).map(({ done, note, group, link }) => ({ done, note, group, link })) };
+  if (id.startsWith("w-")) {
+    const plan = state.plans[id.slice(2)];
+    return {
+      goals: (state.weeks[id.slice(2)] ?? []).map(({ id, t, g, d, done }) => ({ id, t, g, d, done })),
+      // 쓰지 않은 주는 예전과 같은 모양으로
+      ...(plan?.title ? { title: plan.title } : {}),
+      ...(plan?.items.length ? { plan: plan.items.map(({ id, t, done }) => ({ id, t, done })) } : {}),
+    };
+  }
+  return {
+    chunks: dayChunks(state.days[id]).map(({ done, note, group, link, time }) => ({ done, note, group, link, ...(time?.trim() ? { time: time.trim() } : {}) })),
+  };
 }
 
 export const chunkGroupOf = (state: ChunkState, id: string) => state.groups.find((g) => g.id === id) ?? state.groups[0]!;
@@ -346,6 +386,65 @@ export function moveGoalToNextWeek(state: ChunkState, monday: string, id: string
   const removed = removeGoal(state, monday, id);
   const added = setWeek(removed.state, nextMonday, [...(removed.state.weeks[nextMonday] ?? []), { ...goal, d: -1, done: false }]);
   return { state: added.state, changed: [weekDocId(monday), weekDocId(nextMonday)] };
+}
+
+/**
+ * 목표를 다른 목표의 앞·뒤로 옮긴다 (배열 순서 = 화면 순서). patch가 있으면 그룹·요일도 함께 바꾼다
+ * (다른 그룹·요일 칸의 카드 위에 놓았을 때). 덩어리에서 생긴 카드도 순서는 바꿀 수 있다
+ */
+export function moveGoal(
+  state: ChunkState,
+  monday: string,
+  id: string,
+  targetId: string,
+  place: "before" | "after",
+  patch: Partial<Pick<WeekGoal, "g" | "d">> = {},
+): ChunkChange {
+  const list = state.weeks[monday] ?? [];
+  const goal = list.find((g) => g.id === id);
+  if (!goal || id === targetId || !list.some((g) => g.id === targetId)) return { state, changed: [] };
+  const rest = list.filter((g) => g.id !== id);
+  const at = rest.findIndex((g) => g.id === targetId) + (place === "after" ? 1 : 0);
+  const moved = setWeek(state, monday, [...rest.slice(0, at), goal, ...rest.slice(at)]);
+  // 그룹·요일은 updateGoal로 (덩어리에서 생긴 카드는 그날 덩어리를 고쳐야 하므로). 같은 값이면 건드리지 않는다
+  const real = Object.fromEntries(Object.entries(patch).filter(([k, v]) => goal[k as "g" | "d"] !== v));
+  if (!Object.keys(real).length) return moved;
+  const updated = updateGoal(moved.state, monday, id, real);
+  return { state: updated.state, changed: [...new Set([...moved.changed, ...updated.changed])] };
+}
+
+// ── 주간 큰 목표·상세 계획 ──
+
+const planOf = (state: ChunkState, monday: string): WeekPlan => state.plans[monday] ?? { title: "", items: [] };
+
+function setPlan(state: ChunkState, monday: string, plan: WeekPlan): ChunkChange {
+  return { state: { ...state, plans: { ...state.plans, [monday]: plan } }, changed: [weekDocId(monday)] };
+}
+
+export function setWeekTitle(state: ChunkState, monday: string, title: string): ChunkChange {
+  const t = title.trim().slice(0, WEEK_TITLE_MAX);
+  if (t === planOf(state, monday).title) return { state, changed: [] };
+  return setPlan(state, monday, { ...planOf(state, monday), title: t });
+}
+
+export function addPlanItem(state: ChunkState, monday: string, text: string): ChunkChange {
+  const t = text.trim().slice(0, PLAN_ITEM_MAX);
+  if (!t) return { state, changed: [] };
+  const plan = planOf(state, monday);
+  return setPlan(state, monday, { ...plan, items: [...plan.items, { id: newId(), t, done: false }] });
+}
+
+/** 상세 계획 한 줄을 고친다. 이름을 비우면 고치지 않는다 (지우기는 removePlanItem) */
+export function updatePlanItem(state: ChunkState, monday: string, id: string, patch: Partial<Omit<PlanItem, "id">>): ChunkChange {
+  if (patch.t !== undefined) patch = { ...patch, t: patch.t.trim().slice(0, PLAN_ITEM_MAX) };
+  if (patch.t === "") return { state, changed: [] };
+  const plan = planOf(state, monday);
+  return setPlan(state, monday, { ...plan, items: plan.items.map((p) => (p.id === id ? { ...p, ...patch } : p)) });
+}
+
+export function removePlanItem(state: ChunkState, monday: string, id: string): ChunkChange {
+  const plan = planOf(state, monday);
+  return setPlan(state, monday, { ...plan, items: plan.items.filter((p) => p.id !== id) });
 }
 
 // ── 그룹 ──
