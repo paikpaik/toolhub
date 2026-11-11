@@ -15,4 +15,5 @@ export * from "./image-prompt.ts";
 export * from "./draft-status.ts";
 export * from "./draft-length.ts";
 export * from "./draft-status-store.ts";
+export * from "./draft-bundle.ts";
 export * from "./kin-answer.ts";

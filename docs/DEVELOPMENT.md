@@ -22,6 +22,7 @@ toolhub/
 │       ├── brief.ts           # 글쓰기 브리프·글감 브리핑 생성
 │       ├── platforms.ts       # 플랫폼·글 유형·구성 변형 (브라우저에서도 사용)
 │       ├── drafts.ts          # 초안 목록·파싱·고치기
+│       ├── draft-bundle.ts    # 초안 내보내기·가져오기 (JSON 묶음, 덮어쓰지 않음)
 │       ├── image-prompt.ts    # 초안 → Gemini용 본문 이미지 5장 요청문
 │       ├── cli.ts             # npm run collect
 │       └── brief-cli.ts       # npm run brief
@@ -177,6 +178,16 @@ toolhub 전체가 하나의 버전(`1.0.0` 형식)을 씁니다. 올릴 때는 �
 - 브라우저의 체크리스트 기록(`toolhub:draft-check:<파일>`).
 
 되돌릴 수 없으므로 `confirm`으로 한 번 더 묻습니다. 발행됨이 섞여 있으면 기록이 사라진다고 덧붙입니다. 중간에 실패하면 거기서 멈추고, 이미 지운 것까지만 목록에서 뺍니다. `선택 삭제` 버튼은 늘 같은 자리에 둡니다. 고를 때 나타나면 표가 밀려서 누르던 줄이 움직이기 때문입니다. 일정 관리의 할 일에 넣은 초안 링크는 사용자가 만든 할 일이라 건드리지 않습니다.
+
+**초안 내보내기·가져오기** (`packages/collector/src/draft-bundle.ts`, 화면 `apps/web/app/blog/drafts/draft-transfer.tsx`): 다른 PC로 옮기거나 백업하려고 씁니다.
+- **내보내기**는 `POST /api/drafts/export { files }`입니다. `buildDraftBundle`이 `{ format: "toolhub-drafts", version: 1, exportedAt, drafts: [{ file, content, status? }] }`를 만들고, 화면이 `toolhub-drafts-<날짜>-<n>개.json`으로 내려받습니다. 이전 버전(`.history`)과 브라우저 체크리스트 기록은 담지 않습니다.
+- **가져오기**는 `POST /api/drafts/import`입니다. 내보낸 JSON의 `drafts`와 `.md`·`.txt` 파일을 화면에서 `{ file, content }`로 바꿔 한 번에 보냅니다. 그러면 `parseDraftBundle`이 모양을 확인하고(최대 `IMPORT_MAX`개), 상태는 `sanitizeStatusEntry`로 정해진 필드만 남깁니다. 이어서 `importDrafts`가 하나씩 저장합니다.
+  - 파일 이름은 `safeDraftFileName`이 정리합니다. 폴더·금지 문자를 지우고, 앞의 점을 없애 숨김 파일이 되지 않게 하고, `.md`를 붙입니다.
+  - **기존 초안은 덮어쓰지 않습니다.** 이름과 내용이 같으면 건너뛰고, 내용이 다르면 `-2`, `-3` 번호를 붙입니다(MCP `save_draft`와 같은 규칙). 쓰기도 `wx` 플래그라서 이미 있는 파일에는 쓰지 못합니다. 발행됨 초안을 고치지 않는 정책과 같은 이유입니다.
+  - 상태는 `restoreDraftStatus`로 넣습니다. 기록이 이미 있으면 그대로 둡니다.
+  - 파일 이름의 날짜가 그대로라서, 작성일은 원래 날짜로 보입니다.
+- 결과는 추가·번호 붙여 저장·건너뜀 수로 알려 주고, `router.refresh()`로 목록을 다시 읽습니다. 표는 바뀐 `statuses` prop을 상태에 합칩니다.
+- 표 위 필터 줄에 `가져오기 · 내보내기 · 선택 삭제 · 작성일`을 한 줄로 두고, 작성일 버튼과 같은 둥근 모양으로 맞춥니다. 초안이 하나도 없으면 표가 없으므로, 빈 목록 안내 문장에 가져오기 버튼을 둡니다. 내보내기는 고른 키워드를 보여 주며 `confirm`으로 한 번 묻습니다.
 
 초안 목록 순서는 `sortDrafts`(발행됨 → 초안, 같은 상태끼리는 `updatedAt` 내림차순)로 서버에서 정합니다. 사용자가 표 머리를 누르면 `apps/web/lib/draft-sort.ts`의 `cycleSort`(없으면 우선순위 맨 뒤에 추가 → 방향 바꾸기 → 빼기)로 규칙 목록을 만들고, `sortByRules`로 앞 규칙이 같을 때만 다음 규칙을 봅니다(모두 같으면 서버 순서 유지, 안정 정렬). 규칙은 `localStorage`의 `toolhub:draft-sort`에 두고 `parseSavedSort`로 복원합니다. 상태·답변 수 정렬은 화면을 연 때의 값으로 해서 펼친 줄에서 상태를 바꿔도 줄이 튀지 않습니다. 화면에서 상태를 바꿔도 줄이 튀지 않게 클라이언트에서는 다시 정렬하지 않습니다. MCP `list_drafts`는 최근 초안의 패턴을 피하려고 쓰므로 그대로 최근 수정 순입니다. 초안 화면의 이전·다음 버튼은 `adjacentDrafts`(같은 `sortDrafts` 순서에서 `effectiveStatus`가 초안인 글만)로 찾습니다. 이 버튼은 클라이언트 이동이라 화면의 클라이언트 컴포넌트가 다시 만들어지지 않으므로, 상태를 들고 있는 상태 카드·썸네일 패널·발행 할 일 버튼에는 `key={file}`를 줘서 앞 초안의 상태가 남지 않게 합니다.
 

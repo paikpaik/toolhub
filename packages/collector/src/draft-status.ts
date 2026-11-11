@@ -116,3 +116,23 @@ export function adjacentDrafts(files: string[], current: string, statuses: Draft
   const next = files.slice(index + 1).find(isDraft) ?? null;
   return { prev, next };
 }
+
+/** 바깥에서 들어온 상태 기록(초안 가져오기)을 정해진 필드만 남겨 읽는다. 상태를 알 수 없으면 null */
+export function sanitizeStatusEntry(raw: unknown): DraftStatusEntry | null {
+  if (!raw || typeof raw !== "object") return null;
+  const r = raw as Record<string, unknown>;
+  if (!isDraftStatus(r.status)) return null;
+  const entry: DraftStatusEntry = { status: r.status };
+  const url = typeof r.url === "string" ? normalizePostUrl(r.url) : null;
+  if (url) entry.url = url;
+  if (typeof r.at === "string" && !Number.isNaN(Date.parse(r.at))) entry.at = new Date(r.at).toISOString();
+  const answers = Array.isArray(r.answers)
+    ? r.answers.flatMap((a) => {
+        const x = (a ?? {}) as Record<string, unknown>;
+        const link = typeof x.link === "string" ? normalizePostUrl(x.link) : null;
+        return link && typeof x.title === "string" && typeof x.answeredAt === "string" ? [{ link, title: x.title, answeredAt: x.answeredAt }] : [];
+      })
+    : [];
+  if (answers.length) entry.answers = answers;
+  return entry;
+}

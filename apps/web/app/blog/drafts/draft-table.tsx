@@ -7,6 +7,7 @@ import { DRAFT_DATES_KEY, parseSavedDates } from "../../../lib/draft-dates";
 import { cycleSort, DRAFT_SORT_KEY, parseSavedSort, sortByRules, type SortColumn, type SortRule } from "../../../lib/draft-sort";
 import { DateFilter, datesLabel } from "./date-filter";
 import { DeleteDraftsButton } from "./delete-draft-button";
+import { ExportDraftsButton, ImportDraftsButton } from "./draft-transfer";
 import { KinPanel } from "./kin-panel";
 import { PromptCopyButton } from "./prompt-copy-button";
 import { DraftStatusControl, StatusBadge } from "./status-control";
@@ -49,6 +50,8 @@ export interface DraftRow {
 /** 초안 목록. 줄을 누르면 아래로 펼쳐져 상태를 바꾸고, 그 키워드의 지식iN 질문에 답변을 준비한다 */
 export function DraftTable({ rows: allRows, statuses: initial }: { rows: DraftRow[]; statuses: DraftStatusMap }) {
   const [statuses, setStatuses] = useState(initial);
+  // 가져오기 뒤 서버에서 다시 읽은 상태를 반영한다 (새로 생긴 초안의 발행됨 등)
+  useEffect(() => setStatuses((prev) => ({ ...prev, ...initial })), [initial]);
   // 지운 초안은 서버 화면을 다시 불러오지 않고 목록에서 바로 뺀다
   const [deleted, setDeleted] = useState<Set<string>>(new Set());
   const rows = deleted.size ? allRows.filter((r) => !deleted.has(r.file)) : allRows;
@@ -118,6 +121,8 @@ export function DraftTable({ rows: allRows, statuses: initial }: { rows: DraftRo
         </div>
         {/* 선택 삭제는 늘 같은 자리에 둔다 (고를 때 나타나면 표가 밀려 누르던 줄이 움직인다). 고른 게 없으면 눌리지 않는다 */}
         <div className="draft-select-actions">
+          <ImportDraftsButton />
+          <ExportDraftsButton targets={picked.map((d) => ({ file: d.file, keyword: d.keyword }))} />
           <DeleteDraftsButton
             targets={picked.map((d) => ({ file: d.file, keyword: d.keyword, published: statusOf(d.file) === "published" }))}
             onDeleted={removeRows}

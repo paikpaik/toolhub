@@ -4027,14 +4027,40 @@ td.related {
   gap: 8px;
 }
 
+/* 가져오기·내보내기·선택 삭제를 옆의 작성일 버튼과 같은 둥근 모양으로 */
+.draft-select-actions .button {
+  display: inline-flex;
+  align-items: center;
+  font-size: 13px;
+  padding: 4px 12px;
+  border-radius: 16px;
+  color: var(--muted);
+  white-space: nowrap;
+}
+
+.draft-select-actions .button:hover:not(:disabled) {
+  border-color: var(--accent);
+  color: var(--accent);
+}
+
 .draft-select-actions .button.danger:not(:disabled) {
   border-color: var(--p1);
   color: var(--p1);
 }
 
-.draft-select-actions .button.danger:disabled {
+.draft-select-actions .button.danger:hover:not(:disabled) {
+  background: var(--p1);
+  color: #fff;
+}
+
+.draft-select-actions .button:disabled {
   color: var(--faint);
   cursor: default;
+}
+
+/* 가져오기(늘 쓸 수 있음)와 고른 초안에 쓰는 버튼 사이 구분 */
+.draft-select-actions .draft-import {
+  margin-right: 4px;
 }
 
 .date-filter {

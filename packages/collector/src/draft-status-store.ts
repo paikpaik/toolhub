@@ -45,6 +45,12 @@ export async function setDraftStatus(dataDir: string, draftFile: string, patch: 
   return update(dataDir, draftFile, (entry) => applyStatusPatch(entry, patch));
 }
 
+/** 가져온 초안의 상태를 넣는다. 이미 기록이 있으면 그대로 둔다 (덮어쓰지 않음) */
+export async function restoreDraftStatus(dataDir: string, draftFile: string, entry: DraftStatusEntry) {
+  checkName(draftFile);
+  return update(dataDir, draftFile, (current) => current ?? entry);
+}
+
 /** 초안을 지울 때 상태·발행 주소·지식iN 답변 기록도 함께 지운다 */
 export async function removeDraftStatus(dataDir: string, draftFile: string) {
   checkName(draftFile);
