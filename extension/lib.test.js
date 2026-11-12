@@ -2,7 +2,8 @@ import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 import "./lib.js";
 
-const { parseColor, nearestColor, mergeSettings, DEFAULT_SETTINGS, dataUrlMime, bytesToDataUrl, addToShelf, isLargeImage, imageFileName } = globalThis.ToolhubLib;
+const { parseColor, nearestColor, mergeSettings, DEFAULT_SETTINGS, dataUrlMime, addToShelf, nextShelfId, removedShelfIds, mergeShelf, MAX_SHELF, isLargeImage, imageFileName } =
+  globalThis.ToolhubLib;
 
 describe("이미지 모음", () => {
   it("data URL의 이미지 형식, 이미지가 아니면 null", () => {
@@ -12,24 +13,45 @@ describe("이미지 모음", () => {
     assert.equal(dataUrlMime("https://example.com/a.png"), null);
   });
 
-  it("바이트를 data URL로 (큰 파일도 나눠서 인코딩)", () => {
-    assert.equal(bytesToDataUrl(new Uint8Array([137, 80, 78, 71]), "image/png"), "data:image/png;base64,iVBORw==");
-    const big = new Uint8Array(100_000).fill(65);
-    assert.equal(bytesToDataUrl(big, "image/png"), `data:image/png;base64,${Buffer.from(big).toString("base64")}`);
+  it("새 이미지는 맨 앞, 같은 내용(해시)은 앞으로 옮기고, 최대 개수를 넘으면 오래된 것부터 뺀다", () => {
+    const shelf = [{ id: 2, hash: "b" }, { id: 1, hash: "a" }];
+    assert.deepEqual(addToShelf(shelf, { id: 3, hash: "c" }).map((s) => s.id), [3, 2, 1]);
+    assert.deepEqual(addToShelf(shelf, { id: 3, hash: "a" }).map((s) => s.id), [3, 2]);
+    assert.deepEqual(addToShelf(shelf, { id: 3, hash: "c" }, 2).map((s) => s.id), [3, 2]);
   });
 
-  it("새 이미지는 맨 앞, 같은 이미지는 앞으로 옮기고, 최대 개수를 넘으면 오래된 것부터 뺀다", () => {
-    const shelf = [{ id: 2, src: "b" }, { id: 1, src: "a" }];
-    assert.deepEqual(addToShelf(shelf, { id: 3, src: "c" }).map((s) => s.id), [3, 2, 1]);
-    assert.deepEqual(addToShelf(shelf, { id: 3, src: "a" }).map((s) => s.id), [3, 2]);
-    assert.deepEqual(addToShelf(shelf, { id: 3, src: "c" }, 2).map((s) => s.id), [3, 2]);
+  it("기본 최대 장수는 200장", () => {
+    assert.equal(MAX_SHELF, 200);
+    const full = Array.from({ length: 200 }, (_, i) => ({ id: 200 - i, hash: `h${200 - i}` }));
+    const next = addToShelf(full, { id: 201, hash: "new" });
+    assert.equal(next.length, 200);
+    assert.equal(next[0].id, 201);
+    assert.deepEqual(removedShelfIds(full, next), [1]);
   });
 
   it("자동 담기는 원래 주소가 같으면 내용이 조금 달라도 같은 이미지로 본다", () => {
-    const shelf = [{ id: 1, src: "data-v1", source: "blob:https://gemini.google.com/abc" }];
-    assert.deepEqual(addToShelf(shelf, { id: 2, src: "data-v2", source: "blob:https://gemini.google.com/abc" }).map((s) => s.id), [2]);
+    const shelf = [{ id: 1, hash: "v1", source: "blob:https://gemini.google.com/abc" }];
+    assert.deepEqual(addToShelf(shelf, { id: 2, hash: "v2", source: "blob:https://gemini.google.com/abc" }).map((s) => s.id), [2]);
     // 원래 주소가 없는 것(붙여넣기)끼리는 주소로 묶지 않는다
-    assert.deepEqual(addToShelf([{ id: 1, src: "x" }], { id: 2, src: "y" }).map((s) => s.id), [2, 1]);
+    assert.deepEqual(addToShelf([{ id: 1, hash: "x" }], { id: 2, hash: "y" }).map((s) => s.id), [2, 1]);
+  });
+
+  it("새 id는 지금 시각이되, 같은 순간에 담겨도 겹치지 않게 가장 큰 id보다 크게", () => {
+    assert.equal(nextShelfId([], 1000), 1000);
+    assert.equal(nextShelfId([{ id: 500 }], 1000), 1000);
+    assert.equal(nextShelfId([{ id: 1000 }, { id: 999 }], 1000), 1001);
+  });
+
+  it("목록에서 빠진 이미지 id (원본을 함께 지우기 위함)", () => {
+    const prev = [{ id: 3 }, { id: 2 }, { id: 1 }];
+    assert.deepEqual(removedShelfIds(prev, [{ id: 4 }, { id: 3 }, { id: 1 }]), [2]);
+    assert.deepEqual(removedShelfIds(prev, prev), []);
+    assert.deepEqual(removedShelfIds(prev, []), [3, 2, 1]);
+  });
+
+  it("예전 방식에서 옮긴 이미지는 최근 순으로 합치고, 같은 id는 한 번만, 최대 장수까지", () => {
+    assert.deepEqual(mergeShelf([{ id: 5 }], [{ id: 7 }, { id: 5 }, { id: 3 }]).map((s) => s.id), [7, 5, 3]);
+    assert.deepEqual(mergeShelf([], [{ id: 1 }, { id: 3 }, { id: 2 }], 2).map((s) => s.id), [3, 2]);
   });
 
   it("생성 이미지처럼 큰 것만 자동으로 담는다 (아이콘·프로필 제외)", () => {

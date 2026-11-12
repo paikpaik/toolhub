@@ -49,8 +49,8 @@ globalThis.ToolhubLib = (() => {
     return merged;
   }
 
-  /** 패널에 담아 두는 이미지 수. 많아지면 오래된 것부터 빠진다 */
-  const MAX_SHELF = 30;
+  /** 패널에 담아 두는 이미지 수. 많아지면 오래된 것부터 빠진다 (원본은 IndexedDB에 한 장씩 있어 장수가 늘어도 느려지지 않는다) */
+  const MAX_SHELF = 200;
 
   const MIME_EXTENSIONS = { "image/png": "png", "image/jpeg": "jpg", "image/webp": "webp", "image/gif": "gif", "image/svg+xml": "svg", "image/avif": "avif" };
 
@@ -60,20 +60,30 @@ globalThis.ToolhubLib = (() => {
     return mime ?? null;
   }
 
-  /** 바이트 → data URL (서비스 워커에는 FileReader가 없을 수 있어 직접 인코딩) */
-  function bytesToDataUrl(bytes, mime) {
-    let binary = "";
-    for (let i = 0; i < bytes.length; i += 0x8000) binary += String.fromCharCode(...bytes.subarray(i, i + 0x8000));
-    return `data:${mime};base64,${btoa(binary)}`;
-  }
-
   /**
-   * 새 이미지를 맨 앞에 넣는다. 같은 이미지(내용이 같은 data URL, 또는 원래 주소 source가 같은 것)는 앞으로 옮기기만 한다.
+   * 순서 목록(shelfIndex)의 맨 앞에 새 이미지를 넣는다. 같은 이미지(내용의 해시 hash, 또는 원래 주소 source가 같은 것)는 앞으로 옮기기만 한다.
    * 자동 담기는 같은 이미지가 화면에 다시 그려질 때마다 들어오므로 원래 주소로도 중복을 거른다
    */
   function addToShelf(shelf, item, max = MAX_SHELF) {
-    const same = (s) => s.src === item.src || (!!item.source && s.source === item.source);
+    const same = (s) => s.hash === item.hash || (!!item.source && s.source === item.source);
     return [item, ...shelf.filter((s) => !same(s))].slice(0, max);
+  }
+
+  /** 새 이미지 id. 담은 시각(ms)인데, 같은 순간에 둘이 담겨도 겹치지 않게 지금까지의 가장 큰 id보다 크게 */
+  function nextShelfId(shelf, now) {
+    return Math.max(now, ...shelf.map((s) => s.id + 1));
+  }
+
+  /** prev에는 있었는데 next에서 빠진 이미지 id (원본을 함께 지우기 위함) */
+  function removedShelfIds(prev, next) {
+    const kept = new Set(next.map((s) => s.id));
+    return prev.filter((s) => !kept.has(s.id)).map((s) => s.id);
+  }
+
+  /** 예전 방식에서 옮긴 이미지를 목록에 합친다. 최근 것이 앞, 같은 id는 한 번만, 최대 장수까지 */
+  function mergeShelf(shelf, moved, max = MAX_SHELF) {
+    const ids = new Set(shelf.map((s) => s.id));
+    return [...shelf, ...moved.filter((s) => !ids.has(s.id))].sort((a, b) => b.id - a.id).slice(0, max);
   }
 
   /** 자동으로 담을 만한 이미지인지 (생성 이미지는 크다. 아이콘·프로필 사진은 제외) */
@@ -145,8 +155,10 @@ globalThis.ToolhubLib = (() => {
     mergeSettings,
     MAX_SHELF,
     dataUrlMime,
-    bytesToDataUrl,
     addToShelf,
+    nextShelfId,
+    removedShelfIds,
+    mergeShelf,
     isLargeImage,
     imageFileName,
     isTrendMarker,

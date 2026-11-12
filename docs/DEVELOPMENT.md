@@ -53,7 +53,8 @@ toolhub/
 │   │   └── api/               # tasks, projects, brief, stats/enrich, health
 │   └── lib/                   # 데이터 경로, 입력 검증, 미리보기, 예약 발행 시간, 검색량 백그라운드 채우기
 ├── extension/            # 크롬 확장 (빌드 없음, 일반 JS). 네이버 에디터 드래그 서식 + 이미지 모음 사이드 패널
-│   ├── lib.js                 # 색·설정·이미지 모음(data URL·중복·파일 이름) 순수 함수 (테스트 대상)
+│   ├── lib.js                 # 색·설정·이미지 모음(순서 목록·중복·파일 이름) 순수 함수 (테스트 대상)
+│   ├── shelf-store.js         # 이미지 모음 저장소: 원본·미리보기는 IndexedDB, 순서 목록은 storage.local (background·패널 공용)
 │   ├── naver-editor.js        # 스마트에디터 ONE 버튼 위치(SELECTORS)와 조작·진단
 │   ├── content.js             # 서식 묶음 버튼: 항상 뜨는 서식 도구·단축키·드래그 막대 (Shadow DOM)
 │   ├── content-ai.js          # Gemini·ChatGPT·AI Studio에서 새 생성 이미지를 패널로 자동 전송
@@ -97,7 +98,7 @@ toolhub 전체가 하나의 버전(`1.0.0` 형식)을 씁니다. 올릴 때는 �
 | `packages/collector` | 추이 해석·포화도·시즌 알림 날짜, 묶음 분석의 키워드 목록 정리·정렬·표, 브리프·글감 브리핑 형식, 초안 파싱·도입 문장·고치기(백업·경로 차단), 초안 상태(예약 시각 지나면 발행됨·주소 검증·고치기·지식iN 답변 기록·이전·다음 초안 찾기·상태 파일 동시 쓰기·경로 차단), 지식iN 답변 요청문(본문 텍스트화·질문 본문/요약·주소 자리·규칙), 키워드 병합·기간 집계 |
 | `apps/web/lib` | 할 일 수정 요청 검증, 초안 미리보기(네이버 표 블록 포함), 네이버 서식 포함 복사 HTML(기호 제거·소제목·강조·표·이스케이프), 예약 발행 시간 뽑기(개수·10분 단위·첫 예약부터 기준 시각 뒤로 간격 안·간격 바꾸기·다음 날 표시), 기억 시간이 있는 캐시(시간 안·지난 뒤·다시 넣기·지우기) |
 | `packages/insta` | 훅 공식 26개 형식, 음절 어림, 구성표(긴 줄 나누기·훅 3초·장면 4초·구체성·되감기·목표 길이), 훅 점검, 캡션 점검(한글 해시태그·링크·요청·대가성 문구·검색어) |
-| `extension` | 색 해석, 팔레트에서 가장 가까운 색 고르기, 설정 병합, 이미지 모음의 data URL 변환·중복 제거(원래 주소 포함)·자동 담기 크기 기준·파일 이름 (`*.test.js`) |
+| `extension` | 색 해석, 팔레트에서 가장 가까운 색 고르기, 설정 병합, 이미지 모음의 중복 제거(해시·원래 주소)·최대 200장·id 겹침 방지·빠진 이미지 찾기·예전 방식 합치기·자동 담기 크기 기준·파일 이름 (`*.test.js`) |
 
 ## 환경변수
 
@@ -312,8 +313,15 @@ stdio 전송은 stdout을 프로토콜에 쓰므로 서버 코드에서 `console
 - 오른쪽 클릭 메뉴(`contextMenus`, 이미지에만)는 `background.js`가 받아 담습니다. 패널 열기(`sidePanel.open`)는 사용자가 누른 직후에만 허용돼서 이미지를 받기 전에 먼저 엽니다.
 - 받는 순서: 확장 권한(`<all_urls>`)으로 직접 `fetch` → 실패하거나 `blob:` 주소면 `scripting.executeScript`로 그 페이지(프레임을 모르면 모든 프레임) 안에서 읽습니다. Gemini 등은 생성 이미지를 페이지 안에서만 유효한 `blob:` 주소로 띄웁니다.
 - 패널에 붙여넣기·끌어다 놓기는 이미지 파일 → HTML 속 `<img>`의 src 속성 → uri-list → 텍스트 순으로 찾고, 패널이 직접 못 받는 주소(`blob:`, 로그인 필요)는 background가 지금 탭에서 읽습니다.
-- 담기(추가)는 background의 큐로 차례로 저장해 동시에 써서 빠지는 일을 막습니다. 패널·background 모두 `storage.local`의 `shelf`를 쓰고 패널은 `storage.onChanged`로 다시 그립니다.
-- 클립보드는 PNG만 받아서 복사할 때 `OffscreenCanvas`로 PNG로 바꿉니다. 최근 30장은 data URL로 두고 `unlimitedStorage`로 용량 제한을 풉니다.
+- 저장(`shelf-store.js`, background·패널 공용): 최근 200장(`MAX_SHELF`). 장수가 늘어도 느려지지 않게 둘로 나눕니다.
+  - 원본은 IndexedDB `toolhub-shelf`의 `images`에 한 장씩 `{ id, image: Blob, thumb: Blob | null }`으로 둡니다. 담을 때 그 한 장만 씁니다. 미리보기는 너비 400px WebP(`OffscreenCanvas`)이고, GIF·SVG나 이미 작은 이미지는 `null`(원본을 그대로 보여 줌)입니다.
+  - 순서 목록은 `storage.local`의 `shelfIndex`에 `{ id, from, source, hash, type, addedAt }`만 둡니다. 패널은 `storage.onChanged`로 이것만 받아 새 칸만 만들고 나머지는 순서만 맞춥니다.
+  - 중복은 내용의 SHA-256(`hash`)이나 원래 주소(`source`)로 거릅니다.
+  - 고치는 일(담기·지우기·전체 지우기·옮기기)은 모두 `navigator.locks`로 차례로 해서, 패널과 background가 동시에 써도 빠지지 않습니다. 원본을 먼저 쓰고 목록을 올리며, 목록에서 빠진 원본은 함께 지웁니다.
+  - 예전 방식(`storage.local`의 `shelf`, data URL 배열)은 `migrate()`가 설치·업데이트·크롬 시작·패널 열기 때 옮깁니다. 옮기지 못한 것은 `shelf`에 남겨 다음에 다시 시도하고, 목록에 없는 원본(중간에 멈춰 남은 것)은 이때 치웁니다.
+  - `unlimitedStorage`로 IndexedDB 용량 제한도 풉니다.
+- 패널 칸은 미리보기를 보여 주다가 마우스를 올리면 원본 data URL로 바꿉니다. 에디터로 끌어다 놓을 때 원본이 가게 하려는 것으로, 확장 안의 `blob:` 주소는 에디터가 읽지 못합니다.
+- 클립보드는 PNG만 받아서 복사할 때 `OffscreenCanvas`로 PNG로 바꿉니다.
 - 확인 (2026-11-01): Chrome for Testing에 확장을 실제로 설치(`--remote-debugging-pipe --enable-unsafe-extension-debugging` + CDP `Extensions.loadUnpacked`. 일반 크롬은 `--load-extension`을 막음)하고, `gemini.google.com` 요청을 가짜 페이지로 바꿔 자동 담기(작은 아이콘 제외), 다시 그려져도 중복 없음, `blob:` 이미지 끌어다 놓기, 자동 담기 끄기를 확인했습니다. 실제 Gemini·ChatGPT 화면 구조는 로그인이 필요해 설치 후 확인이 필요합니다.
 
 ## 이미지 5장 프롬프트 (`image-prompt.ts`)

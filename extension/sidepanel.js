@@ -1,11 +1,15 @@
-const { addToShelf, dataUrlMime, imageFileName } = ToolhubLib;
+const { imageFileName } = ToolhubLib;
+const { INDEX_KEY, readIndex, getRecord, addImage, removeImages, clearImages, migrate } = ToolhubShelf;
 const shelfEl = document.getElementById("shelf");
 const empty = document.getElementById("empty");
 const statusLine = document.getElementById("status");
 const drop = document.getElementById("drop");
 const clearButton = document.getElementById("clear");
 
+/** 순서 목록 (원본은 IndexedDB에 있고 칸을 그릴 때 꺼낸다) */
 let shelf = [];
+/** 이미 그린 칸. 목록이 바뀌면 새로 생긴 칸만 만들고 나머지는 그대로 옮긴다 */
+const cards = new Map();
 let statusTimer = 0;
 
 function setStatus(text, isError = false) {
@@ -18,9 +22,14 @@ function setStatus(text, isError = false) {
 const autoToggle = document.getElementById("auto");
 
 async function load() {
-  let autoCollect;
-  ({ shelf = [], autoCollect } = await chrome.storage.local.get(["shelf", "autoCollect"]));
+  const { autoCollect } = await chrome.storage.local.get("autoCollect");
   autoToggle.checked = autoCollect !== false;
+  try {
+    await migrate();
+  } catch (e) {
+    setStatus(`예전에 담은 이미지를 옮기지 못했어요: ${e.message}`, true);
+  }
+  shelf = await readIndex();
   render();
 }
 
@@ -34,8 +43,8 @@ autoToggle.addEventListener("change", () => chrome.storage.local.set({ autoColle
 
 // 자동 담기·오른쪽 클릭으로 담은 이미지(background.js)도 바로 보이게 한다
 chrome.storage.onChanged.addListener((changes, area) => {
-  if (area === "local" && changes.shelf) {
-    shelf = changes.shelf.newValue ?? [];
+  if (area === "local" && changes[INDEX_KEY]) {
+    shelf = changes[INDEX_KEY].newValue ?? [];
     render();
   }
 });
@@ -43,17 +52,12 @@ chrome.runtime.onMessage.addListener((message) => {
   if (message?.type === "shelf-status") setStatus(message.text, message.error);
 });
 
-async function add(src, from) {
-  if (!dataUrlMime(src)) return setStatus("이미지가 아니에요.", true);
-  shelf = addToShelf(shelf, { id: Date.now(), src, from, addedAt: new Date().toISOString() });
-  await save();
-  render();
-  setStatus("담았어요. 클릭하면 복사돼요.");
-}
-
-async function save() {
+/** 목록은 storage.onChanged로 다시 그린다 (background가 담은 것과 같은 길) */
+async function add(blob, from) {
+  if (!blob.type.startsWith("image/")) return setStatus("이미지가 아니에요.", true);
   try {
-    await chrome.storage.local.set({ shelf });
+    await addImage(blob, { from });
+    setStatus("담았어요. 클릭하면 복사돼요.");
   } catch (e) {
     setStatus(`저장하지 못했어요: ${e.message}`, true);
   }
@@ -71,7 +75,7 @@ const readFile = (file) =>
 async function fetchImage(url) {
   const blob = await (await fetch(url)).blob();
   if (!blob.type.startsWith("image/")) throw new Error("이미지 주소가 아니에요");
-  return readFile(blob);
+  return blob;
 }
 
 /** 끌어다 놓기·붙여넣기 데이터에서 이미지 주소를 찾는다. HTML 속 img → uri-list → 일반 텍스트 순 */
@@ -86,10 +90,10 @@ function findImageUrl(data) {
 /** 붙여넣기·끌어다 놓기 공통: 이미지 파일 → 이미지 주소 순으로 찾는다 */
 async function addFromTransfer(data) {
   const file = [...data.files].find((f) => f.type.startsWith("image/"));
-  if (file) return add(await readFile(file), "붙여넣기");
+  if (file) return add(file, "붙여넣기");
   const url = findImageUrl(data);
   if (!url) return setStatus("이미지를 찾지 못했어요. 사이트의 \"이미지 복사\"를 눌러 복사한 뒤 여기에 붙여넣어 주세요.", true);
-  if (url.startsWith("data:")) return add(url, "붙여넣기");
+  if (url.startsWith("data:")) return add(await (await fetch(url)).blob(), "붙여넣기");
   setStatus("이미지를 받는 중…");
   if (url.startsWith("http")) {
     try {
@@ -117,9 +121,16 @@ drop.addEventListener("drop", (e) => {
   addFromTransfer(e.dataTransfer);
 });
 
+/** 원본 이미지 (미리보기 말고). 지워졌으면 오류 */
+async function original(item) {
+  const record = await getRecord(item.id);
+  if (!record) throw new Error("이미지를 찾지 못했어요");
+  return record.image;
+}
+
 /** 클립보드 이미지는 PNG만 받아서 PNG로 바꿔 넣는다 */
 async function copyImage(item) {
-  let blob = await (await fetch(item.src)).blob();
+  let blob = await original(item);
   if (blob.type !== "image/png") {
     const bitmap = await createImageBitmap(blob);
     const canvas = new OffscreenCanvas(bitmap.width, bitmap.height);
@@ -129,55 +140,101 @@ async function copyImage(item) {
   await navigator.clipboard.write([new ClipboardItem({ "image/png": blob })]);
 }
 
-function download(item) {
-  const link = document.createElement("a");
-  link.href = item.src;
-  link.download = imageFileName(new Date(item.id), dataUrlMime(item.src));
-  link.click();
+async function download(item) {
+  try {
+    const blob = await original(item);
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement("a");
+    link.href = url;
+    link.download = imageFileName(new Date(item.id), blob.type);
+    link.click();
+    // 바로 풀면 내려받기가 시작되기 전에 주소가 사라질 수 있다
+    setTimeout(() => URL.revokeObjectURL(url), 60_000);
+  } catch (e) {
+    setStatus(`저장하지 못했어요: ${e.message}`, true);
+  }
 }
 
 async function remove(id) {
-  shelf = shelf.filter((s) => s.id !== id);
-  await save();
-  render();
+  try {
+    await removeImages([id]);
+  } catch (e) {
+    setStatus(`지우지 못했어요: ${e.message}`, true);
+  }
 }
 
+/** 칸 하나. 처음엔 작은 미리보기를 보여 주고, 마우스를 올리면 원본으로 바꿔 둔다 (에디터로 끌어다 놓을 때 원본이 가게) */
+function createCard(item) {
+  const figure = document.createElement("figure");
+  figure.innerHTML = `
+    <button type="button" class="thumb" title="클릭하면 복사 · 에디터로 끌어다 놓아도 돼요"><img alt="" loading="lazy" decoding="async" /></button>
+    <div class="actions">
+      <button type="button" data-action="copy">복사</button>
+      <button type="button" data-action="save">저장</button>
+      <button type="button" class="link remove" data-action="remove" aria-label="지우기">✕</button>
+    </div>`;
+  const img = figure.querySelector("img");
+  let preview = "";
+  getRecord(item.id)
+    .then((record) => {
+      if (!record) return;
+      preview = URL.createObjectURL(record.thumb ?? record.image);
+      img.src = preview;
+    })
+    .catch(() => {});
+  const thumb = figure.querySelector(".thumb");
+  thumb.addEventListener(
+    "pointerenter",
+    async () => {
+      try {
+        // 예전처럼 data URL로 둔다 (확장 안의 blob: 주소는 에디터가 읽지 못한다)
+        img.src = await readFile(await original(item));
+      } catch {
+        // 미리보기 그대로
+      }
+    },
+    { once: true },
+  );
+  const copy = async () => {
+    try {
+      await copyImage(item);
+      setStatus("복사했어요. 에디터에서 ⌘V(Ctrl+V)로 붙여넣으세요.");
+    } catch (e) {
+      setStatus(`복사하지 못했어요: ${e.message}`, true);
+    }
+  };
+  thumb.addEventListener("click", copy);
+  figure.querySelector('[data-action="copy"]').addEventListener("click", copy);
+  figure.querySelector('[data-action="save"]').addEventListener("click", () => download(item));
+  figure.querySelector('[data-action="remove"]').addEventListener("click", () => remove(item.id));
+  return { figure, release: () => preview && URL.revokeObjectURL(preview) };
+}
+
+/** 목록에서 빠진 칸은 치우고, 새 칸만 만들고, 나머지는 순서만 맞춘다 (이미 그린 이미지는 다시 읽지 않는다) */
 function render() {
   empty.hidden = shelf.length > 0;
   clearButton.hidden = shelf.length === 0;
+  const ids = new Set(shelf.map((item) => item.id));
+  for (const [id, card] of cards) {
+    if (ids.has(id)) continue;
+    card.release();
+    cards.delete(id);
+  }
   shelfEl.replaceChildren(
     ...shelf.map((item) => {
-      const figure = document.createElement("figure");
-      figure.innerHTML = `
-        <button type="button" class="thumb" title="클릭하면 복사 · 에디터로 끌어다 놓아도 돼요"><img alt="" /></button>
-        <div class="actions">
-          <button type="button" data-action="copy">복사</button>
-          <button type="button" data-action="save">저장</button>
-          <button type="button" class="link remove" data-action="remove" aria-label="지우기">✕</button>
-        </div>`;
-      figure.querySelector("img").src = item.src;
-      const copy = async () => {
-        try {
-          await copyImage(item);
-          setStatus("복사했어요. 에디터에서 ⌘V(Ctrl+V)로 붙여넣으세요.");
-        } catch (e) {
-          setStatus(`복사하지 못했어요: ${e.message}`, true);
-        }
-      };
-      figure.querySelector(".thumb").addEventListener("click", copy);
-      figure.querySelector('[data-action="copy"]').addEventListener("click", copy);
-      figure.querySelector('[data-action="save"]').addEventListener("click", () => download(item));
-      figure.querySelector('[data-action="remove"]').addEventListener("click", () => remove(item.id));
-      return figure;
+      if (!cards.has(item.id)) cards.set(item.id, createCard(item));
+      return cards.get(item.id).figure;
     }),
   );
 }
 
 clearButton.addEventListener("click", async () => {
   if (!confirm(`담아 둔 이미지 ${shelf.length}개를 모두 지울까요?`)) return;
-  shelf = [];
-  await save();
-  render();
+  try {
+    await clearImages();
+  } catch (e) {
+    setStatus(`지우지 못했어요: ${e.message}`, true);
+  }
 });
 
 document.getElementById("options").addEventListener("click", () => chrome.runtime.openOptionsPage());

@@ -4,7 +4,7 @@
  * - 오른쪽 클릭 → "toolhub 패널에 담기"
  * - 패널에 끌어다 놓은 이미지 중 패널이 직접 받지 못하는 주소(blob:, 로그인 필요)를 대신 받는다
  */
-importScripts("lib.js");
+importScripts("lib.js", "shelf-store.js");
 
 const MENU_ID = "toolhub-add-image";
 const ADVISOR_MENU_ID = "toolhub-advisor-trends";
@@ -19,7 +19,11 @@ chrome.commands.onCommand.addListener((command, tab) => {
   if (tab?.id && command.startsWith("format-")) chrome.tabs.sendMessage(tab.id, { type: "format", kind }).catch(() => {});
 });
 
+// 예전 방식(data URL 배열)으로 담아 둔 이미지를 새 저장소로 옮긴다 (업데이트 직후·크롬을 켤 때. 패널을 열 때도 한 번 더)
+chrome.runtime.onStartup.addListener(() => ToolhubShelf.migrate().catch(() => {}));
+
 chrome.runtime.onInstalled.addListener(() => {
+  ToolhubShelf.migrate().catch(() => {});
   chrome.contextMenus.create({ id: MENU_ID, title: "toolhub 패널에 담기", contexts: ["image"] });
   chrome.contextMenus.create({
     id: ADVISOR_MENU_ID,
@@ -54,13 +58,15 @@ async function panelOpen() {
 }
 
 /** 확장 권한으로 바로 받는다 (다른 사이트 이미지도 CORS 제한 없이) */
-async function fetchAsDataUrl(src) {
+async function fetchImage(src) {
   const res = await fetch(src);
   if (!res.ok) throw new Error(`이미지를 받지 못했어요 (${res.status})`);
   const blob = await res.blob();
   if (!blob.type.startsWith("image/")) throw new Error("이미지 파일이 아니에요");
-  return ToolhubLib.bytesToDataUrl(new Uint8Array(await blob.arrayBuffer()), blob.type);
+  return blob;
 }
+
+const dataUrlToBlob = async (dataUrl) => (await fetch(dataUrl)).blob();
 
 /** blob: 주소나 로그인이 필요한 이미지는 그 페이지 안에서 읽어야 한다. 프레임을 모르면 모든 프레임에서 시도 */
 async function readInPage(tabId, frameId, src) {
@@ -87,28 +93,18 @@ async function readInPage(tabId, frameId, src) {
   return found;
 }
 
-async function toDataUrl(src, tabId, frameId) {
-  if (src.startsWith("data:")) return src;
+async function toBlob(src, tabId, frameId) {
+  if (src.startsWith("data:")) return dataUrlToBlob(src);
   if (!src.startsWith("blob:")) {
     try {
-      return await fetchAsDataUrl(src);
+      return await fetchImage(src);
     } catch {
       // 아래에서 페이지 안에서 다시 시도
     }
   }
   if (tabId === undefined) throw new Error("이미지를 받지 못했어요");
-  return readInPage(tabId, frameId, src);
-}
-
-/** 패널과 background가 동시에 쓰지 않도록 담기는 여기서 차례로 처리한다 */
-let queue = Promise.resolve();
-function addToShelf(src, from, source) {
-  queue = queue.then(async () => {
-    const { shelf = [] } = await chrome.storage.local.get("shelf");
-    const item = { id: Date.now(), src, from, source, addedAt: new Date().toISOString() };
-    await chrome.storage.local.set({ shelf: ToolhubLib.addToShelf(shelf, item) });
-  });
-  return queue;
+  // 페이지 밖으로는 글자(data URL)로만 꺼낼 수 있어서 받은 뒤 다시 Blob으로
+  return dataUrlToBlob(await readInPage(tabId, frameId, src));
 }
 
 /** 패널이 상태를 보여 줄 수 있게 알린다 (패널이 닫혀 있으면 무시) */
@@ -117,9 +113,8 @@ const notify = (message) => chrome.runtime.sendMessage({ type: "shelf-status", .
 /** 실패하면 패널에 이유와 대안을 보여 준다 */
 async function collect(src, tabId, frameId, from) {
   try {
-    const dataUrl = await toDataUrl(src, tabId, frameId);
-    if (!ToolhubLib.dataUrlMime(dataUrl)) throw new Error("이미지 파일이 아니에요");
-    await addToShelf(dataUrl, from, src.startsWith("data:") ? undefined : src);
+    const blob = await toBlob(src, tabId, frameId);
+    await ToolhubShelf.addImage(blob, { from, source: src.startsWith("data:") ? undefined : src });
     notify({ text: "담았어요. 클릭하면 복사돼요." });
   } catch (e) {
     notify({ text: `담지 못했어요: ${e?.message ?? e}. 사이트의 "이미지 복사" 후 패널에 붙여넣어 보세요.`, error: true });
@@ -148,8 +143,12 @@ chrome.runtime.onMessage.addListener((message, sender) => {
     Promise.all([panelOpen(), chrome.storage.local.get("autoCollect")]).then(async ([open, { autoCollect }]) => {
       if (!open || autoCollect === false) return;
       if (message.dataUrl && ToolhubLib.dataUrlMime(message.dataUrl)) {
-        await addToShelf(message.dataUrl, message.from, message.src);
-        notify({ text: `${message.from}에서 새 이미지를 담았어요.` });
+        try {
+          await ToolhubShelf.addImage(await dataUrlToBlob(message.dataUrl), { from: message.from, source: message.src });
+          notify({ text: `${message.from}에서 새 이미지를 담았어요.` });
+        } catch (e) {
+          notify({ text: `담지 못했어요: ${e?.message ?? e}`, error: true });
+        }
       } else {
         await collect(message.src, sender.tab?.id, sender.frameId, message.from);
       }
