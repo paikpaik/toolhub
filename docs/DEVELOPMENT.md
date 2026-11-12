@@ -322,13 +322,27 @@ stdio 전송은 stdout을 프로토콜에 쓰므로 서버 코드에서 `console
   - `unlimitedStorage`로 IndexedDB 용량 제한도 풉니다.
 - 패널 칸은 미리보기를 보여 주다가 마우스를 올리면 원본 data URL로 바꿉니다. 에디터로 끌어다 놓을 때 원본이 가게 하려는 것으로, 확장 안의 `blob:` 주소는 에디터가 읽지 못합니다.
 - 클립보드는 PNG만 받아서 복사할 때 `OffscreenCanvas`로 PNG로 바꿉니다.
-- **삽입**: 패널이 이미지를 클립보드에 PNG로 복사한 뒤, 지금 탭에 `insert-image` 메시지를 보냅니다. 에디터가 있는 프레임의 `content.js`만 답합니다. 그 프레임에서 `naver-editor.js`의 `insertImageAtNextSlot()`이 다음을 합니다.
-  1. `.se-content .se-text-paragraph` 중 글자가 `ToolhubLib.imageSlotKind()`로 `"body"`인 첫 문단을 고릅니다. 문단 전체가 `[이미지: …]` 하나일 때만이고, 대표 썸네일은 `"thumbnail"`이라 빠집니다. 전각 괄호·콜론과 보이지 않는 글자는 무시합니다.
-  2. 편집 영역에 포커스를 주고, 마우스 누르기·떼기와 함께 문단 글자 전체를 고릅니다(`selectWhole`).
-  3. `document.execCommand("paste")`로 진짜(isTrusted) 붙여넣기를 일으킵니다. 이를 위해 `clipboardRead` 권한이 필요합니다. 에디터가 화면 직접 수정은 저장 때 버리므로, 사람이 ⌘V 하는 것과 같은 길을 씁니다.
-  4. `.se-component.se-image` 개수가 늘 때까지 최대 10초 기다립니다.
-  5. 표시 문단이 남아 있으면 한 번 더 골라 `delete`합니다. 결과는 `{ left, slotLeft }`입니다.
-  - 확인 (2026-11-12): Chrome for Testing에 확장을 설치하고 `blog.naver.com` 요청을 가짜 에디터 페이지로 바꿔 확인했습니다. 확인한 것은 썸네일 건너뛰기, 순서대로 채우기, 문장 속 표시 보존, 붙여넣기가 `isTrusted`이고 PNG 파일인지, 자리가 없을 때 안내입니다. 실제 스마트에디터가 붙여넣은 이미지를 고른 글자 자리에 넣는지는 로그인이 필요해 설치 후 확인해야 합니다. 진단 정보에 `found.image`와 `imageSlots`가 담깁니다.
+- **삽입** (`sidepanel.js`의 `insert`): 실제 스마트에디터는 확장이 만든 입력을 받지 않습니다(2026-11-12 실제 글쓰기 화면에서 확인).
+  - 받지 않은 것: 프로그램으로 고른 범위, `isTrusted: false`인 Backspace `keydown`, `execCommand("delete")`. 그래서 이미지만 들어가고 `[이미지: …]` 표시는 남았습니다.
+  - 받은 것: `execCommand("paste")`(진짜 붙여넣기)와 합성 마우스 클릭.
+  - 그래서 `debugger` 권한으로 사람과 같은 진짜 입력을 보냅니다. 하는 동안 크롬 위에 "디버깅을 시작함" 띠가 잠깐 뜹니다.
+  1. 패널이 이미지를 클립보드에 PNG로 복사합니다.
+  2. `chrome.debugger.attach({ tabId })`로 연결하고 `Emulation.setFocusEmulationEnabled`를 켭니다. 포커스가 패널에 있어도 탭이 입력을 받게 하려는 것입니다. 띠가 뜨며 화면이 밀리므로 400ms 기다립니다.
+  3. `image-insert-step: locate`: 에디터 프레임의 `content.js` → `locateImageSlot()`.
+     - `.se-content .se-text-paragraph` 중 `ToolhubLib.imageSlotKind()`가 `"body"`인 첫 문단을 고릅니다. 문단 전체가 `[이미지: …]` 하나일 때만이고, 대표 썸네일은 `"thumbnail"`이라 빠집니다.
+     - 그 문단을 가운데로 스크롤합니다.
+     - 첫 글자 왼쪽·끝 글자 오른쪽의 좌표를 줍니다. Range의 글자 단위 `getClientRects`로 재서, 두 줄로 넘어가도 정확합니다.
+     - 좌표는 `frameElement`를 따라 올라가며 탭 화면 기준으로 바꿉니다. 에디터가 같은 사이트의 iframe 안에 있기 때문입니다.
+     - 삽입 전 모든 문단의 글자도 기억해 둡니다.
+  4. `Input.dispatchMouseEvent`로 드래그(누르기 → 네 번 나눠 끌기 → 떼기)하고, `Input.dispatchKeyEvent`로 Backspace를 보냅니다.
+  5. `check` → `imageSlotStatus()`: 표시 문단만 비었거나 사라졌으면 `cleared`입니다. 다른 글자까지 바뀌었으면 `changed`이고, 이때는 진짜 ⌘Z(`commands: ["undo"]`)로 되돌리고 멈춥니다. 아무것도 안 바뀌었으면 1초까지 다시 봅니다.
+  6. `paste` → `pasteImageAtCaret()`: 에디터의 편집 칸(본문 밖, 클래스 없는 DIV)에 `execCommand("paste")`합니다. 이를 위해 `clipboardRead` 권한이 필요합니다. 그다음 `.se-component.se-image` 개수가 늘 때까지 최대 10초 기다립니다.
+  7. 끝나면(실패해도) `debugger.detach`합니다.
+  - 실패 안내는 막힌 단계를 함께 보여 줍니다: 자리 없음 / 표시를 지우지 못함 / 다른 글자가 바뀌어 되돌림 / 붙여넣기가 에디터에 닿지 않음 / 클립보드에 이미지 없음 / 에디터가 이미지를 넣지 않음. 이미지는 클립보드에 남아 있어 ⌘V로 이어서 할 수 있습니다. 진단 정보에는 `found.image`, `imageSlots`, `activeElement`, `editables`가 담깁니다.
+  - 확인 (2026-11-12): Chrome for Testing에 확장을 설치하고 `blog.naver.com` 요청을 가짜 에디터로 바꿔 패널의 `insert()`를 그대로 돌렸습니다.
+    - 가짜 에디터는 실제처럼 진짜 Backspace만 받고, 숨은 편집 칸이 있습니다. 위치를 어긋나게 한 iframe 안과 밖 두 경우를 모두 봤습니다.
+    - 확인한 것: 두 줄짜리 표시 드래그 → 지우기 → 그 자리에 이미지, 썸네일 건너뛰기, 순서대로 채우기, 문장 속 표시와 다른 문단 보존, 가짜 키 입력 미사용, 자리가 없을 때 안내.
+    - 실제 스마트에디터에서는 설치 후 확인해야 합니다.
 - 확인 (2026-11-01): Chrome for Testing에 확장을 실제로 설치(`--remote-debugging-pipe --enable-unsafe-extension-debugging` + CDP `Extensions.loadUnpacked`. 일반 크롬은 `--load-extension`을 막음)하고, `gemini.google.com` 요청을 가짜 페이지로 바꿔 자동 담기(작은 아이콘 제외), 다시 그려져도 중복 없음, `blob:` 이미지 끌어다 놓기, 자동 담기 끄기를 확인했습니다. 실제 Gemini·ChatGPT 화면 구조는 로그인이 필요해 설치 후 확인이 필요합니다.
 
 ## 이미지 5장 프롬프트 (`image-prompt.ts`)

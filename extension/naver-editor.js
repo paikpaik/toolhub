@@ -188,59 +188,122 @@ globalThis.ToolhubNaver = (() => {
   }
 
   /** 본문 이미지 자리 표시 문단 (위에서부터). 대표 썸네일 자리는 따로 만든 썸네일을 넣으므로 뺀다 */
-  const imageSlots = () =>
-    [...document.querySelectorAll(`${SELECTORS.content} ${SELECTORS.paragraph}`)].filter((p) => ToolhubLib.imageSlotKind(p.textContent) === "body");
+  const paragraphs = () => [...document.querySelectorAll(`${SELECTORS.content} ${SELECTORS.paragraph}`)];
+  const imageSlots = () => paragraphs().filter((p) => ToolhubLib.imageSlotKind(p.textContent) === "body");
 
-  /** 문단 글자 전체를 드래그한 것처럼 고른다 (clickInto와 같은 이유로 마우스 누르기·떼기를 함께 보낸다) */
-  async function selectWhole(paragraph) {
-    paragraph.scrollIntoView({ block: "center" });
-    // 패널 버튼을 누른 직후라 포커스가 패널에 있다. 붙여넣기가 이 편집 영역으로 가게 먼저 포커스를 옮긴다
-    paragraph.closest('[contenteditable="true"], [contenteditable=""]')?.focus({ preventScroll: true });
-    await sleep(80);
-    const texts = textNodes(paragraph);
-    const [first, last] = [texts[0], texts.at(-1)];
-    const point = (node, atEnd) => {
-      const rect = node.parentElement.getBoundingClientRect();
-      return { bubbles: true, cancelable: true, composed: true, view: window, button: 0, clientX: atEnd ? rect.right - 1 : rect.left + 1, clientY: rect.top + rect.height / 2 };
-    };
-    const start = point(first, false);
-    const end = point(last, true);
-    first.parentElement.dispatchEvent(new PointerEvent("pointerdown", { ...start, buttons: 1, pointerType: "mouse", isPrimary: true }));
-    first.parentElement.dispatchEvent(new MouseEvent("mousedown", { ...start, buttons: 1 }));
+  const EDITABLE = '[contenteditable="true"], [contenteditable=""]';
+
+  /**
+   * 에디터가 키보드·붙여넣기를 받는 편집 칸. 글 본문(.se-content)은 편집 칸이 아니고 따로 둔 칸 하나가 받는다
+   * (2026-11-12 실제 글쓰기 화면 진단: 편집 가능한 요소가 클래스 없는 DIV 하나). 에디터가 이미 포커스를 줬으면 그것을 쓴다
+   */
+  function inputTarget(paragraph) {
+    const active = document.activeElement;
+    if (active?.isContentEditable) return active;
+    return paragraph.closest(EDITABLE) ?? [...document.querySelectorAll(EDITABLE)].find((el) => !el.closest(SELECTORS.toolbar)) ?? null;
+  }
+
+  /** 안내·진단용 요소 이름 (글자는 담지 않는다) */
+  const label = (el) => {
+    if (!el) return "없음";
+    const classes = typeof el.className === "string" ? el.className.trim().split(/\s+/).filter(Boolean).slice(0, 2) : [];
+    return [el.tagName, ...classes].join(".");
+  };
+
+  /** 에디터 프레임의 좌표 → 탭 전체 화면 좌표. 글쓰기 에디터는 같은 사이트의 iframe 안에 있다 */
+  function frameOffset() {
+    let x = 0;
+    let y = 0;
+    for (let w = window; w !== w.top; w = w.parent) {
+      const frame = w.frameElement;
+      if (!frame) throw new EditorError("에디터 화면 위치를 계산하지 못했어요");
+      const rect = frame.getBoundingClientRect();
+      x += rect.left + frame.clientLeft;
+      y += rect.top + frame.clientTop;
+    }
+    return { x, y };
+  }
+
+  /** 글자 하나의 화면 위치 (두 줄로 넘어간 문단에서도 정확하게 그 글자 자리) */
+  function charRect(node, offset) {
     const range = document.createRange();
-    range.setStart(first, 0);
-    range.setEnd(last, last.length);
-    const selection = getSelection();
-    selection.removeAllRanges();
-    selection.addRange(range);
-    last.parentElement.dispatchEvent(new PointerEvent("pointerup", { ...end, pointerType: "mouse", isPrimary: true }));
-    last.parentElement.dispatchEvent(new MouseEvent("mouseup", end));
-    await sleep(150);
+    range.setStart(node, offset);
+    range.setEnd(node, offset + 1);
+    return [...range.getClientRects()].find((r) => r.width || r.height) ?? range.getBoundingClientRect();
+  }
+
+  const normalize = (text) => text.replace(/[\u200b\ufeff]/g, "").trim();
+
+  /** 이미지 삽입 중인 자리: 몇 번째 문단인지와 삽입 전 모든 문단의 글자 (지운 뒤 표시 문단만 바뀌었는지 확인용) */
+  let pending = null;
+
+  /**
+   * 이미지 삽입 1단계: 위에서부터 첫 번째 본문 이미지 자리를 화면 가운데로 보이고, 드래그할 시작·끝 좌표(탭 화면 기준)를 준다.
+   * 실제 에디터는 확장이 만든 키 입력·선택을 받지 않아서(2026-11-12) 패널이 이 좌표로 진짜 마우스 드래그를 보낸다 (debugger)
+   */
+  async function locateImageSlot() {
+    const slots = imageSlots();
+    if (!slots.length) throw new EditorError("남은 본문 이미지 자리([이미지: …] 문단)가 없어요. 대표 썸네일 자리는 건너뛰어요");
+    const slot = slots[0];
+    slot.scrollIntoView({ block: "center" });
+    await sleep(200);
+    const texts = textNodes(slot);
+    const [first, last] = [texts[0], texts.at(-1)];
+    const start = charRect(first, first.textContent.search(/\S/));
+    const end = charRect(last, last.textContent.search(/\S\s*$/));
+    const offset = frameOffset();
+    const all = paragraphs();
+    pending = { index: all.indexOf(slot), texts: all.map((p) => p.textContent) };
+    return {
+      start: { x: offset.x + start.left + 1, y: offset.y + (start.top + start.bottom) / 2 },
+      end: { x: offset.x + end.right - 1, y: offset.y + (end.top + end.bottom) / 2 },
+    };
   }
 
   /**
-   * 패널이 클립보드에 담아 둔 이미지를 위에서부터 첫 번째 본문 이미지 자리에 넣는다.
-   * 에디터가 직접 고친 화면은 저장 때 버리므로, 자리 표시 문단을 고른 뒤 사람이 ⌘V 하듯 진짜 붙여넣기를 일으킨다 (clipboardRead 권한).
-   * 이미지가 들어갔는데 표시 문단이 남으면 한 번 더 골라 지운다.
-   * { left: 남은 자리 수, slotLeft: 표시 문단을 지우지 못했는지 }
+   * 이미지 삽입 2단계: 백스페이스 뒤 확인. 표시 문단만 비었거나 사라졌으면 "cleared", 아무것도 안 바뀌었으면 "unchanged",
+   * 다른 글자까지 바뀌었으면 "changed" (패널이 되돌린다)
    */
-  async function insertImageAtNextSlot() {
-    const slots = imageSlots();
-    if (!slots.length) throw new EditorError("남은 본문 이미지 자리([이미지: …] 문단)가 없어요. 대표 썸네일 자리는 건너뛰어요");
+  function imageSlotStatus() {
+    if (!pending) throw new EditorError("이미지 자리를 먼저 찾아야 해요");
+    const { index, texts } = pending;
+    const now = paragraphs().map((p) => normalize(p.textContent));
+    const before = texts.map(normalize);
+    const same = (a, b) => a.length === b.length && a.every((t, i) => t === b[i]);
+    if (same(now, before)) return "unchanged";
+    const emptied = before.map((t, i) => (i === index ? "" : t));
+    const removed = before.filter((_, i) => i !== index);
+    return same(now, emptied) || same(now, removed) ? "cleared" : "changed";
+  }
+
+  /**
+   * 이미지 삽입 3단계: 패널이 클립보드에 담아 둔 이미지를 지금 커서 자리(비운 표시 문단)에 붙여넣는다.
+   * 에디터가 직접 고친 화면은 저장 때 버리므로 진짜 붙여넣기(execCommand paste, clipboardRead 권한)를 일으킨다.
+   * { left: 남은 본문 이미지 자리 수 }
+   */
+  async function pasteImageAtCaret() {
     const images = () => document.querySelectorAll(SELECTORS.image).length;
     const before = images();
-    await selectWhole(slots[0]);
-    if (!document.execCommand("paste")) throw new EditorError("브라우저가 붙여넣기를 막았어요");
-    // 에디터가 이미지를 올리는 동안 기다린다
-    if (!(await waitFor(() => images() > before, 10000))) throw new EditorError("이미지가 들어가지 않았어요");
-    await sleep(300);
-    if (imageSlots().length >= slots.length) {
-      await selectWhole(imageSlots()[0]);
-      document.execCommand("delete");
-      await sleep(200);
+    const target = inputTarget(document.querySelector(SELECTORS.content));
+    if (!target) throw new EditorError("붙여넣을 편집 칸을 찾지 못했어요");
+    if (document.activeElement !== target) target.focus({ preventScroll: true });
+    // 실패했을 때 어느 단계에서 막혔는지 알 수 있게, 붙여넣기가 어디로 갔고 이미지 파일이 들어 있었는지 기록한다
+    let seen = null;
+    const spy = (e) => (seen = { target: label(e.target), files: e.clipboardData?.files.length ?? 0 });
+    document.addEventListener("paste", spy, true);
+    let pasted;
+    try {
+      pasted = document.execCommand("paste");
+    } finally {
+      document.removeEventListener("paste", spy, true);
     }
-    const left = imageSlots().length;
-    return { left, slotLeft: left >= slots.length };
+    const where = `편집 칸 ${label(target)}, 포커스 ${label(document.activeElement)}`;
+    if (!pasted || !seen) throw new EditorError(`붙여넣기가 에디터에 닿지 않았어요 (${where})`);
+    if (!seen.files) throw new EditorError(`붙여넣기는 됐는데 클립보드에 이미지가 없었어요 (${seen.target})`);
+    // 에디터가 이미지를 올리는 동안 기다린다
+    if (!(await waitFor(() => images() > before, 10000))) throw new EditorError(`붙여넣기는 ${seen.target}에 닿았는데 에디터가 이미지를 넣지 않았어요 (${where})`);
+    pending = null;
+    return { left: imageSlots().length };
   }
 
   const describe = (el) => ({
@@ -280,6 +343,13 @@ globalThis.ToolhubNaver = (() => {
       found: Object.fromEntries(["content", "toolbar", "bold", "fontSize", "fontColor", "backgroundColor", "image"].map((k) => [k, !!document.querySelector(SELECTORS[k])])),
       // 이미지 삽입: 찾은 본문 이미지 자리 수 (글자는 담지 않는다)
       imageSlots: imageSlots().length,
+      // 붙여넣기를 받는 편집 칸이 어디 있는지 (본문 안인지, 부모 요소들)
+      activeElement: label(document.activeElement),
+      editables: [...document.querySelectorAll(EDITABLE)].map((el) => ({
+        el: label(el),
+        inContent: !!el.closest(SELECTORS.content),
+        parents: [el.parentElement, el.parentElement?.parentElement].map(label),
+      })),
       toolbarButtons: buttons.slice(0, 100).map(describe),
       fontSize: await peek(SELECTORS.fontSize),
       fontColor: await peek(SELECTORS.fontColor),
@@ -290,5 +360,5 @@ globalThis.ToolhubNaver = (() => {
     };
   }
 
-  return { SELECTORS, EditorError, hasEditor, isInEditor, apply, convertPastedHeadings, insertImageAtNextSlot, diagnose };
+  return { SELECTORS, EditorError, hasEditor, isInEditor, apply, convertPastedHeadings, locateImageSlot, imageSlotStatus, pasteImageAtCaret, diagnose };
 })();

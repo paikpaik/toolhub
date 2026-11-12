@@ -184,18 +184,16 @@
       if (document.hasFocus() && editorFrame()) run(message.kind, dock ?? dragBar);
       return false;
     }
-    // 패널의 이미지 "삽입": 패널이 클립보드에 담아 둔 이미지를 다음 본문 이미지 자리에. 에디터가 있는 프레임만 답한다
-    if (message?.type === "insert-image") {
-      if (!naver.hasEditor()) return false;
-      if (busy) {
-        sendResponse({ error: "다른 서식을 적용하는 중이에요. 잠시 뒤 다시 눌러 주세요" });
-        return false;
-      }
-      busy = true;
-      naver
-        .insertImageAtNextSlot()
-        .then(sendResponse, (e) => sendResponse({ error: e instanceof naver.EditorError ? e.message : String(e?.message ?? e) }))
-        .finally(() => (busy = false));
+    // 패널의 이미지 "삽입" 단계 (자리 찾기 → 지운 뒤 확인 → 붙여넣기). 드래그·백스페이스는 패널이 debugger로 보낸다. 에디터가 있는 프레임만 답한다
+    if (message?.type === "image-insert-step") {
+      const steps = { locate: naver.locateImageSlot, check: naver.imageSlotStatus, paste: naver.pasteImageAtCaret };
+      if (!naver.hasEditor() || !steps[message.step]) return false;
+      Promise.resolve()
+        .then(() => steps[message.step]())
+        .then(
+          (result) => sendResponse({ result }),
+          (e) => sendResponse({ error: e instanceof naver.EditorError ? e.message : String(e?.message ?? e) }),
+        );
       return true;
     }
     // 패널의 "진단 정보 복사". 에디터가 있는 프레임만 답한다

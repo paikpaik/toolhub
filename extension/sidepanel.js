@@ -155,10 +155,32 @@ async function download(item) {
   }
 }
 
+const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
+const IS_MAC = /Mac/i.test(navigator.platform);
+
+/** debugger로 보내는 진짜 키 입력 (에디터는 확장이 만든 키 이벤트를 받지 않는다) */
+async function pressKey(send, key, code, keyCode, { modifiers = 0, commands } = {}) {
+  const base = { key, code, windowsVirtualKeyCode: keyCode, nativeVirtualKeyCode: keyCode, modifiers };
+  await send("Input.dispatchKeyEvent", { type: "rawKeyDown", ...base, ...(commands ? { commands } : {}) });
+  await send("Input.dispatchKeyEvent", { type: "keyUp", ...base });
+}
+
+/** debugger로 보내는 진짜 마우스 드래그 (from → to). 끄는 동안 몇 번 나눠 움직여 에디터가 드래그로 알아보게 한다 */
+async function drag(send, from, to) {
+  const mouse = (type, p, extra) => send("Input.dispatchMouseEvent", { type, x: p.x, y: p.y, ...extra });
+  await mouse("mouseMoved", from, { button: "none" });
+  await mouse("mousePressed", from, { button: "left", buttons: 1, clickCount: 1 });
+  for (let i = 1; i <= 4; i++) {
+    await mouse("mouseMoved", { x: from.x + ((to.x - from.x) * i) / 4, y: from.y + ((to.y - from.y) * i) / 4 }, { button: "left", buttons: 1 });
+  }
+  await mouse("mouseReleased", to, { button: "left", buttons: 0, clickCount: 1 });
+}
+
 /**
  * 지금 보고 있는 네이버 글쓰기 탭에서, 위에서부터 첫 번째 본문 이미지 자리([이미지: …] 문단)에 이 이미지를 넣는다.
- * 먼저 클립보드에 복사해 두고(에디터가 진짜 붙여넣기로 받게) 에디터 프레임(content.js)에 넣으라고 알린다.
- * 자동으로 못 넣어도 클립보드에 남아 있어 ⌘V로 붙여넣을 수 있다
+ * 실제 에디터는 확장이 만든 키 입력·선택을 받지 않아서(2026-11-12) 사람이 하듯 진짜 입력(debugger 권한)으로 한다:
+ * 클립보드에 복사 → 표시 문단 드래그 → 백스페이스 → 표시 문단만 지워졌는지 확인(아니면 ⌘Z로 되돌림) → 붙여넣기.
+ * 하는 동안 크롬 위에 "디버깅을 시작함" 띠가 잠깐 뜬다. 자동으로 못 넣어도 클립보드에 남아 있어 ⌘V로 붙여넣을 수 있다
  */
 async function insert(item) {
   const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
@@ -169,12 +191,45 @@ async function insert(item) {
     return setStatus(`복사하지 못했어요: ${e.message}`, true);
   }
   setStatus("이미지 자리에 넣는 중…");
-  const result = await chrome.tabs.sendMessage(tab.id, { type: "insert-image" }).catch(() => null);
-  const fallback = "이미지는 복사돼 있으니 자리에서 ⌘V로 붙여넣어 주세요.";
-  if (!result) return setStatus(`글쓰기 화면을 찾지 못했어요. 페이지를 새로고침한 뒤 다시 눌러 주세요. ${fallback}`, true);
-  if (result.error) return setStatus(`${result.error}. ${fallback}`, true);
-  if (result.slotLeft) return setStatus("이미지는 넣었는데 [이미지: …] 문단은 지우지 못했어요. 직접 지워 주세요.", true);
-  setStatus(result.left ? `넣었어요. 남은 본문 이미지 자리 ${result.left}개.` : "넣었어요. 본문 이미지 자리를 모두 채웠어요.");
+  const step = async (name) => {
+    const response = await chrome.tabs.sendMessage(tab.id, { type: "image-insert-step", step: name }).catch(() => null);
+    if (!response) throw new Error("글쓰기 화면이 응답하지 않아요. 확장을 새로고침했다면 글쓰기 탭도 새로고침해 주세요");
+    if (response.error) throw new Error(response.error);
+    return response.result;
+  };
+  const target = { tabId: tab.id };
+  try {
+    await chrome.debugger.attach(target, "1.3");
+  } catch (e) {
+    return setStatus(`글쓰기 화면에 연결하지 못했어요 (${e.message}). 이미지는 복사돼 있으니 자리에서 ⌘V로 붙여넣어 주세요.`, true);
+  }
+  const send = (method, params) => chrome.debugger.sendCommand(target, method, params);
+  try {
+    // 패널에 포커스가 있어도 글쓰기 화면이 입력을 받게 한다
+    await send("Emulation.setFocusEmulationEnabled", { enabled: true });
+    // 디버깅 띠가 뜨며 화면이 밀린 뒤에 좌표를 잰다
+    await sleep(400);
+    const { start, end } = await step("locate");
+    await drag(send, start, end);
+    await sleep(150);
+    await pressKey(send, "Backspace", "Backspace", 8);
+    let status = "unchanged";
+    for (let i = 0; i < 10 && status === "unchanged"; i++) {
+      await sleep(100);
+      status = await step("check");
+    }
+    if (status === "changed") {
+      await pressKey(send, "z", "KeyZ", 90, { modifiers: IS_MAC ? 4 : 2, commands: ["undo"] });
+      throw new Error("[이미지: …] 문단 말고 다른 글자가 바뀌어서 되돌렸어요 (바뀐 글이 있으면 ⌘Z로 확인해 주세요)");
+    }
+    if (status === "unchanged") throw new Error("[이미지: …] 문단을 지우지 못했어요");
+    const { left } = await step("paste");
+    setStatus(left ? `넣었어요. 남은 본문 이미지 자리 ${left}개.` : "넣었어요. 본문 이미지 자리를 모두 채웠어요.");
+  } catch (e) {
+    setStatus(`${e.message}. 이미지는 복사돼 있으니 자리에서 ⌘V로 붙여넣어 주세요.`, true);
+  } finally {
+    await chrome.debugger.detach(target).catch(() => {});
+  }
 }
 
 async function remove(id) {
