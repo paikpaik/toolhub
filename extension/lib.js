@@ -86,6 +86,26 @@ globalThis.ToolhubLib = (() => {
     return [...shelf, ...moved.filter((s) => !ids.has(s.id))].sort((a, b) => b.id - a.id).slice(0, max);
   }
 
+  /** 초안의 이미지 자리 표시 한 문단: [이미지: 장면 | alt: … | 추천: …] (packages/collector의 MARKER_PATTERN과 같은 모양) */
+  const IMAGE_SLOT = /^\[이미지:\s*([^\]]+)\]$/;
+
+  /**
+   * 에디터 문단 글자가 이미지 자리 표시 하나뿐인지. 대표 썸네일 자리면 "thumbnail", 본문 이미지 자리면 "body", 아니면 null.
+   * 문장 속에 섞인 표시는 자리로 보지 않는다 (본문을 지우지 않게). 전각 괄호·콜론, 에디터가 넣는 보이지 않는 글자는 무시한다
+   */
+  function imageSlotKind(text) {
+    const normalized = String(text ?? "")
+      .replace(/［/g, "[")
+      .replace(/］/g, "]")
+      .replace(/：/g, ":")
+      .replace(/[​﻿]/g, "")
+      .replace(/\s+/g, " ")
+      .trim();
+    const match = normalized.match(IMAGE_SLOT);
+    if (!match) return null;
+    return /^대표\s*썸네일/.test(match[1].trim()) ? "thumbnail" : "body";
+  }
+
   /** 자동으로 담을 만한 이미지인지 (생성 이미지는 크다. 아이콘·프로필 사진은 제외) */
   const AUTO_MIN_SIZE = 400;
   const isLargeImage = (width, height) => width >= AUTO_MIN_SIZE && height >= AUTO_MIN_SIZE;
@@ -159,6 +179,7 @@ globalThis.ToolhubLib = (() => {
     nextShelfId,
     removedShelfIds,
     mergeShelf,
+    imageSlotKind,
     isLargeImage,
     imageFileName,
     isTrendMarker,

@@ -112,7 +112,7 @@ button.link {
 
 .shelf {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
+  grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
   gap: 10px;
 }
 
@@ -145,6 +145,11 @@ button.link {
   display: flex;
   gap: 4px;
   margin-top: 4px;
+}
+
+/* 복사·저장·삽입·지우기가 한 줄에 들어가게 */
+.shelf .actions button:not(.link) {
+  padding: 3px 6px;
 }
 
 .shelf .actions .remove {

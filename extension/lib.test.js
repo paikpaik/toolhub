@@ -54,6 +54,20 @@ describe("이미지 모음", () => {
     assert.deepEqual(mergeShelf([], [{ id: 1 }, { id: 3 }, { id: 2 }], 2).map((s) => s.id), [3, 2]);
   });
 
+  it("에디터 문단이 이미지 자리 표시인지 (대표 썸네일은 따로)", () => {
+    const { imageSlotKind } = globalThis.ToolhubLib;
+    assert.equal(imageSlotKind("[이미지: 식탁에서 명세서를 정리하는 직장인 | alt: 카드 사용액 정리 | 추천: AI 생성]"), "body");
+    assert.equal(imageSlotKind("  [이미지:  퇴근길 | alt: 퇴근 | 추천: AI 생성]​ "), "body");
+    assert.equal(imageSlotKind("［이미지： 전각 괄호 | alt: x］"), "body");
+    assert.equal(imageSlotKind("[이미지: 대표 썸네일 | alt: 연말정산 준비 | 추천: 썸네일 만들기]"), "thumbnail");
+    assert.equal(imageSlotKind("[이미지: 대표썸네일 | alt: x]"), "thumbnail");
+    // 문장 속에 섞인 표시, 다른 표시, 두 개 붙은 것은 자리가 아니다
+    assert.equal(imageSlotKind("아래 [이미지: 장면 | alt: x] 처럼"), null);
+    assert.equal(imageSlotKind("[직접 작성: 후기]"), null);
+    assert.equal(imageSlotKind("[이미지: a][이미지: b]"), null);
+    assert.equal(imageSlotKind(""), null);
+  });
+
   it("생성 이미지처럼 큰 것만 자동으로 담는다 (아이콘·프로필 제외)", () => {
     assert.equal(isLargeImage(1024, 1024), true);
     assert.equal(isLargeImage(1536, 1024), true);

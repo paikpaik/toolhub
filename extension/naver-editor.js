@@ -24,6 +24,8 @@ globalThis.ToolhubNaver = (() => {
     /** 본문 덩어리와 그 안의 한 문단. 소제목으로 바꾸면 se-sectionTitle 덩어리로 따로 빠진다 */
     textComponent: ".se-component.se-text",
     paragraph: ".se-text-paragraph",
+    /** 본문에 들어간 사진 덩어리. 삽입이 됐는지 개수로 확인한다 */
+    image: ".se-component.se-image",
   };
 
   /** toolhub "서식 포함 복사"가 소제목에 넣는 글자 크기 (apps/web/lib/preview.ts와 맞춘다) */
@@ -185,6 +187,62 @@ globalThis.ToolhubNaver = (() => {
     return count;
   }
 
+  /** 본문 이미지 자리 표시 문단 (위에서부터). 대표 썸네일 자리는 따로 만든 썸네일을 넣으므로 뺀다 */
+  const imageSlots = () =>
+    [...document.querySelectorAll(`${SELECTORS.content} ${SELECTORS.paragraph}`)].filter((p) => ToolhubLib.imageSlotKind(p.textContent) === "body");
+
+  /** 문단 글자 전체를 드래그한 것처럼 고른다 (clickInto와 같은 이유로 마우스 누르기·떼기를 함께 보낸다) */
+  async function selectWhole(paragraph) {
+    paragraph.scrollIntoView({ block: "center" });
+    // 패널 버튼을 누른 직후라 포커스가 패널에 있다. 붙여넣기가 이 편집 영역으로 가게 먼저 포커스를 옮긴다
+    paragraph.closest('[contenteditable="true"], [contenteditable=""]')?.focus({ preventScroll: true });
+    await sleep(80);
+    const texts = textNodes(paragraph);
+    const [first, last] = [texts[0], texts.at(-1)];
+    const point = (node, atEnd) => {
+      const rect = node.parentElement.getBoundingClientRect();
+      return { bubbles: true, cancelable: true, composed: true, view: window, button: 0, clientX: atEnd ? rect.right - 1 : rect.left + 1, clientY: rect.top + rect.height / 2 };
+    };
+    const start = point(first, false);
+    const end = point(last, true);
+    first.parentElement.dispatchEvent(new PointerEvent("pointerdown", { ...start, buttons: 1, pointerType: "mouse", isPrimary: true }));
+    first.parentElement.dispatchEvent(new MouseEvent("mousedown", { ...start, buttons: 1 }));
+    const range = document.createRange();
+    range.setStart(first, 0);
+    range.setEnd(last, last.length);
+    const selection = getSelection();
+    selection.removeAllRanges();
+    selection.addRange(range);
+    last.parentElement.dispatchEvent(new PointerEvent("pointerup", { ...end, pointerType: "mouse", isPrimary: true }));
+    last.parentElement.dispatchEvent(new MouseEvent("mouseup", end));
+    await sleep(150);
+  }
+
+  /**
+   * 패널이 클립보드에 담아 둔 이미지를 위에서부터 첫 번째 본문 이미지 자리에 넣는다.
+   * 에디터가 직접 고친 화면은 저장 때 버리므로, 자리 표시 문단을 고른 뒤 사람이 ⌘V 하듯 진짜 붙여넣기를 일으킨다 (clipboardRead 권한).
+   * 이미지가 들어갔는데 표시 문단이 남으면 한 번 더 골라 지운다.
+   * { left: 남은 자리 수, slotLeft: 표시 문단을 지우지 못했는지 }
+   */
+  async function insertImageAtNextSlot() {
+    const slots = imageSlots();
+    if (!slots.length) throw new EditorError("남은 본문 이미지 자리([이미지: …] 문단)가 없어요. 대표 썸네일 자리는 건너뛰어요");
+    const images = () => document.querySelectorAll(SELECTORS.image).length;
+    const before = images();
+    await selectWhole(slots[0]);
+    if (!document.execCommand("paste")) throw new EditorError("브라우저가 붙여넣기를 막았어요");
+    // 에디터가 이미지를 올리는 동안 기다린다
+    if (!(await waitFor(() => images() > before, 10000))) throw new EditorError("이미지가 들어가지 않았어요");
+    await sleep(300);
+    if (imageSlots().length >= slots.length) {
+      await selectWhole(imageSlots()[0]);
+      document.execCommand("delete");
+      await sleep(200);
+    }
+    const left = imageSlots().length;
+    return { left, slotLeft: left >= slots.length };
+  }
+
   const describe = (el) => ({
     class: typeof el.className === "string" ? el.className : "",
     text: el.textContent.trim().slice(0, 20),
@@ -219,7 +277,9 @@ globalThis.ToolhubNaver = (() => {
       url: location.origin + location.pathname,
       userAgent: navigator.userAgent,
       selectors: SELECTORS,
-      found: Object.fromEntries(["content", "toolbar", "bold", "fontSize", "fontColor", "backgroundColor"].map((k) => [k, !!document.querySelector(SELECTORS[k])])),
+      found: Object.fromEntries(["content", "toolbar", "bold", "fontSize", "fontColor", "backgroundColor", "image"].map((k) => [k, !!document.querySelector(SELECTORS[k])])),
+      // 이미지 삽입: 찾은 본문 이미지 자리 수 (글자는 담지 않는다)
+      imageSlots: imageSlots().length,
       toolbarButtons: buttons.slice(0, 100).map(describe),
       fontSize: await peek(SELECTORS.fontSize),
       fontColor: await peek(SELECTORS.fontColor),
@@ -230,5 +290,5 @@ globalThis.ToolhubNaver = (() => {
     };
   }
 
-  return { SELECTORS, EditorError, hasEditor, isInEditor, apply, convertPastedHeadings, diagnose };
+  return { SELECTORS, EditorError, hasEditor, isInEditor, apply, convertPastedHeadings, insertImageAtNextSlot, diagnose };
 })();

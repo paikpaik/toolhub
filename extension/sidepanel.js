@@ -155,6 +155,28 @@ async function download(item) {
   }
 }
 
+/**
+ * 지금 보고 있는 네이버 글쓰기 탭에서, 위에서부터 첫 번째 본문 이미지 자리([이미지: …] 문단)에 이 이미지를 넣는다.
+ * 먼저 클립보드에 복사해 두고(에디터가 진짜 붙여넣기로 받게) 에디터 프레임(content.js)에 넣으라고 알린다.
+ * 자동으로 못 넣어도 클립보드에 남아 있어 ⌘V로 붙여넣을 수 있다
+ */
+async function insert(item) {
+  const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
+  if (!tab?.url?.startsWith("https://blog.naver.com/")) return setStatus("네이버 블로그 글쓰기 화면을 띄워 두고 눌러 주세요.", true);
+  try {
+    await copyImage(item);
+  } catch (e) {
+    return setStatus(`복사하지 못했어요: ${e.message}`, true);
+  }
+  setStatus("이미지 자리에 넣는 중…");
+  const result = await chrome.tabs.sendMessage(tab.id, { type: "insert-image" }).catch(() => null);
+  const fallback = "이미지는 복사돼 있으니 자리에서 ⌘V로 붙여넣어 주세요.";
+  if (!result) return setStatus(`글쓰기 화면을 찾지 못했어요. 페이지를 새로고침한 뒤 다시 눌러 주세요. ${fallback}`, true);
+  if (result.error) return setStatus(`${result.error}. ${fallback}`, true);
+  if (result.slotLeft) return setStatus("이미지는 넣었는데 [이미지: …] 문단은 지우지 못했어요. 직접 지워 주세요.", true);
+  setStatus(result.left ? `넣었어요. 남은 본문 이미지 자리 ${result.left}개.` : "넣었어요. 본문 이미지 자리를 모두 채웠어요.");
+}
+
 async function remove(id) {
   try {
     await removeImages([id]);
@@ -171,6 +193,7 @@ function createCard(item) {
     <div class="actions">
       <button type="button" data-action="copy">복사</button>
       <button type="button" data-action="save">저장</button>
+      <button type="button" data-action="insert" title="네이버 글쓰기 화면에서 위에서부터 첫 번째 [이미지: …] 자리에 넣어요 (대표 썸네일 자리는 건너뜀)">삽입</button>
       <button type="button" class="link remove" data-action="remove" aria-label="지우기">✕</button>
     </div>`;
   const img = figure.querySelector("img");
@@ -206,6 +229,7 @@ function createCard(item) {
   thumb.addEventListener("click", copy);
   figure.querySelector('[data-action="copy"]').addEventListener("click", copy);
   figure.querySelector('[data-action="save"]').addEventListener("click", () => download(item));
+  figure.querySelector('[data-action="insert"]').addEventListener("click", () => insert(item));
   figure.querySelector('[data-action="remove"]').addEventListener("click", () => remove(item.id));
   return { figure, release: () => preview && URL.revokeObjectURL(preview) };
 }
