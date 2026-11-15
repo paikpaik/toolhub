@@ -21,4 +21,16 @@ describe("초안 분량", () => {
     assert.match(lengthFeedback("naver", null) ?? "", /코드 블록을 찾지 못해/);
     assert.equal(lengthFeedback(null, "가"), null);
   });
+
+  it("쇼핑 커넥트 글은 플랫폼과 상관없이 3,500자 기준, 대가성 문구가 없으면 먼저 알린다", () => {
+    const disclosure = "이 포스팅은 네이버 쇼핑 커넥트 활동의 일환으로, 판매 발생 시 수수료를 제공받습니다.";
+    const body = (n: number) => `${disclosure}\n${"가".repeat(n - bodyLength(disclosure))}`;
+    assert.match(lengthFeedback("naver", body(2000)) ?? "", /^본문 2,000자: 쇼핑 커넥트 목표 3,500자.*1,500자 짧습니다/);
+    assert.match(lengthFeedback("naver", body(3400)) ?? "", /분량 맞음/);
+    assert.match(lengthFeedback("tistory", body(4100)) ?? "", /깁니다/);
+    // 쉼표·따옴표가 빠져도 같은 문구로 본다
+    assert.doesNotMatch(lengthFeedback("naver", `"${disclosure.replace(",", "")}"\n${"가".repeat(3400)}`) ?? "", /대가성 문구가 없습니다/);
+    // 링크 자리만 있고 문구가 없으면 쇼핑 커넥트 글로 보고 문구를 넣으라고 한다
+    assert.match(lengthFeedback("naver", `[링크: 쇼핑 커넥트]\n${"가".repeat(3500)}`) ?? "", /^대가성 문구가 없습니다.*\n본문 .*분량 맞음/);
+  });
 });

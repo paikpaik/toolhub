@@ -113,6 +113,30 @@ describe("formatWritingBrief", () => {
   it("참고 메모", () => {
     assert.match(formatWritingBrief({ platform: "naver", keyword: "x", note: "  부모님 사례  " }), /참고: 부모님 사례$/);
   });
+
+  it("쇼핑 커넥트: 링크·대가성 문구·상품 정보, 경험 메모가 있을 때만 실제 경험", () => {
+    const connect = { link: "https://naver.me/abc", product: "상품명: 피토메스 스킨로션\n할인가: 39,000원" };
+    const guide = formatWritingBrief({ platform: "naver", type: "connect", keyword: "x", connect });
+    assert.match(guide, /유형: 쇼핑 커넥트/);
+    assert.match(guide, /글 방식: 구매 가이드 \(사용 경험을 지어내지 않습니다\)/);
+    assert.match(guide, /쇼핑 커넥트 링크: https:\/\/naver\.me\/abc/);
+    assert.match(guide, /대가성 문구 \(본문 맨 위에 글자 그대로\): 이 포스팅은 네이버 쇼핑 커넥트 활동의 일환으로, 판매 발생 시 수수료를 제공받습니다\./);
+    assert.match(guide, /상품 정보 \(.*\):\n상품명: 피토메스 스킨로션\n할인가: 39,000원/);
+    assert.doesNotMatch(guide, /경험 메모/);
+
+    const experience = formatWritingBrief({ platform: "naver", type: "connect", keyword: "x", connect: { ...connect, experience: "2주 사용, 향이 순함" } });
+    assert.match(experience, /글 방식: 실제 경험/);
+    assert.match(experience, /경험 메모:\n2주 사용, 향이 순함/);
+
+    // 실제 경험을 골랐어도 메모가 없으면 지어내지 않도록 구매 가이드로
+    const empty = formatWritingBrief({ platform: "naver", type: "connect", keyword: "x", connect: { mode: "experience", experience: " " } });
+    assert.match(empty, /글 방식: 구매 가이드 \(실제 경험을 골랐지만 경험 메모가 없어/);
+    assert.match(empty, /쇼핑 커넥트 링크: 없음 — 링크 자리마다 \[링크: 쇼핑 커넥트\]/);
+
+    const long = formatWritingBrief({ platform: "naver", type: "connect", keyword: "x", connect: { product: "가".repeat(6000) } });
+    assert.match(long, /…\(이하 생략\)/);
+    assert.doesNotMatch(formatWritingBrief({ platform: "naver", type: "review", keyword: "x", connect }), /쇼핑 커넥트 링크/, "다른 유형에는 넣지 않는다");
+  });
 });
 
 describe("글감 브리핑·정렬", () => {

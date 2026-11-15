@@ -14,7 +14,7 @@ export function isPlatform(value: unknown): value is Platform {
 }
 
 /** 글 유형. 유형마다 글 구조와 사람이 채울 자리 기준이 다르다 (docs/prompts/types/*.md) */
-export const WRITING_TYPES = ["info", "review", "place"] as const;
+export const WRITING_TYPES = ["info", "review", "place", "connect"] as const;
 
 export type WritingType = (typeof WRITING_TYPES)[number];
 
@@ -22,6 +22,7 @@ export const WRITING_TYPE_LABELS: Record<WritingType, string> = {
   info: "정보",
   review: "리뷰",
   place: "장소",
+  connect: "쇼핑 커넥트",
 };
 
 export function isWritingType(value: unknown): value is WritingType {
@@ -40,7 +41,25 @@ export const STRUCTURE_NAMES: Record<WritingType, Record<Structure, string>> = {
   info: { A: "질문 답변형", B: "결론 먼저형", C: "상황으로 시작형", D: "비교·표 중심형" },
   review: { A: "요약 먼저형", B: "사용 기간 순", C: "장단점 중심형", D: "비교형" },
   place: { A: "정보 먼저형", B: "방문 동선 순", C: "추천 포인트형", D: "상황별 가이드" },
+  connect: { A: "요약 먼저형", B: "고민 해결형", C: "장단점 중심형", D: "비교형" },
 };
+
+/** 쇼핑 커넥트 글 방식. experience: 사람이 준 경험 메모로 1인칭 후기, guide: 경험 없이 구매 가이드 */
+export const CONNECT_MODES = ["guide", "experience"] as const;
+
+export type ConnectMode = (typeof CONNECT_MODES)[number];
+
+export const CONNECT_MODE_LABELS: Record<ConnectMode, string> = {
+  guide: "구매 가이드",
+  experience: "실제 경험",
+};
+
+export function isConnectMode(value: unknown): value is ConnectMode {
+  return typeof value === "string" && (CONNECT_MODES as readonly string[]).includes(value);
+}
+
+/** 네이버 브랜드커넥트가 링크 발급 시 반드시 넣으라고 안내하는 대가성 문구 (글자 그대로 쓴다) */
+export const CONNECT_DISCLOSURE = "이 포스팅은 네이버 쇼핑 커넥트 활동의 일환으로, 판매 발생 시 수수료를 제공받습니다.";
 
 export function isStructure(value: unknown): value is Structure {
   return typeof value === "string" && (STRUCTURES as readonly string[]).includes(value);

@@ -5,10 +5,13 @@
 import { fetchDailyTrends, type HubConfig } from "./naver-hub.ts";
 import { fetchRelatedKeywords, toHintKeyword, type KeywordStat, type SearchAdConfig } from "./naver-searchad.ts";
 import {
+  CONNECT_DISCLOSURE,
+  CONNECT_MODE_LABELS,
   PLATFORM_LABELS,
   randomStructure,
   structureLine,
   WRITING_TYPE_LABELS,
+  type ConnectMode,
   type Platform,
   type Structure,
   type WritingType,
@@ -23,6 +26,44 @@ const BRIEF_RELATED_COUNT = 20;
 const BRIEF_QUESTION_COUNT = 8;
 const BRIEF_BLOG_COUNT = 5;
 const BRIEF_CAFE_COUNT = 5;
+/** 상품 페이지에서 읽은 글자 정보가 너무 길면 여기까지만 넣는다 (상세 FAQ·표가 아주 긴 상품이 있음) */
+const BRIEF_PRODUCT_MAX = 5000;
+
+/** 쇼핑 커넥트(type connect) 글에만 쓰는 입력. 사람만 아는 정보와 확장이 상품 페이지에서 읽은 정보 */
+export interface ConnectBrief {
+  /** 브랜드커넥트에서 복사한 제휴 링크 */
+  link?: string;
+  /** 생략하면 경험 메모가 있으면 experience, 없으면 guide */
+  mode?: ConnectMode;
+  /** 상품명·가격·수수료·평점·상세 정보(FAQ·표) 등 상품 페이지 글자 */
+  product?: string;
+  /** 직접 써 본 경험 메모 (실제 경험 방식) */
+  experience?: string;
+}
+
+/** 쇼핑 커넥트 브리프 줄. 경험 메모 없이 실제 경험을 고르면 지어내지 않도록 구매 가이드로 쓴다 */
+export function connectBriefLines({ link, mode, product, experience }: ConnectBrief = {}) {
+  const memo = experience?.trim();
+  const picked: ConnectMode = memo ? (mode ?? "experience") : "guide";
+  const lines = [
+    `글 방식: ${CONNECT_MODE_LABELS[picked]}${
+      picked === "guide"
+        ? mode === "experience"
+          ? " (실제 경험을 골랐지만 경험 메모가 없어 구매 가이드로 씁니다. 사용 경험을 지어내지 않습니다)"
+          : " (사용 경험을 지어내지 않습니다)"
+        : " (경험 메모에 있는 내용만 1인칭으로 씁니다)"
+    }`,
+    `쇼핑 커넥트 링크: ${link?.trim() || "없음 — 링크 자리마다 [링크: 쇼핑 커넥트] 한 줄을 둡니다"}`,
+    `대가성 문구 (본문 맨 위에 글자 그대로): ${CONNECT_DISCLOSURE}`,
+  ];
+  const info = product?.trim();
+  if (info) {
+    const clipped = info.length > BRIEF_PRODUCT_MAX ? `${info.slice(0, BRIEF_PRODUCT_MAX)}\n…(이하 생략)` : info;
+    lines.push("상품 정보 (판매처 페이지에서 읽은 내용, 글 쓴 시점 기준. 효능·성능은 판매처 설명으로만 씁니다):", clipped);
+  }
+  if (memo && picked === "experience") lines.push("경험 메모:", memo);
+  return lines;
+}
 
 /** 검색량 표시. 네이버가 "< 10"으로 주는 값은 0으로 저장돼 있다 */
 export function formatSearchCount(value: number | null | undefined) {
@@ -77,6 +118,8 @@ export interface WritingBriefInput {
   surge?: Surge | null;
   /** 대표 키워드 경쟁이 셀 때 돌릴 연관어 (점수순). undefined = 조회하지 않음 */
   pivots?: PivotRow[];
+  /** type이 connect일 때만 쓴다 */
+  connect?: ConnectBrief;
   note?: string;
 }
 
@@ -93,6 +136,7 @@ export function formatWritingBrief({
   research,
   surge,
   pivots,
+  connect,
   note,
 }: WritingBriefInput) {
   const stats =
@@ -110,6 +154,7 @@ export function formatWritingBrief({
     `키워드: ${keyword}`,
     `월간 검색량: ${stats}`,
   ];
+  if (type === "connect") lines.push(...connectBriefLines(connect));
 
   if (research?.trend && research.trend.label !== "데이터 부족") {
     lines.push(`검색 추이: ${research.trend.label} — ${research.trend.reason}`);
@@ -228,7 +273,7 @@ export async function buildWritingBrief(
   { searchAd, hub }: BriefSources,
   keyword: string,
   platform: Platform,
-  { type = "info", structure, note }: { type?: WritingType; structure?: Structure; note?: string } = {},
+  { type = "info", structure, connect, note }: { type?: WritingType; structure?: Structure; connect?: ConnectBrief; note?: string } = {},
 ) {
   const [insight, research, daily] = await Promise.all([
     searchAd ? fetchKeywordInsight(searchAd, keyword) : null,
@@ -250,6 +295,7 @@ export async function buildWritingBrief(
     research,
     surge: points ? summarizeSurge(points) : null,
     pivots,
+    connect,
     note,
   });
 }

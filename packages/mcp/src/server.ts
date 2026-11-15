@@ -67,6 +67,7 @@ import {
   summarizeTrend,
   WRITING_TYPE_LABELS,
   WRITING_TYPES,
+  CONNECT_MODES,
   type Platform,
   type ShoppingCategory,
   type WritingType,
@@ -88,7 +89,9 @@ const PROMPTS_DIR = path.join(ROOT, "docs/prompts");
 const platformSchema = z.enum(PLATFORMS).describe("발행 플랫폼: tistory(티스토리), blogger(Blogger), naver(네이버)");
 const typeSchema = z
   .enum(WRITING_TYPES)
-  .describe("글 유형: info(정보 - 제도·방법·비교), review(리뷰 - 상품·서비스 사용기), place(장소 - 맛집·여행지 방문기)");
+  .describe(
+    "글 유형: info(정보 - 제도·방법·비교), review(리뷰 - 상품·서비스 사용기), place(장소 - 맛집·여행지 방문기), connect(쇼핑 커넥트 - 제휴 링크를 넣는 상품 글)",
+  );
 
 const structureSchema = z
   .enum(STRUCTURES)
@@ -140,8 +143,9 @@ const server = new McpServer(
       "키워드 목록·화면 캡처: 사용자가 네이버 크리에이터 어드바이저(검색 유입 트렌드·메인 유입 트렌드·주제별 트렌드) 같은 캡처나 키워드 목록을 주면, 보이는 키워드를 모두 뽑아 analyze_keywords 한 번으로 분석하고 (크롬 확장이 복사한 '[크리에이터 어드바이저 트렌드 …]' 글이면 카드별 키워드를 50개씩 나눠 넣는다. 뒤의 (new)·(▲3)은 변동 표시로, new·▲를 우선한다) get_writing_rules(task=planning)의 기준으로 추천한다. 최근 7일이 급상승·상승인 키워드를 우선하고, 포화도가 보통·높음인 키워드는 find_pivot_keywords로 연관어를 찾아 함께 제안한다.",
       "초안 쓰기: 먼저 list_drafts(keyword)로 같은 키워드의 초안이 있는지 확인해 있으면 사용자에게 알린다. get_writing_rules(task=writing, platform, type)로 규칙을 읽고, get_writing_brief로 브리프를 받는다. 브리프에 '경쟁 판단'과 '추천 타깃 키워드'가 있으면 그중 하나(검색 의도가 글로 답하기 좋은 것)를 골라 사용자에게 알리고, 그 키워드로 get_writing_brief를 다시 받아 그 키워드를 메인 키워드로 쓴다 (save_draft의 keyword도 그 키워드). 그다음 규칙대로 웹 검색으로 사실을 확인하며 쓴다. 이때 list_drafts가 보여 준 최근 초안들의 제목·도입 문장과 같은 패턴을 피한다. 사용자가 원하면 save_draft로 저장하고 open_web(page=drafts)으로 보여준다. save_draft·update_draft 결과에 본문 글자 수가 나오며, 목표보다 짧다고 하면 안내대로 보완해 update_draft로 다시 저장한다.",
       "초안 고치기: read_draft로 읽고 고친 뒤 update_draft로 같은 파일에 저장한다 (이전 버전은 자동 보관). 새 초안은 save_draft로 만든다. 발행됨 초안은 고치지 않는다 (정책, update_draft가 거부함): list_drafts의 상태가 발행됨이면 고치려고 읽지도 않는다 (인스타 재가공처럼 읽기만 하는 건 괜찮다).",
-      "글 유형: 상품·서비스 사용기는 review, 맛집·여행지·시설 방문기는 place, 그 밖에는 info. 리뷰 상품의 쇼핑 트렌드는 get_shopping_trend, 장소 정보는 search_places로 확인한다.",
-      "사용자가 플랫폼을 말하지 않으면 티스토리(tistory)로 쓴다.",
+      "글 유형: 상품·서비스 사용기는 review, 맛집·여행지·시설 방문기는 place, 쇼핑 커넥트 제휴 링크를 넣는 상품 글은 connect, 그 밖에는 info. 리뷰 상품의 쇼핑 트렌드는 get_shopping_trend, 장소 정보는 search_places로 확인한다.",
+      "쇼핑 커넥트: 사용자가 '[쇼핑 커넥트 요청]'(크롬 확장이 만든 요청문)이나 쇼핑 커넥트 링크와 함께 상품 글을 요청하면 platform=naver, type=connect로 쓴다. get_writing_brief에 요청문의 링크·글 방식·상품 정보·경험 메모를 link·mode·product·experience로 그대로 넘긴다. 메인 키워드는 요청문에 있으면 그것, 없으면 상품명에서 검색될 말(브랜드+제품군+후기·추천 등)을 정한다. 경험 메모에 없는 사용 경험은 지어내지 않는다.",
+      "사용자가 플랫폼을 말하지 않으면 티스토리(tistory)로 쓴다 (쇼핑 커넥트는 네이버).",
       "인스타그램: 릴스 대본·캡션·카드뉴스·스토리·댓글/답글·블로그 글을 인스타 게시물로 바꾸기는 먼저 get_insta_rules(task)로 규칙과 계정 말투를 읽고 쓴다. 릴스 대본은 훅 후보 3개와 대본을 check_reel_script로, 캡션은 check_caption으로 점검해 고친 뒤 보여 준다. 게시·댓글·DM은 사람이 직접 한다 (자동으로 올리지 않음).",
       "일정 관리: 할 일·일정·스케줄 이야기는 list_tasks / add_task / update_task / complete_task를 쓴다. 사용자가 한 말을 add_task의 text에 그대로 넣으면 날짜·시간·태그·프로젝트를 해석한다. 블로그 글감을 일정으로 잡아 달라고 하면 add_task에 link로 키워드 분석·초안 주소를 함께 넣는다.",
     ].join("\n"),
@@ -296,12 +300,20 @@ server.registerTool(
       type: typeSchema.default("info"),
       structure: structureSchema,
       note: z.string().optional().describe("글 각도, 직접 경험 메모 등 참고 사항"),
+      link: z.string().optional().describe("type=connect: 브랜드커넥트에서 복사한 쇼핑 커넥트 링크 (요청문의 링크 그대로)"),
+      mode: z
+        .enum(CONNECT_MODES)
+        .optional()
+        .describe("type=connect: guide(구매 가이드) | experience(실제 경험, 경험 메모가 있을 때만). 요청문의 '글 방식'"),
+      product: z.string().optional().describe("type=connect: 요청문의 상품 정보 전체 (상품명·가격·수수료·평점·상세 정보). 줄이지 말고 그대로"),
+      experience: z.string().optional().describe("type=connect: 요청문의 경험 메모 그대로 (없으면 생략)"),
     },
     annotations: { readOnlyHint: true, openWorldHint: true },
   },
-  async ({ keyword, platform, type, structure, note }) => {
+  async ({ keyword, platform, type, structure, note, link, mode, product, experience }) => {
     try {
-      return text(await buildWritingBrief(briefSources(), keyword, platform, { type, structure, note }));
+      const connect = { link, mode, product, experience };
+      return text(await buildWritingBrief(briefSources(), keyword, platform, { type, structure, connect, note }));
     } catch (e) {
       return failure(e);
     }

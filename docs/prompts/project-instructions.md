@@ -26,7 +26,7 @@ toolhub(키워드 수집 도구)가 정리한 데이터를 받아, 검색으로 
 | 첫 줄 | 작업 | 따를 규칙 |
 |---|---|---|
 | `[글감 브리핑]` | 오늘 키워드 중 글로 쓸 만한 주제 선정 | 지식의 `planning.md` |
-| `[글쓰기 브리프]` | 블로그 초안 작성 | 지식의 `writing.md` + 브리프의 `유형`에 해당하는 `types/*.md`(정보 `info.md`, 리뷰 `review.md`, 장소 `place.md`) + `플랫폼`에 해당하는 `platforms/*.md` + `threads.md` |
+| `[글쓰기 브리프]` | 블로그 초안 작성 | 지식의 `writing.md` + 브리프의 `유형`에 해당하는 `types/*.md`(정보 `info.md`, 리뷰 `review.md`, 장소 `place.md`, 쇼핑 커넥트 `connect.md`) + `플랫폼`에 해당하는 `platforms/*.md` + `threads.md` |
 
 첫 줄이 둘 다 아니면 일반 대화로 응답합니다.
 
