@@ -6,6 +6,38 @@
     <link rel="stylesheet" href="sidepanel.css" />
   </head>
   <body>
+    <!-- 브랜드커넥트 상품 페이지를 보고 있을 때만 보인다 (sidepanel-connect.js) -->
+    <section id="connect" class="connect" hidden>
+      <header>
+        <h1>쇼핑 커넥트</h1>
+        <button type="button" class="link" id="connect-read" title="상품 정보를 페이지에서 다시 읽어요">다시 읽기</button>
+      </header>
+      <p id="connect-product" class="product"></p>
+      <label>
+        쇼핑 커넥트 링크
+        <input id="connect-link" type="url" placeholder="브랜드커넥트 '링크 복사' 후 붙여넣기" autocomplete="off" />
+      </label>
+      <fieldset class="modes">
+        <legend>글 방식</legend>
+        <label title="써 보지 않은 상품: 판매처 정보와 실구매자 반응으로 누구에게 맞는지 정리"><input type="radio" name="connect-mode" value="guide" checked /> 구매 가이드</label>
+        <label title="직접 써 본 상품: 경험 메모를 1인칭 후기로"><input type="radio" name="connect-mode" value="experience" /> 실제 경험</label>
+      </fieldset>
+      <label id="connect-memo-field" hidden>
+        경험 메모 <small>직접 써 본 것만 (사용 기간, 좋았던 점, 아쉬운 점…)</small>
+        <textarea id="connect-memo" rows="4"></textarea>
+      </label>
+      <label>
+        키워드 <small>비우면 Claude가 상품명으로 정해요</small>
+        <input id="connect-keyword" autocomplete="off" />
+      </label>
+      <details>
+        <summary>읽은 상품 정보 보기</summary>
+        <pre id="connect-preview"></pre>
+      </details>
+      <button type="button" class="primary" id="connect-copy">요청문 복사 → Claude 앱에 붙여넣기</button>
+      <p id="connect-status" class="status"></p>
+    </section>
+
     <header>
       <h1>이미지 모음</h1>
       <button type="button" class="link" id="clear" hidden>전체 지우기</button>
@@ -32,5 +64,7 @@
     <script src="lib.js"></script>
     <script src="shelf-store.js"></script>
     <script src="sidepanel.js"></script>
+    <script src="connect.js"></script>
+    <script src="sidepanel-connect.js"></script>
   </body>
 </html>

@@ -157,6 +157,107 @@ button.link {
   color: var(--muted);
 }
 
+/* 쇼핑 커넥트 영역 (브랜드커넥트 상품 페이지에서만) */
+.connect {
+  display: grid;
+  gap: 8px;
+  margin-bottom: 18px;
+  padding-bottom: 14px;
+  border-bottom: 1px solid var(--border);
+}
+
+.connect header {
+  margin-bottom: 0;
+}
+
+.connect label {
+  display: grid;
+  gap: 3px;
+}
+
+.connect small {
+  color: var(--muted);
+}
+
+.connect input:not([type="radio"]),
+.connect textarea {
+  font: inherit;
+  color: inherit;
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 5px 7px;
+  min-width: 0;
+}
+
+.connect input:focus,
+.connect textarea:focus {
+  outline: none;
+  border-color: var(--accent);
+}
+
+.connect textarea {
+  resize: vertical;
+}
+
+.connect .product {
+  margin: 0;
+  font-weight: 600;
+}
+
+.connect .product.error {
+  color: var(--error);
+  font-weight: 400;
+}
+
+.connect .modes {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 14px;
+  margin: 0;
+  padding: 0;
+  border: 0;
+}
+
+.connect .modes legend {
+  padding: 0;
+  margin-bottom: 3px;
+}
+
+.connect .modes label {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.connect details summary {
+  cursor: pointer;
+  color: var(--muted);
+}
+
+.connect pre {
+  max-height: 200px;
+  overflow: auto;
+  margin: 6px 0 0;
+  padding: 8px;
+  background: var(--surface);
+  border-radius: 6px;
+  font: 11.5px/1.5 ui-monospace, monospace;
+  white-space: pre-wrap;
+}
+
+button.primary {
+  padding: 7px 10px;
+  background: var(--accent);
+  border-color: var(--accent);
+  color: #fff;
+  font-weight: 600;
+}
+
+.connect .status {
+  margin: 0;
+}
+
 footer {
   display: flex;
   gap: 14px;

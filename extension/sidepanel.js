@@ -107,6 +107,8 @@ async function addFromTransfer(data) {
 }
 
 document.addEventListener("paste", (e) => {
+  // 쇼핑 커넥트 링크·메모 칸에 붙여넣는 글자는 이미지로 받지 않는다
+  if (e.target.closest?.("input, textarea")) return;
   e.preventDefault();
   addFromTransfer(e.clipboardData);
 });
