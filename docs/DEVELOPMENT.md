@@ -404,7 +404,7 @@ stdio 전송은 stdout을 프로토콜에 쓰므로 서버 코드에서 `console
 
 - **웹 API**
   - `GET /api/drafts/naver?date=` → `{ date, drafts: [{ file, keyword, format, title }] }`. `naverDraftsFor`가 네이버·그 발행일·초안 상태만 고르고, 목록과 같은 순서(홈판형 먼저)로 둡니다.
-  - `GET /api/drafts/naver/fill?file=` → `{ file, title, text, html, tags, images }`. `html`은 초안 화면 "서식 포함 복사"와 같은 `naverPasteHtml`입니다. 같은 글을 두 번 올리지 않게 발행됨은 409로 거절합니다.
+  - `GET /api/drafts/naver/fill?file=` → `{ file, title, text, html, tags, images }`. `naverFillContent`가 만드는 `html`은 초안 화면 "서식 포함 복사"와 같은 `naverPasteHtml` 뒤에 빈 문단 5개와 `#태그 #태그…` 문단을 붙인 것입니다(`text`도 같은 모양). 사용자가 손으로 하던 대로 태그를 본문 맨 아래에 두면 네이버가 본문의 #태그를 태그로 등록하므로, 발행 설정 창의 태그 칸을 따로 채우지 않습니다. 같은 글을 두 번 올리지 않게 발행됨은 409로 거절합니다.
   - 확장은 `http://localhost:3000`(npm run web) → `3100`(MCP open_web) 순으로 찾습니다. 옛 웹(404)은 건너뛰고, 찾은 주소를 기억합니다. 확장 권한(`<all_urls>`)이라 CORS 설정은 필요 없습니다.
 - **에디터 구조** (2026-11-17 진단): 제목 칸도 본문과 같은 글쓰기 iframe, 같은 `.se-content`의 첫 덩어리(`.se-component.se-documentTitle`)입니다. 빈 칸의 "제목"·"본문" 글자는 `.se-placeholder`라서 글자로 세지 않습니다(`ownText`).
 - **순서** (`fill`, 단계는 content.js의 `draft-fill-step` → naver-editor.js)
@@ -414,9 +414,9 @@ stdio 전송은 stdout을 프로토콜에 쓰므로 서버 코드에서 `console
   4. `locate(title)` 좌표로 진짜 클릭 → `caret(title)`로 커서가 제목 덩어리에 들어갔는지 확인 → `Input.insertText`(진짜 입력) → `state`로 제목이 그대로 들어갔는지(`sameText`, 공백 차이 무시) 확인합니다.
   5. `locate(body)` 클릭 → `caret(body)` 확인 → `paste` → `pasteBodyAtCaret()`: 이미지 삽입과 같은 `execCommand("paste")`입니다. paste 이벤트에 `text/html`이 있었는지 보고, 본문 글자 수가 늘 때까지(최대 8초), 다시 멈출 때까지 기다립니다.
   6. debugger를 떼고 `headings` → `convertPastedHeadings()`(기존 소제목 정리)를 합니다.
-  7. 본문 글자 수·소제목 수·남은 이미지 자리 수를 보여 주고, 태그 복사 버튼(`#태그 #태그`)을 띄웁니다.
+  7. 본문 글자 수·소제목 수·넣은 태그 수·남은 이미지 자리 수를 보여 줍니다.
 - 한 단계라도 어긋나면(커서가 안 들어감, 제목이 다르게 들어감, 붙여넣기가 안 닿음) 거기서 멈추고 이유를 보여 줍니다. 빈 글에서만 시작하므로 되돌릴 것이 생기지 않습니다.
-- 확인 (2026-11-17): Chrome for Testing에서 `blog.naver.com` 요청을 가짜 글쓰기 화면으로 바꿨습니다. iframe 안 에디터, 안내 글자, HTML 붙여넣기, 커서 줄에 따라 바뀌는 툴바, 소제목으로 바꾸면 덩어리가 빠지는 문단 서식을 흉내 냈습니다. 개발 서버의 실제 초안 목록(6개)으로 확인한 것: 제목(안내 글자 없이), 본문 49문단, 소제목 6개 모두 변환, 태그 버튼, 두 번째 채우기는 "제목이 이미 있어요"로 멈춤. 실제 스마트에디터에서는 설치 후 확인해야 합니다.
+- 확인 (2026-11-17): Chrome for Testing에서 `blog.naver.com` 요청을 가짜 글쓰기 화면으로 바꿨습니다. iframe 안 에디터, 안내 글자, HTML 붙여넣기, 커서 줄에 따라 바뀌는 툴바, 소제목으로 바꾸면 덩어리가 빠지는 문단 서식을 흉내 냈습니다. 개발 서버의 실제 초안 목록(6개)으로 확인한 것: 제목(안내 글자 없이), 본문 49문단, 소제목 6개 모두 변환, 두 번째 채우기는 "제목이 이미 있어요"로 멈춤. 태그 줄을 넣은 뒤에는 웹 API를 가짜 응답으로 바꿔 홈판 표시, 맨 아래 빈 줄 5개 뒤 `#태그` 줄까지 확인했습니다. 실제 네이버 에디터에서도 제목·본문 채우기가 되는 것을 사용자가 확인했습니다(태그 줄 추가 전). 
 
 ## 이미지 5장 프롬프트 (`image-prompt.ts`)
 

@@ -1,6 +1,15 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
-import { countBodyChars, naverPasteHtml, previewDocument } from "./preview.ts";
+import { countBodyChars, naverFillContent, naverPasteHtml, previewDocument } from "./preview.ts";
+
+describe("초안 채우기 본문", () => {
+  it("본문 아래에 빈 줄 5개, 그다음 #태그 줄 (태그가 없으면 본문만)", () => {
+    const { html, text } = naverFillContent("도입 문장", ["원주매운맛축제", "아이와가볼만한곳"]);
+    assert.equal(html, `<p>도입 문장</p>${"<p><br></p>".repeat(5)}<p>#원주매운맛축제 #아이와가볼만한곳</p>`);
+    assert.equal(text, "도입 문장\n\n\n\n\n\n#원주매운맛축제 #아이와가볼만한곳");
+    assert.deepEqual(naverFillContent("도입 문장", []), { html: "<p>도입 문장</p>", text: "도입 문장" });
+  });
+});
 
 describe("초안 미리보기", () => {
   it("글자 수: 태그·사람이 채울 자리·네이버 기호를 빼고 센다", () => {

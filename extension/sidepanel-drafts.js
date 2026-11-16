@@ -1,6 +1,6 @@
 /**
  * 패널의 초안 메뉴: toolhub 웹(localhost)에서 그날 올릴 네이버 초안을 불러와, 네이버 새 글쓰기 화면에
- * 제목 → 본문(서식 포함 복사와 같은 HTML) → 소제목 정리까지 채운다. 저장(임시저장)·발행은 사람이 누른다.
+ * 제목 → 본문(서식 포함 복사와 같은 HTML, 맨 아래 빈 줄 5개 + #태그 줄) → 소제목 정리까지 채운다. 저장(임시저장)·발행은 사람이 누른다.
  * 에디터는 확장이 만든 입력을 받지 않아서(2026-11-12) 클릭·제목 입력은 이미지 삽입처럼 debugger로 진짜 입력을 보낸다.
  * sidepanel.js와 같은 전역에서 돌므로 이름이 겹치지 않게 감싼다
  */
@@ -10,13 +10,11 @@
   const dateInput = $("drafts-date");
   const list = $("drafts-list");
   const statusLine = $("drafts-status");
-  const done = $("drafts-done");
 
   /** 사용자가 직접 띄운 웹(npm run web, 3000)을 먼저, 없으면 MCP open_web이 띄운 웹(3100) */
   const WEB_BASES = ["http://localhost:3000", "http://localhost:3100"];
   let web = null;
   let busy = false;
-  let tags = [];
 
   function setStatus(text, isError = false) {
     statusLine.textContent = text;
@@ -47,7 +45,6 @@
 
   async function load() {
     list.replaceChildren();
-    done.hidden = true;
     setStatus("초안을 불러오는 중…");
     try {
       const { drafts } = await api(`/api/drafts/naver?date=${dateInput.value}`);
@@ -84,7 +81,6 @@
     const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
     if (!tab?.url?.startsWith("https://blog.naver.com/")) return setStatus("네이버 블로그 새 글쓰기 화면을 띄워 두고 눌러 주세요.", true);
     busy = true;
-    done.hidden = true;
     list.querySelectorAll("button").forEach((b) => (b.disabled = true));
 
     const step = async (name, which) => {
@@ -134,11 +130,9 @@
 
       setStatus("소제목을 정리하는 중…");
       const headings = await step("headings");
-      tags = content.tags;
-      done.hidden = tags.length === 0;
       setStatus(
         [
-          `채웠어요: 본문 ${length.toLocaleString()}자, 소제목 ${headings}개.`,
+          `채웠어요: 본문 ${length.toLocaleString()}자, 소제목 ${headings}개${content.tags.length ? `, 맨 아래 태그 ${content.tags.length}개` : ""}.`,
           slots ? `이미지 자리 ${slots}곳은 이미지 모음의 "삽입"으로 넣어 주세요.` : "",
           "확인한 뒤 저장·발행은 직접 눌러 주세요.",
         ]
@@ -154,15 +148,6 @@
     }
   }
 
-  $("drafts-tags").addEventListener("click", async () => {
-    try {
-      // 네이버 태그 칸은 보이는 그대로(#태그 #태그) 붙여넣으면 태그가 나뉜다 (초안 화면의 태그 전체 복사와 같은 모양)
-      await navigator.clipboard.writeText(tags.map((t) => `#${t}`).join(" "));
-      setStatus("태그를 복사했어요. 발행 설정 창의 태그 칸에 붙여넣으세요.");
-    } catch (e) {
-      setStatus(`복사하지 못했어요: ${e.message}`, true);
-    }
-  });
   $("drafts-reload").addEventListener("click", load);
   dateInput.addEventListener("change", load);
   // 메뉴를 열 때마다 새로 불러온다 (Claude 앱이 그사이 초안을 더 저장했을 수 있다)

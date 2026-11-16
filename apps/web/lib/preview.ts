@@ -46,6 +46,20 @@ function naverTextToHtml(text: string, paste = false) {
 /** 네이버 본문을 스마트에디터에 서식째 붙여넣을 HTML로 (기호는 빠지고, 사람이 채울 자리는 글자 그대로 남는다) */
 export const naverPasteHtml = (body: string) => naverTextToHtml(body, true);
 
+/** 네이버 본문 맨 아래 태그 줄 앞의 빈 줄 수 (사용자가 손으로 붙이던 모양) */
+const TAG_GAP = 5;
+
+/** 태그를 본문에 쓰는 모양 (#태그 #태그). 본문의 #태그는 네이버가 태그로 등록한다 */
+export const naverTagLine = (tags: string[]) => tags.map((tag) => `#${tag}`).join(" ");
+
+/** 초안 채우기(크롬 확장)로 붙여넣을 본문: 서식 포함 본문 + 빈 줄 5개 + 태그 줄. 태그가 없으면 본문만 */
+export function naverFillContent(body: string, tags: string[]) {
+  const html = naverPasteHtml(body);
+  if (!tags.length) return { html, text: body };
+  const line = naverTagLine(tags);
+  return { html: `${html}${"<p><br></p>".repeat(TAG_GAP)}<p>${escapeHtml(line)}</p>`, text: `${body.trimEnd()}${"\n".repeat(TAG_GAP + 1)}${line}` };
+}
+
 /** 미리보기 iframe에 넣을 문서. 스크립트는 iframe sandbox로 막는다 */
 export function previewDocument(body: string, platform: Platform | null, lang: string | null) {
   const isHtml = lang === "html" || (lang !== "text" && platform !== "naver" && /<(p|h[23]|ul|ol|table)\b/i.test(body));

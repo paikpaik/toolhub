@@ -453,17 +453,6 @@ button.primary {
   margin: 0;
 }
 
-.drafts-done {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: 6px;
-}
-
-.drafts-done small {
-  color: var(--muted);
-}
-
 footer {
   display: flex;
   align-items: center;
