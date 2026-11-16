@@ -157,13 +157,56 @@ button.link {
   color: var(--muted);
 }
 
-/* 쇼핑 커넥트 영역 (브랜드커넥트 상품 페이지에서만) */
-.connect {
-  display: grid;
-  gap: 8px;
-  margin-bottom: 18px;
-  padding-bottom: 14px;
+/* display를 준 요소도 hidden이면 숨긴다 (메뉴 화면 전환) */
+[hidden] {
+  display: none !important;
+}
+
+/* 위쪽 메뉴 */
+.tabs {
+  display: flex;
+  gap: 4px;
+  margin: -4px 0 14px;
   border-bottom: 1px solid var(--border);
+}
+
+.tabs button {
+  margin-bottom: -1px;
+  padding: 7px 10px;
+  background: none;
+  border: 0;
+  border-bottom: 2px solid transparent;
+  border-radius: 0;
+  color: var(--muted);
+  font-weight: 600;
+}
+
+.tabs button[aria-selected="true"] {
+  color: var(--text);
+  border-bottom-color: var(--accent);
+}
+
+.tabs small {
+  margin-left: 2px;
+  padding: 0 6px;
+  border-radius: 9px;
+  background: var(--surface);
+  color: var(--muted);
+  font-size: 11px;
+  font-weight: 600;
+}
+
+.tabs small:empty {
+  display: none;
+}
+
+/* 쇼핑 커넥트 화면 (입력은 브랜드커넥트 상품 페이지에서만) */
+/* 칸 너비를 패널에 맞춘다 (긴 주소 같은 끊을 곳 없는 글자가 칸을 밀어 패널 밖으로 넘치지 않게) */
+.connect-body {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: 8px;
+  overflow-wrap: anywhere;
 }
 
 .connect header {
@@ -256,6 +299,84 @@ button.primary {
 
 .connect .status {
   margin: 0;
+}
+
+.picker {
+  display: grid;
+  gap: 8px;
+}
+
+.picker-bar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px 12px;
+}
+
+.picker-bar .primary {
+  margin-left: auto;
+}
+
+.picker-bar .primary:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+
+/* 조각은 세로로 길 수 있어 높이를 묶고, 고른 것은 테두리와 체크 표시 */
+/* 줄 높이를 고정한다: 조각이 많아 높이 제한(60vh)을 넘으면, 칸(overflow: hidden)이 줄어들어 얇은 띠로 보였다 */
+.pieces {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(100px, 1fr));
+  grid-auto-rows: 144px;
+  align-content: start;
+  gap: 8px;
+  max-height: 60vh;
+  overflow: auto;
+}
+
+.piece {
+  position: relative;
+  padding: 0;
+  border: 2px solid var(--border);
+  border-radius: 8px;
+  overflow: hidden;
+  background: var(--surface);
+}
+
+.piece img {
+  display: block;
+  width: 100%;
+  height: 140px;
+  object-fit: contain;
+}
+
+.piece span {
+  position: absolute;
+  left: 4px;
+  top: 4px;
+  padding: 0 5px;
+  border-radius: 4px;
+  background: rgb(0 0 0 / 0.55);
+  color: #fff;
+  font-size: 11px;
+}
+
+.piece.checked {
+  border-color: var(--accent);
+}
+
+.piece.checked::after {
+  content: "✓";
+  position: absolute;
+  right: 4px;
+  top: 4px;
+  width: 20px;
+  height: 20px;
+  border-radius: 50%;
+  background: var(--accent);
+  color: #fff;
+  line-height: 20px;
+  font-weight: 700;
 }
 
 footer {

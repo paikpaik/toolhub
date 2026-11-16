@@ -36,10 +36,17 @@ globalThis.ToolhubConnect = (() => {
   }
 
   /**
-   * 상품 페이지 글자 줄 → 상품 정보. 상품 정보 영역은 "상품 정보" 제목부터 "링크 복사"까지,
-   * 상세 정보는 "상세 정보" 제목 뒤 (판매자가 글자로 넣은 FAQ·표. 이미지 속 글자는 못 읽음)
+   * 브랜드커넥트의 "상세 정보"는 본문이 아니라 스마트스토어 iframe 안에 있다 (2026-11-16 진단 정보:
+   * m.smartstore.naver.com/<스토어>/products/<번호>/shopping-connect-contents). 글자·상세 이미지는 이 프레임에서 읽는다
    */
-  function parseConnectPage(rawLines, { shoppingUrl = null } = {}) {
+  const isDetailFrame = (url) => /^https:\/\/(m\.)?smartstore\.naver\.com\/.+\/shopping-connect-contents/.test(url ?? "");
+
+  /**
+   * 상품 페이지 글자 줄 → 상품 정보. 상품 정보 영역은 "상품 정보" 제목부터 "링크 복사"까지.
+   * 상세 정보는 detailLines(상세 iframe의 글자 줄)가 있으면 그것, 없으면 본문의 "상세 정보" 제목 뒤
+   * (판매자가 글자로 넣은 FAQ·표. 이미지 속 글자는 못 읽음)
+   */
+  function parseConnectPage(rawLines, { shoppingUrl = null, detailLines } = {}) {
     const lines = rawLines.map(clean).filter(Boolean);
     const start = lines.indexOf("상품 정보");
     const end = lines.indexOf(SUMMARY_END, start + 1);
@@ -56,8 +63,10 @@ globalThis.ToolhubConnect = (() => {
     const name = texts.reduce((longest, line) => (line.length > longest.length ? line : longest), "");
     const before = texts[texts.indexOf(name) - 1];
 
+    // 상세 iframe이 있으면 본문의 "상세 정보" 뒤는 사이트 아래쪽 메뉴(TOP·로그아웃·이용약관)뿐이라 보지 않는다
     const detailAt = lines.indexOf("상세 정보", end);
-    let detail = detailAt < 0 ? "" : lines.slice(detailAt + 1).filter((line) => !/^네이버 쇼핑에서 보기/.test(line)).join("\n");
+    const fromPage = detailAt < 0 ? [] : lines.slice(detailAt + 1).filter((line) => !/^네이버 쇼핑에서 보기/.test(line));
+    let detail = (detailLines ? detailLines.map(clean).filter(Boolean) : fromPage).join("\n");
     if (detail.length > DETAIL_MAX) detail = `${detail.slice(0, DETAIL_MAX)}\n…(이하 생략)`;
 
     return {
@@ -106,5 +115,5 @@ globalThis.ToolhubConnect = (() => {
     return lines.join("\n");
   }
 
-  return { connectProductId, parseConnectPage, connectRequestProblem, formatConnectRequest, MODE_LABELS };
+  return { connectProductId, isDetailFrame, parseConnectPage, connectRequestProblem, formatConnectRequest, MODE_LABELS };
 })();

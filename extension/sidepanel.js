@@ -106,9 +106,21 @@ async function addFromTransfer(data) {
   chrome.runtime.sendMessage({ type: "shelf-add-url", url });
 }
 
+// ── 위쪽 메뉴: 이미지 모음 / 쇼핑 커넥트. 패널을 열면 늘 이미지 모음부터 ──
+const tabButtons = document.querySelectorAll('[role="tab"]');
+function showTab(name) {
+  for (const button of tabButtons) {
+    const selected = button.dataset.tab === name;
+    button.setAttribute("aria-selected", String(selected));
+    document.getElementById(`tab-${button.dataset.tab}`).hidden = !selected;
+  }
+}
+tabButtons.forEach((button) => button.addEventListener("click", () => showTab(button.dataset.tab)));
+showTab("shelf");
+
 document.addEventListener("paste", (e) => {
-  // 쇼핑 커넥트 링크·메모 칸에 붙여넣는 글자는 이미지로 받지 않는다
-  if (e.target.closest?.("input, textarea")) return;
+  // 이미지 모음 화면에서만 받고, 쇼핑 커넥트 링크·메모 칸에 붙여넣는 글자는 이미지로 받지 않는다
+  if (document.getElementById("tab-shelf").hidden || e.target.closest?.("input, textarea")) return;
   e.preventDefault();
   addFromTransfer(e.clipboardData);
 });
@@ -295,6 +307,8 @@ function createCard(item) {
 function render() {
   empty.hidden = shelf.length > 0;
   clearButton.hidden = shelf.length === 0;
+  // 쇼핑 커넥트 화면에서 담아도 늘어난 게 보이게 메뉴에 장수를 단다
+  document.getElementById("shelf-count").textContent = shelf.length ? String(shelf.length) : "";
   const ids = new Set(shelf.map((item) => item.id));
   for (const [id, card] of cards) {
     if (ids.has(id)) continue;

@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 import "./connect.js";
 
-const { connectProductId, parseConnectPage, connectRequestProblem, formatConnectRequest } = globalThis.ToolhubConnect;
+const { connectProductId, isDetailFrame, parseConnectPage, connectRequestProblem, formatConnectRequest } = globalThis.ToolhubConnect;
 
 // 2026-11-15 브랜드커넥트 상품 페이지 화면을 보고 만든 글자 줄 (실제 innerText 줄바꿈과 다를 수 있음)
 const PAGE = [
@@ -65,6 +65,15 @@ describe("쇼핑 커넥트 상품 페이지", () => {
     assert.equal(product.salePrice, "10% 9,000원");
     assert.equal(product.brand, "브랜드A");
     assert.equal(product.detail, null);
+  });
+
+  it("상세 iframe의 글자가 있으면 그것을 상세 정보로 (본문의 사이트 아래쪽 메뉴는 버림)", () => {
+    const page = ["상품 정보", "상품 이름", "판매가", "1,000원", "링크 복사", "상세 정보", "네이버 쇼핑에서 보기", "TOP", "로그아웃", "이용약관"];
+    assert.equal(parseConnectPage(page, { detailLines: ["  FAQ ", "", "용량\t150ml"] }).detail, "FAQ\n용량 150ml");
+    assert.equal(parseConnectPage(page, { detailLines: [] }).detail, null);
+    assert.ok(isDetailFrame("https://m.smartstore.naver.com/phyto/products/389854589/shopping-connect-contents"));
+    assert.ok(!isDetailFrame("https://smartstore.naver.com/phyto/products/389854589"));
+    assert.ok(!isDetailFrame("https://brandconnect.naver.com/1/affiliate/products/2"));
   });
 
   it("상품 정보 영역이 없으면 null, 상세 정보가 길면 자른다", () => {
