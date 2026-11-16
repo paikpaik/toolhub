@@ -150,3 +150,19 @@ describe("크리에이터 어드바이저 트렌드", () => {
     assert.deepEqual(Object.keys(mergeAdvisorTrends(stored, "2026. 11. 06.", "메인 유입 트렌드", main).tabs), ["메인 유입 트렌드"]);
   });
 });
+
+describe("초안 채우기", () => {
+  const { fillProblem, sameText } = globalThis.ToolhubLib;
+
+  it("빈 글(제목·본문 덩어리 2개, 글자 없음)만 채운다", () => {
+    assert.equal(fillProblem({ title: "", body: 0, components: 2 }), null);
+    assert.match(fillProblem({ title: "쓰던 제목", body: 0, components: 2 }), /제목이 이미/);
+    assert.match(fillProblem({ title: "", body: 12, components: 2 }), /본문에 이미/);
+    assert.match(fillProblem({ title: "", body: 0, components: 3 }), /본문에 이미/, "사진만 넣어 둔 글도 덮어쓰지 않는다");
+  });
+
+  it("제목 비교는 공백 차이를 무시한다", () => {
+    assert.ok(sameText(" 원주 매운맛축제,  아이와 가도 될까 ", "원주 매운맛축제, 아이와 가도 될까"));
+    assert.ok(!sameText("원주 매운맛축제", "원주 매운맛축제, 아이와 가도 될까"));
+  });
+});

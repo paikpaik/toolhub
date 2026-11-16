@@ -3,7 +3,7 @@ import { mkdtemp, readFile, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { describe, it } from "node:test";
-import { adjacentDrafts, applyStatusPatch, draftEditBlocked, effectiveStatus, normalizePostUrl, sortDrafts, toggleKinAnswer } from "./draft-status.ts";
+import { adjacentDrafts, applyStatusPatch, draftEditBlocked, effectiveStatus, naverDraftsFor, normalizePostUrl, sortDrafts, toggleKinAnswer } from "./draft-status.ts";
 import { readDraftStatuses, removeDraftStatus, setDraftStatus, setKinAnswered } from "./draft-status-store.ts";
 
 describe("초안 상태", () => {
@@ -28,6 +28,19 @@ describe("초안 상태", () => {
     ];
     const statuses = { "b.md": { status: "published" as const }, "d.md": { status: "scheduled" as never } };
     assert.deepEqual(sortDrafts(rows, statuses).map((r) => r.file), ["b.md", "d.md", "a.md", "c.md"]);
+  });
+
+  it("확장 초안 메뉴: 그날 네이버 초안만, 발행됨 빼고, 홈판형 먼저", () => {
+    const row = (file: string, date: string, platform: string, format: string | null) => ({ file, date, platform, format, updatedAt: "2026-11-17T00:00:00Z" });
+    const rows = [
+      row("검색.md", "2026-11-17", "naver", "search"),
+      row("홈판.md", "2026-11-17", "naver", "home"),
+      row("발행.md", "2026-11-17", "naver", "search"),
+      row("내일.md", "2026-11-18", "naver", "home"),
+      row("티스토리.md", "2026-11-17", "tistory", null),
+    ];
+    const picked = naverDraftsFor(rows, { "발행.md": { status: "published" } }, "2026-11-17");
+    assert.deepEqual(picked.map((r) => r.file), ["홈판.md", "검색.md"]);
   });
 
   it("같은 상태에서는 발행일 늦은 순, 같은 날이면 홈판형 먼저", () => {

@@ -196,6 +196,24 @@
         );
       return true;
     }
+    // 패널 "초안" 메뉴의 채우기 단계 (빈 글 확인 → 칸 위치 → 커서 확인 → 본문 붙여넣기 → 소제목 정리). 클릭·제목 입력은 패널이 debugger로 보낸다
+    if (message?.type === "draft-fill-step") {
+      const steps = {
+        state: naver.fillState,
+        locate: () => naver.locateFill(message.which),
+        caret: () => naver.caretIn(message.which),
+        paste: naver.pasteBodyAtCaret,
+        headings: naver.convertPastedHeadings,
+      };
+      if (!naver.hasEditor() || !steps[message.step]) return false;
+      Promise.resolve()
+        .then(() => steps[message.step]())
+        .then(
+          (result) => sendResponse({ result }),
+          (e) => sendResponse({ error: e instanceof naver.EditorError ? e.message : String(e?.message ?? e) }),
+        );
+      return true;
+    }
     // 패널의 "진단 정보 복사". 에디터가 있는 프레임만 답한다
     if (message?.type !== "diagnose" || !naver.hasEditor()) return false;
     naver.diagnose().then(sendResponse, (e) => sendResponse({ error: String(e?.message ?? e) }));

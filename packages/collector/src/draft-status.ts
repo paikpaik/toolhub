@@ -58,6 +58,16 @@ export function sortDrafts<T extends { file: string; updatedAt: string; date?: s
   );
 }
 
+/** 확장 "초안" 메뉴의 목록: 그날 올릴 네이버 초안 (발행됨 제외), 목록과 같은 순서 (홈판형 먼저) */
+export function naverDraftsFor<T extends { file: string; updatedAt: string; date: string | null; platform: string | null; format?: string | null }>(
+  rows: T[],
+  statuses: DraftStatusMap,
+  date: string,
+): T[] {
+  const picked = rows.filter((row) => row.platform === "naver" && row.date === date && effectiveStatus(statuses[row.file]) === "draft");
+  return sortDrafts(picked, statuses);
+}
+
 /** 글 주소로 쓸 수 있는 http(s) 주소만. 앞뒤 공백·꺾쇠는 걷어낸다 */
 export function normalizePostUrl(value: string) {
   const trimmed = value.trim().replace(/^<|>$/g, "");

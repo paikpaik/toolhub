@@ -167,6 +167,19 @@ globalThis.ToolhubLib = (() => {
     return lines.join("\n");
   }
 
+  /**
+   * 초안 채우기 전 글쓰기 화면 확인 (패널 "초안" 메뉴). 쓰던 글을 덮어쓰지 않도록 빈 글이 아니면 이유를 준다.
+   * state: 에디터의 { title: 제목 글자, body: 본문 글자 수, components: 덩어리 수 (빈 글은 제목·본문 2개) }
+   */
+  function fillProblem(state) {
+    if (state.title) return "제목이 이미 있어요. 새 글쓰기 화면에서 채워 주세요 (쓰던 글을 덮어쓰지 않아요).";
+    if (state.body > 0 || state.components > 2) return "본문에 이미 내용이 있어요. 새 글쓰기 화면에서 채워 주세요 (쓰던 글을 덮어쓰지 않아요).";
+    return null;
+  }
+
+  /** 공백을 하나로 (에디터에 들어간 제목과 넣으려던 제목 비교) */
+  const sameText = (a, b) => String(a ?? "").replace(/\s+/g, " ").trim() === String(b ?? "").replace(/\s+/g, " ").trim();
+
   return {
     FONT_SIZES,
     DEFAULT_SETTINGS,
@@ -186,5 +199,7 @@ globalThis.ToolhubLib = (() => {
     trendChange,
     mergeAdvisorTrends,
     formatAdvisorTrends,
+    fillProblem,
+    sameText,
   };
 })();

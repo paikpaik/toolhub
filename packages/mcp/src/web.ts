@@ -63,7 +63,8 @@ export interface CommitInfo {
   subject: string;
 }
 
-async function mainCommit(): Promise<CommitInfo> {
+/** main 브랜치의 최신 커밋 (get_version도 쓴다) */
+export async function mainCommit(): Promise<CommitInfo> {
   const [hash = "", subject = ""] = (await git(ROOT, "log", "-1", "--format=%H%n%s", BRANCH)).split("\n");
   return { hash, short: hash.slice(0, 7), subject };
 }

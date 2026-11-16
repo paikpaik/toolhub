@@ -379,10 +379,101 @@ button.primary {
   font-weight: 700;
 }
 
+/* 초안 채우기 화면 */
+.drafts {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: 8px;
+}
+
+.drafts header {
+  margin-bottom: 0;
+}
+
+.drafts-date {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.drafts-date input {
+  font: inherit;
+  color: inherit;
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 3px 6px;
+}
+
+.drafts .hint {
+  margin: 0;
+}
+
+.drafts-list {
+  display: grid;
+  gap: 6px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.drafts-list button {
+  display: grid;
+  gap: 2px;
+  width: 100%;
+  padding: 8px 10px;
+  text-align: left;
+  overflow-wrap: anywhere;
+}
+
+.drafts-list button:hover {
+  border-color: var(--accent);
+}
+
+.drafts-list button:disabled {
+  opacity: 0.5;
+  cursor: wait;
+}
+
+.drafts-list small {
+  color: var(--muted);
+}
+
+.drafts-list .chip {
+  margin-right: 4px;
+  padding: 0 5px;
+  border-radius: 8px;
+  background: var(--accent);
+  color: #fff;
+  font-size: 11px;
+  font-weight: 600;
+}
+
+.drafts .status {
+  margin: 0;
+}
+
+.drafts-done {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+}
+
+.drafts-done small {
+  color: var(--muted);
+}
+
 footer {
   display: flex;
+  align-items: center;
   gap: 14px;
   margin-top: 20px;
   padding-top: 10px;
   border-top: 1px solid var(--border);
+}
+
+footer .version {
+  margin-left: auto;
+  color: var(--muted);
 }

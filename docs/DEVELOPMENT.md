@@ -86,8 +86,8 @@ toolhub/
 toolhub 전체가 하나의 버전(`1.0.0` 형식)을 씁니다. 올릴 때는 루트 `package.json`과 각 패키지(`packages/*`, `apps/web`)의 `package.json`, `extension/manifest.json`을 같은 번호로 고칩니다. 하나라도 다르면 `packages/mcp/src/version.test.ts`가 실패합니다.
 
 - 웹 사이드바에 `v버전`이 보이고, `open_web`으로 띄운 웹은 실행 중인 커밋(`· abc1234`)도 함께 보입니다. `/api/health`도 버전을 돌려줍니다.
-- MCP 서버는 루트 `package.json`의 버전으로 자신을 알립니다.
-- 크롬 확장은 `chrome://extensions`에 같은 번호가 보입니다.
+- MCP 서버는 루트 `package.json`의 버전으로 자신을 알립니다. Claude 앱 화면에는 이 값이 보이지 않아서 `get_version` 도구를 둡니다(2026-11-17): 서버가 시작될 때의 버전·main 커밋(`STARTED`)과 지금 저장소의 버전·커밋을 비교합니다. 커밋이 다르면 Claude 앱을 다시 켜야 새 도구·규칙이 적용된다고 알려 줍니다(Claude 앱은 앱을 다시 켤 때만 MCP 서버를 새로 띄움). 3100(open_web)·3000(npm run web) 웹의 `/api/health`도 1.5초 안에 물어 함께 보여 줍니다.
+- 크롬 확장은 `chrome://extensions`와 패널 맨 아래(`v버전`, `chrome.runtime.getManifest()`)에 같은 번호가 보입니다.
 - 기능이 늘면 가운데 자리, 고치기만 하면 끝자리를 올립니다. 쓰는 방법이 크게 바뀌면(데이터 형식·설정이 바뀌어 옮겨야 할 때) 앞자리를 올립니다.
 - toolhub는 MIT 라이선스입니다 (`LICENSE`).
 
@@ -271,7 +271,7 @@ toolhub 전체가 하나의 버전(`1.0.0` 형식)을 씁니다. 올릴 때는 �
 
 **일정**: `list_tasks`, `add_task`(자연어 `text` 또는 필드 지정), `update_task`, `complete_task`, `delete_task`, `add_project`
 
-**블로그**: `get_live_keywords`, `get_daily_keywords`, `analyze_keyword`, `analyze_keywords`(목록·캡처 묶음 분석), `discover_keywords`(주제로 키워드 찾기), `research_keyword`, `search_places`, `get_shopping_trend`, `get_writing_rules`, `get_writing_brief`, `save_draft`, `list_drafts`, `read_draft`, `update_draft`
+**블로그**: `get_live_keywords`, `get_daily_keywords`, `analyze_keyword`, `analyze_keywords`(목록·캡처 묶음 분석), `discover_keywords`(주제로 키워드 찾기), `research_keyword`, `search_places`, `get_shopping_trend`, `get_writing_rules`, `get_writing_brief`, `save_draft`, `list_drafts`, `read_draft`, `update_draft`, `get_version`(버전·최신 여부)
 
 **인스타**: `get_insta_rules`(task: reel·caption·carousel·story·comment·repurpose, 내 계정 정보 포함), `check_reel_script`(훅 후보·대본 점검), `check_caption` — `insta-tools.ts`. 게시·댓글·DM은 사람이 직접 합니다 (자동화는 약관 위반이라 만들지 않음).
 
@@ -371,7 +371,7 @@ stdio 전송은 stdout을 프로토콜에 쓰므로 서버 코드에서 `console
 
 ### 쇼핑 커넥트 (사이드 패널 메뉴)
 
-패널 위쪽 메뉴(`sidepanel.js`의 `showTab`)로 **이미지 모음**과 **쇼핑 커넥트** 화면을 나눕니다. 패널을 열면 늘 이미지 모음부터 보입니다. 메뉴의 이미지 모음 옆에는 담긴 장수를 달아, 쇼핑 커넥트 화면에서 담아도 늘어난 게 보입니다. ⌘V로 이미지 담기는 이미지 모음 화면에서만 받습니다.
+패널 위쪽 메뉴(`sidepanel.js`의 `showTab`)로 **이미지 모음**·**초안**·**쇼핑 커넥트** 화면을 나눕니다. 패널을 열면 늘 이미지 모음부터 보입니다. 메뉴의 이미지 모음 옆에는 담긴 장수를 달아, 쇼핑 커넥트 화면에서 담아도 늘어난 게 보입니다. ⌘V로 이미지 담기는 이미지 모음 화면에서만 받습니다.
 
 쇼핑 커넥트 화면의 입력 영역(`#connect-body`)은 브랜드커넥트 상품 페이지(`brandconnect.naver.com/<채널>/affiliate/products/<상품>`)를 보고 있을 때만 보이고, 아니면 안내 문구(`#connect-none`)만 보입니다. 사람이 입력할 것을 링크 붙여넣기와 글 방식 고르기로 줄이고, 나머지는 페이지에서 읽어 [쇼핑 커넥트 요청] 글을 만듭니다. Claude 앱이 이 글을 받아 MCP `get_writing_brief(type=connect, link, mode, product, experience)`로 초안을 씁니다(서버 안내문의 "쇼핑 커넥트").
 
@@ -397,6 +397,26 @@ stdio 전송은 stdout을 프로토콜에 쓰므로 서버 코드에서 `console
 - 확인 (2026-11-15): 스크린샷 기준으로 만든 가짜 상품 페이지를 Chrome for Testing에서 `brandconnect.naver.com` 요청 대신 내려주고 확인했습니다.
   - 확인한 것: 다른 페이지에서는 숨김, 상품 탭을 활성화하면 보이고 읽음, 상품명·할인가 표시, 수수료 제외, 링크 칸 붙여넣기를 가로채지 않음, 링크·메모 없을 때 막음, 요청문 복사, 상품별 입력 기억.
   - 실제 페이지의 `innerText` 줄바꿈은 다를 수 있어 설치 후 확인해야 합니다.
+
+### 초안 채우기 (사이드 패널 메뉴, 2026-11-17)
+
+패널 메뉴는 `이미지 모음 | 초안 | 쇼핑 커넥트`입니다. 초안 메뉴(`sidepanel-drafts.js`)는 toolhub 웹에서 그날 올릴 네이버 초안을 받아 네이버 새 글쓰기 화면에 채웁니다. 저장(임시저장)·발행은 누르지 않습니다. 클릭 한 번 아끼는 효과는 작은데, "자동 등록"으로 보일 위험은 그 클릭에서 생기기 때문입니다.
+
+- **웹 API**
+  - `GET /api/drafts/naver?date=` → `{ date, drafts: [{ file, keyword, format, title }] }`. `naverDraftsFor`가 네이버·그 발행일·초안 상태만 고르고, 목록과 같은 순서(홈판형 먼저)로 둡니다.
+  - `GET /api/drafts/naver/fill?file=` → `{ file, title, text, html, tags, images }`. `html`은 초안 화면 "서식 포함 복사"와 같은 `naverPasteHtml`입니다. 같은 글을 두 번 올리지 않게 발행됨은 409로 거절합니다.
+  - 확장은 `http://localhost:3000`(npm run web) → `3100`(MCP open_web) 순으로 찾습니다. 옛 웹(404)은 건너뛰고, 찾은 주소를 기억합니다. 확장 권한(`<all_urls>`)이라 CORS 설정은 필요 없습니다.
+- **에디터 구조** (2026-11-17 진단): 제목 칸도 본문과 같은 글쓰기 iframe, 같은 `.se-content`의 첫 덩어리(`.se-component.se-documentTitle`)입니다. 빈 칸의 "제목"·"본문" 글자는 `.se-placeholder`라서 글자로 세지 않습니다(`ownText`).
+- **순서** (`fill`, 단계는 content.js의 `draft-fill-step` → naver-editor.js)
+  1. `state` → `fillState()`: 제목 글자, 본문 글자 수, 덩어리 수입니다. `fillProblem`이 제목이나 본문 글자가 있거나, 덩어리가 2개(제목·본문)보다 많으면(사진만 넣은 글) 멈춥니다.
+  2. 클립보드에 `text/html`(+`text/plain`)을 씁니다. 패널을 누른 직후라 포커스가 있습니다.
+  3. `debugger.attach` → `Emulation.setFocusEmulationEnabled`를 합니다.
+  4. `locate(title)` 좌표로 진짜 클릭 → `caret(title)`로 커서가 제목 덩어리에 들어갔는지 확인 → `Input.insertText`(진짜 입력) → `state`로 제목이 그대로 들어갔는지(`sameText`, 공백 차이 무시) 확인합니다.
+  5. `locate(body)` 클릭 → `caret(body)` 확인 → `paste` → `pasteBodyAtCaret()`: 이미지 삽입과 같은 `execCommand("paste")`입니다. paste 이벤트에 `text/html`이 있었는지 보고, 본문 글자 수가 늘 때까지(최대 8초), 다시 멈출 때까지 기다립니다.
+  6. debugger를 떼고 `headings` → `convertPastedHeadings()`(기존 소제목 정리)를 합니다.
+  7. 본문 글자 수·소제목 수·남은 이미지 자리 수를 보여 주고, 태그 복사 버튼(`#태그 #태그`)을 띄웁니다.
+- 한 단계라도 어긋나면(커서가 안 들어감, 제목이 다르게 들어감, 붙여넣기가 안 닿음) 거기서 멈추고 이유를 보여 줍니다. 빈 글에서만 시작하므로 되돌릴 것이 생기지 않습니다.
+- 확인 (2026-11-17): Chrome for Testing에서 `blog.naver.com` 요청을 가짜 글쓰기 화면으로 바꿨습니다. iframe 안 에디터, 안내 글자, HTML 붙여넣기, 커서 줄에 따라 바뀌는 툴바, 소제목으로 바꾸면 덩어리가 빠지는 문단 서식을 흉내 냈습니다. 개발 서버의 실제 초안 목록(6개)으로 확인한 것: 제목(안내 글자 없이), 본문 49문단, 소제목 6개 모두 변환, 태그 버튼, 두 번째 채우기는 "제목이 이미 있어요"로 멈춤. 실제 스마트에디터에서는 설치 후 확인해야 합니다.
 
 ## 이미지 5장 프롬프트 (`image-prompt.ts`)
 

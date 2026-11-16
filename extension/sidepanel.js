@@ -106,7 +106,7 @@ async function addFromTransfer(data) {
   chrome.runtime.sendMessage({ type: "shelf-add-url", url });
 }
 
-// ── 위쪽 메뉴: 이미지 모음 / 쇼핑 커넥트. 패널을 열면 늘 이미지 모음부터 ──
+// ── 위쪽 메뉴: 이미지 모음 / 초안 / 쇼핑 커넥트. 패널을 열면 늘 이미지 모음부터 ──
 const tabButtons = document.querySelectorAll('[role="tab"]');
 function showTab(name) {
   for (const button of tabButtons) {
@@ -333,6 +333,7 @@ clearButton.addEventListener("click", async () => {
 });
 
 document.getElementById("options").addEventListener("click", () => chrome.runtime.openOptionsPage());
+document.getElementById("version").textContent = `v${chrome.runtime.getManifest().version}`;
 
 // 드래그 서식 버튼이 동작하지 않을 때, 지금 에디터의 버튼 구조(글 내용 제외)를 복사해 naver-editor.js를 고칠 수 있게 한다
 document.getElementById("diagnose").addEventListener("click", async () => {

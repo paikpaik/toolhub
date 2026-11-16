@@ -83,7 +83,7 @@ import { VIEWS } from "@toolhub/tasks";
 import { z } from "zod";
 import { registerInstaTools } from "./insta-tools.ts";
 import { registerTaskTools } from "./tasks-tools.ts";
-import { openWeb, stopWeb, WEB_LOG_FILE, WEB_URL } from "./web.ts";
+import { mainCommit, openWeb, stopWeb, WEB_LOG_FILE, WEB_URL, type CommitInfo } from "./web.ts";
 
 /** 도구 호출이 클라이언트 제한 시간(보통 60초)에 걸리지 않도록, 이 시간이 지나면 먼저 응답한다 */
 const TOOL_SOFT_TIMEOUT_MS = 45_000;
@@ -146,8 +146,13 @@ async function planningRules() {
   return (await Promise.all(["project-instructions.md", "planning.md"].map(readPrompt))).join("\n\n---\n\n");
 }
 
+const readVersion = async () => JSON.parse(await readFile(path.join(ROOT, "package.json"), "utf-8")).version as string;
+/** 이 MCP 서버가 시작될 때의 버전·커밋. Claude 앱은 앱을 다시 켤 때만 서버를 새로 띄우므로, 지금 저장소와 다르면 옛 코드로 돌고 있다 */
+const STARTED = { version: await readVersion(), commit: await mainCommit().catch(() => null), at: new Date() };
+
 const server = new McpServer(
-  { name: "toolhub", version: JSON.parse(await readFile(path.join(ROOT, "package.json"), "utf-8")).version },
+  // title: 커넥터 이름을 서버 정보로 보여 주는 클라이언트라면 버전·커밋이 바로 보이게 (Claude 앱이 보여 주는지는 앱에 달림)
+  { name: "toolhub", title: `toolhub v${STARTED.version}${STARTED.commit ? ` · ${STARTED.commit.short}` : ""}`, version: STARTED.version },
   {
     instructions: [
       "toolhub는 블로그 글감을 찾기 위한 한국어 키워드 도구다.",
@@ -160,6 +165,7 @@ const server = new McpServer(
       "초안 고치기: read_draft로 읽고 고친 뒤 update_draft로 같은 파일에 저장한다 (이전 버전은 자동 보관). 새 초안은 save_draft로 만든다. 발행됨 초안은 고치지 않는다 (정책, update_draft가 거부함): list_drafts의 상태가 발행됨이면 고치려고 읽지도 않는다 (인스타 재가공처럼 읽기만 하는 건 괜찮다).",
       "글 유형: 상품·서비스 사용기는 review, 맛집·여행지·시설 방문기는 place, 쇼핑 커넥트 제휴 링크를 넣는 상품 글은 connect, 그 밖에는 info. 리뷰 상품의 쇼핑 트렌드는 get_shopping_trend, 장소 정보는 search_places로 확인한다.",
       "쇼핑 커넥트: 사용자가 '[쇼핑 커넥트 요청]'(크롬 확장이 만든 요청문)이나 쇼핑 커넥트 링크와 함께 상품 글을 요청하면 platform=naver, type=connect로 쓴다. get_writing_brief에 요청문의 링크·글 방식·상품 정보·경험 메모를 link·mode·product·experience로 그대로 넘긴다. 메인 키워드는 요청문에 있으면 그것, 없으면 상품명에서 검색될 말(브랜드+제품군+후기·추천 등)을 정한다. 경험 메모에 없는 사용 경험은 지어내지 않는다.",
+      "버전: 사용자가 toolhub 버전·최신인지·업데이트가 적용됐는지 물으면 get_version을 부른다.",
       "사용자가 플랫폼을 말하지 않으면 티스토리(tistory)로 쓴다 (쇼핑 커넥트는 네이버).",
       "인스타그램: 릴스 대본·캡션·카드뉴스·스토리·댓글/답글·블로그 글을 인스타 게시물로 바꾸기는 먼저 get_insta_rules(task)로 규칙과 계정 말투를 읽고 쓴다. 릴스 대본은 훅 후보 3개와 대본을 check_reel_script로, 캡션은 check_caption으로 점검해 고친 뒤 보여 준다. 게시·댓글·DM은 사람이 직접 한다 (자동으로 올리지 않음).",
       "일정 관리: 할 일·일정·스케줄 이야기는 list_tasks / add_task / update_task / complete_task를 쓴다. 사용자가 한 말을 add_task의 text에 그대로 넣으면 날짜·시간·태그·프로젝트를 해석한다. 블로그 글감을 일정으로 잡아 달라고 하면 add_task에 link로 키워드 분석·초안 주소를 함께 넣는다.",
@@ -713,6 +719,50 @@ server.registerTool(
       const result = await updateDraftFile(DRAFTS_DIR, file, content);
       if (!result) return failure(`초안을 찾을 수 없습니다: ${draft}. 새 초안이면 save_draft를 쓰세요.`);
       return text(`고쳤습니다: ${result.file}\n이전 버전: ${result.backup}\n${await draftFeedback(file, content)}웹에서 보려면 open_web(page="drafts", draft="${result.file}")`);
+    } catch (e) {
+      return failure(e);
+    }
+  },
+);
+
+/** toolhub 웹이 떠 있으면 { version, commit }, 아니면 null */
+async function webHealth(url: string) {
+  try {
+    const res = await fetch(`${url}/api/health`, { signal: AbortSignal.timeout(1500) });
+    const data = (await res.json()) as { app?: string; version?: string; commit?: string | null };
+    return data.app === "toolhub" ? { version: data.version ?? null, commit: data.commit?.slice(0, 7) ?? null } : null;
+  } catch {
+    return null;
+  }
+}
+
+const commitLabel = (commit: CommitInfo | null) => (commit ? `main ${commit.short} ${commit.subject}` : "커밋 정보 없음");
+
+server.registerTool(
+  "get_version",
+  {
+    title: "toolhub 버전 확인",
+    description:
+      "Claude 앱에 연결된 toolhub(MCP 서버)의 버전과, 저장소의 최신 버전·커밋, 켜져 있는 toolhub 웹(3100·3000)의 버전을 보여 준다. 저장소가 더 새로우면 Claude 앱을 다시 켜야 적용된다고 알려 준다.",
+    annotations: { readOnlyHint: true },
+  },
+  async () => {
+    try {
+      const [version, commit, mcpWeb, devWeb] = await Promise.all([readVersion(), mainCommit().catch(() => null), webHealth(WEB_URL), webHealth("http://localhost:3000")]);
+      const stale = version !== STARTED.version || (commit && STARTED.commit && commit.hash !== STARTED.commit.hash);
+      const started = STARTED.at.toLocaleString("ko-KR", { timeZone: "Asia/Seoul" });
+      return text(
+        [
+          `Claude 앱에 연결된 toolhub: v${STARTED.version} (${commitLabel(STARTED.commit)}, ${started} 시작)`,
+          `저장소 최신: v${version} (${commitLabel(commit)})`,
+          stale
+            ? "→ 저장소가 더 새롭습니다. Claude 앱을 완전히 껐다 켜야 새 도구·규칙이 적용됩니다."
+            : "→ 최신입니다.",
+          `toolhub 웹 (${WEB_URL}, open_web): ${mcpWeb ? `${mcpWeb.version ? `v${mcpWeb.version}` : "버전 정보 없음"}${mcpWeb.commit ? ` main ${mcpWeb.commit}` : ""}${commit && mcpWeb.commit && mcpWeb.commit !== commit.short ? " — 옛 커밋, open_web을 부르면 새 커밋으로 다시 켭니다" : ""}` : "꺼짐"}`,
+          `toolhub 웹 (http://localhost:3000, npm run web): ${devWeb ? `${devWeb.version ? `v${devWeb.version}` : "버전 정보 없음"} (작업 폴더 코드)` : "꺼짐"}`,
+          "크롬 확장 버전은 확장 패널 맨 아래에 보입니다.",
+        ].join("\n"),
+      );
     } catch (e) {
       return failure(e);
     }

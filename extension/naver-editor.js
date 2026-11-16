@@ -26,6 +26,11 @@ globalThis.ToolhubNaver = (() => {
     paragraph: ".se-text-paragraph",
     /** 본문에 들어간 사진 덩어리. 삽입이 됐는지 개수로 확인한다 */
     image: ".se-component.se-image",
+    /** 제목 칸 덩어리와 모든 덩어리 (2026-11-17 진단: 제목도 본문과 같은 편집 영역의 첫 덩어리) */
+    documentTitle: ".se-component.se-documentTitle",
+    component: ".se-component",
+    /** 빈 칸에 보이는 "제목"·"본문" 안내 글자 (내용이 아님) */
+    placeholder: ".se-placeholder",
   };
 
   /** toolhub "서식 포함 복사"가 소제목에 넣는 글자 크기 (apps/web/lib/preview.ts와 맞춘다) */
@@ -306,6 +311,77 @@ globalThis.ToolhubNaver = (() => {
     return { left: imageSlots().length };
   }
 
+  // ── 초안 채우기 (패널 "초안" 메뉴): 빈 글인지 확인 → 제목 클릭·입력 → 본문 클릭·붙여넣기 → 소제목 정리.
+  //    클릭과 제목 입력은 패널이 debugger로 진짜 입력을 보내고, 여기서는 위치를 알려 주고 결과를 확인한다
+
+  /** 안내 글자(se-placeholder)를 뺀 실제 글자 */
+  function ownText(el) {
+    const walker = document.createTreeWalker(el, NodeFilter.SHOW_TEXT);
+    let text = "";
+    while (walker.nextNode()) if (!walker.currentNode.parentElement?.closest(SELECTORS.placeholder)) text += walker.currentNode.textContent;
+    return normalize(text);
+  }
+
+  const titleParagraph = () => document.querySelector(`${SELECTORS.content} ${SELECTORS.documentTitle} ${SELECTORS.paragraph}`);
+  const bodyParagraphs = () => paragraphs().filter((p) => !p.closest(SELECTORS.documentTitle));
+  const bodyLength = () => bodyParagraphs().reduce((n, p) => n + ownText(p).length, 0);
+
+  /** 지금 글: 제목 글자, 본문 글자 수, 덩어리 수(제목·본문 말고 사진·표 등이 있는지) */
+  function fillState() {
+    const title = titleParagraph();
+    if (!title) throw new EditorError("제목 칸을 찾지 못했어요");
+    const components = document.querySelectorAll(`${SELECTORS.content} ${SELECTORS.component}`).length;
+    return { title: ownText(title), body: bodyLength(), components };
+  }
+
+  /** 제목(title)·본문(body) 칸을 화면에 보이고, 클릭할 좌표(탭 화면 기준)를 준다 */
+  async function locateFill(which) {
+    const target = which === "title" ? titleParagraph() : bodyParagraphs()[0];
+    if (!target) throw new EditorError(which === "title" ? "제목 칸을 찾지 못했어요" : "본문 칸을 찾지 못했어요");
+    target.scrollIntoView({ block: "center" });
+    await sleep(200);
+    const rect = target.getBoundingClientRect();
+    const offset = frameOffset();
+    return { x: offset.x + rect.left + Math.min(12, rect.width / 2), y: offset.y + rect.top + rect.height / 2 };
+  }
+
+  /** 커서가 그 칸(제목·본문)에 들어갔는지. 엉뚱한 곳에 입력하지 않게 클릭 뒤 확인한다 */
+  function caretIn(which) {
+    const node = getSelection()?.anchorNode;
+    const el = node?.nodeType === Node.ELEMENT_NODE ? node : node?.parentElement;
+    if (!el?.closest(SELECTORS.content)) return false;
+    return which === "title" ? !!el.closest(SELECTORS.documentTitle) : !!el.closest(SELECTORS.textComponent);
+  }
+
+  /**
+   * 패널이 클립보드에 담아 둔 서식 포함 본문을 지금 커서 자리(본문 칸)에 붙여넣는다 (이미지 붙여넣기와 같은 진짜 붙여넣기).
+   * { length: 본문 글자 수, slots: 본문 이미지 자리 수 }
+   */
+  async function pasteBodyAtCaret() {
+    const before = bodyLength();
+    const target = inputTarget(document.querySelector(SELECTORS.content));
+    if (!target) throw new EditorError("붙여넣을 편집 칸을 찾지 못했어요");
+    if (document.activeElement !== target) target.focus({ preventScroll: true });
+    let seen = null;
+    const spy = (e) => (seen = { target: label(e.target), html: e.clipboardData?.types.includes("text/html") ?? false });
+    document.addEventListener("paste", spy, true);
+    let pasted;
+    try {
+      pasted = document.execCommand("paste");
+    } finally {
+      document.removeEventListener("paste", spy, true);
+    }
+    if (!pasted || !seen) throw new EditorError(`붙여넣기가 에디터에 닿지 않았어요 (편집 칸 ${label(target)}, 포커스 ${label(document.activeElement)})`);
+    if (!seen.html) throw new EditorError("붙여넣기는 됐는데 클립보드에 서식 포함 본문이 없었어요");
+    if (!(await waitFor(() => bodyLength() > before, 8000))) throw new EditorError(`붙여넣기는 ${seen.target}에 닿았는데 본문이 들어오지 않았어요`);
+    // 긴 글은 에디터가 나눠 그리므로 글자 수가 멈출 때까지 기다린다
+    for (let last = -1; bodyLength() !== last; ) {
+      last = bodyLength();
+      await sleep(300);
+    }
+    return { length: bodyLength(), slots: imageSlots().length };
+  }
+
   const describe = (el) => ({
     class: typeof el.className === "string" ? el.className : "",
     text: el.textContent.trim().slice(0, 20),
@@ -360,5 +436,20 @@ globalThis.ToolhubNaver = (() => {
     };
   }
 
-  return { SELECTORS, EditorError, hasEditor, isInEditor, apply, convertPastedHeadings, locateImageSlot, imageSlotStatus, pasteImageAtCaret, diagnose };
+  return {
+    SELECTORS,
+    EditorError,
+    hasEditor,
+    isInEditor,
+    apply,
+    convertPastedHeadings,
+    locateImageSlot,
+    imageSlotStatus,
+    pasteImageAtCaret,
+    fillState,
+    locateFill,
+    caretIn,
+    pasteBodyAtCaret,
+    diagnose,
+  };
 })();
