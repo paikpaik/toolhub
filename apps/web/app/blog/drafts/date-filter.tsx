@@ -14,7 +14,7 @@ export const dateLabel = (date: string) => `${Number(date.slice(5, 7))}월 ${Num
 export const datesLabel = (dates: string[]) => `${dateLabel(dates[0]!)}${dates.length > 1 ? ` 외 ${dates.length - 1}일` : ""}`;
 
 /**
- * 작성일 고르기: 버튼을 누르면 달력이 열리고, 초안이 있는 날에는 개수가 보인다. 날을 누를 때마다 고르고 풀어서 여러 날을 함께 볼 수 있다.
+ * 발행일 고르기: 버튼을 누르면 달력이 열리고, 초안이 있는 날에는 개수가 보인다. 날을 누를 때마다 고르고 풀어서 여러 날을 함께 볼 수 있다.
  * counts는 지금 상태 탭으로 거른 초안 기준이라, 상태와 함께 걸러 볼 수 있다
  */
 export function DateFilter({ counts, value, onChange }: { counts: Map<string, number>; value: string[]; onChange: (dates: string[]) => void }) {
@@ -59,15 +59,15 @@ export function DateFilter({ counts, value, onChange }: { counts: Map<string, nu
         title={value.length > 1 ? value.map(dateLabel).join(", ") : undefined}
       >
         <Icon name="calendar" size={14} />
-        작성일 {on ? datesLabel(value) : "전체"}
+        발행일 {on ? datesLabel(value) : "전체"}
       </button>
       {on && (
-        <button type="button" className="date-filter-clear" onClick={clear} aria-label="작성일 거르기 풀기" title="전체 기간">
+        <button type="button" className="date-filter-clear" onClick={clear} aria-label="발행일 거르기 풀기" title="전체 기간">
           <Icon name="close" size={12} />
         </button>
       )}
       {open && (
-        <div className="date-filter-popover" role="dialog" aria-label="작성일 고르기">
+        <div className="date-filter-popover" role="dialog" aria-label="발행일 고르기">
           <div className="calendar-nav">
             <button type="button" className="icon-button ghost" onClick={() => setMonth(shiftMonth(month, -1))} aria-label="이전 달">
               <Icon name="chevronLeft" />

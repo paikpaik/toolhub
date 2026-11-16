@@ -17,7 +17,7 @@ const COLUMNS: { column: SortColumn; label: string }[] = [
   { column: "status", label: "상태" },
   { column: "answers", label: "지식iN" },
   { column: "platform", label: "플랫폼" },
-  { column: "date", label: "작성일" },
+  { column: "date", label: "발행일" },
   { column: "updatedAt", label: "마지막 수정" },
 ];
 const COLUMN_LABEL = Object.fromEntries(COLUMNS.map((c) => [c.column, c.label])) as Record<SortColumn, string>;
@@ -43,9 +43,15 @@ export interface DraftRow {
   file: string;
   keyword: string;
   platform: string | null;
+  /** 발행일 (파일 이름의 날짜) */
   date: string | null;
+  /** 네이버 글 형식. 홈판형이면 그날 먼저 올리라고 표시한다 */
+  format: string | null;
   updatedAt: string;
 }
+
+/** 오늘 (KST, YYYY-MM-DD). 이보다 뒤 발행일은 미리 쓴 초안이라 "예정"으로 보인다 */
+const todayKst = () => new Date().toLocaleDateString("sv-SE", { timeZone: "Asia/Seoul" });
 
 /** 초안 목록. 줄을 누르면 아래로 펼쳐져 상태를 바꾸고, 그 키워드의 지식iN 질문에 답변을 준비한다 */
 export function DraftTable({ rows: allRows, statuses: initial }: { rows: DraftRow[]; statuses: DraftStatusMap }) {
@@ -60,7 +66,7 @@ export function DraftTable({ rows: allRows, statuses: initial }: { rows: DraftRo
   const [dates, setDates] = useState<string[]>([]);
   const [sort, setSort] = useState<SortRule[]>([]);
 
-  // 고른 작성일·정렬은 다른 화면에 다녀와도 기억한다 (브라우저에서 읽어서 서버 화면과 어긋나지 않게)
+  // 고른 발행일·정렬은 다른 화면에 다녀와도 기억한다 (브라우저에서 읽어서 서버 화면과 어긋나지 않게)
   useEffect(() => {
     setDates(parseSavedDates(recall(DRAFT_DATES_KEY), new Set(rows.flatMap((r) => (r.date ? [r.date] : [])))));
     setSort(parseSavedSort(recall(DRAFT_SORT_KEY)));
@@ -74,9 +80,10 @@ export function DraftTable({ rows: allRows, statuses: initial }: { rows: DraftRo
     remember(DRAFT_SORT_KEY, next);
   };
 
+  const today = todayKst();
   const statusOf = (file: string) => effectiveStatus(statuses[file]);
   const matchesStatus = (r: DraftRow) => filter === "all" || statusOf(r.file) === filter;
-  // 상태 탭 개수는 고른 작성일 안에서, 달력의 날짜별 개수는 고른 상태 안에서 센다
+  // 상태 탭 개수는 고른 발행일 안에서, 달력의 날짜별 개수는 고른 상태 안에서 센다
   const inDate = dates.length ? rows.filter((r) => r.date && dates.includes(r.date)) : rows;
   const counts = Object.fromEntries(DRAFT_STATUSES.map((s) => [s, inDate.filter((r) => statusOf(r.file) === s).length])) as Record<DraftStatus, number>;
   const dateCounts = new Map<string, number>();
@@ -206,7 +213,19 @@ export function DraftTable({ rows: allRows, statuses: initial }: { rows: DraftRo
                     </td>
                     <td className="num">{entry?.answers?.length ? `답변 ${entry.answers.length}` : "-"}</td>
                     <td>{d.platform ?? "-"}</td>
-                    <td>{d.date ?? "-"}</td>
+                    <td className="draft-date">
+                      {d.date ?? "-"}
+                      {d.format === "home" && (
+                        <span className="draft-chip home" title="홈판형: 그날 아침 먼저 올려요">
+                          홈판
+                        </span>
+                      )}
+                      {d.date && d.date > today && (
+                        <span className="draft-chip" title="미리 쓴 초안: 이 날 올려요">
+                          예정
+                        </span>
+                      )}
+                    </td>
                     <td>{new Date(d.updatedAt).toLocaleString("ko-KR", { timeZone: "Asia/Seoul" })}</td>
                     <td>
                       <PromptCopyButton file={d.file} />

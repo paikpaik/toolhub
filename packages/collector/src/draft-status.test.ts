@@ -30,6 +30,15 @@ describe("초안 상태", () => {
     assert.deepEqual(sortDrafts(rows, statuses).map((r) => r.file), ["b.md", "d.md", "a.md", "c.md"]);
   });
 
+  it("같은 상태에서는 발행일 늦은 순, 같은 날이면 홈판형 먼저", () => {
+    const rows = [
+      { file: "검색.md", date: "2026-11-19", format: "search", updatedAt: "2026-11-17T09:00:00Z" },
+      { file: "오늘.md", date: "2026-11-17", format: "search", updatedAt: "2026-11-17T10:00:00Z" },
+      { file: "홈판.md", date: "2026-11-19", format: "home", updatedAt: "2026-11-17T08:00:00Z" },
+    ];
+    assert.deepEqual(sortDrafts(rows, {}).map((r) => r.file), ["홈판.md", "검색.md", "오늘.md"]);
+  });
+
   it("글 주소는 http(s)만, 앞뒤 공백·꺾쇠는 걷는다", () => {
     assert.equal(normalizePostUrl(" <https://blog.naver.com/abc/123> "), "https://blog.naver.com/abc/123");
     assert.equal(normalizePostUrl("blog.naver.com/abc"), null);

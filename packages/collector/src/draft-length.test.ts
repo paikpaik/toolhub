@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
-import { bodyLength, draftPlatform, lengthFeedback } from "./draft-length.ts";
+import { bodyLength, draftFormat, draftPlatform, lengthFeedback } from "./draft-length.ts";
 
 describe("초안 분량", () => {
   it("공백은 세고, 줄바꿈·이미지 자리·■·★·표 머리 표시·HTML 태그는 빼고 센다", () => {
@@ -12,6 +12,19 @@ describe("초안 분량", () => {
     assert.equal(draftPlatform("2026-11-05-연말정산-naver.md"), "naver");
     assert.equal(draftPlatform("2026-11-05-연말정산-tistory-2.md"), "tistory");
     assert.equal(draftPlatform("메모.md"), null);
+    assert.equal(draftPlatform("2026-11-19-원주-매운맛축제-naver-home-2.md"), "naver");
+    assert.equal(draftFormat("2026-11-19-원주-매운맛축제-naver-home.md"), "home");
+    assert.equal(draftFormat("2026-11-19-원주-naver.md"), "search");
+    assert.equal(draftFormat("2026-11-19-원주-tistory.md"), null);
+  });
+
+  it("네이버 홈판형은 목표 1,800자 (범위는 같음), 소제목을 늘리지 말라고", () => {
+    assert.match(lengthFeedback("naver", "가".repeat(1850), "home") ?? "", /홈판형 목표 1,800자.*분량 맞음/);
+    const short = lengthFeedback("naver", "가".repeat(1500), "home") ?? "";
+    assert.match(short, /300자 짧습니다/);
+    assert.match(short, /소제목을 늘리지 말고/);
+    assert.match(lengthFeedback("naver", "가".repeat(1700)) ?? "", /짧습니다/, "검색형은 2,000자 기준");
+    assert.match(lengthFeedback("tistory", "가".repeat(2500), "home") ?? "", /^본문 2,500자 \(목표 2,500자/, "다른 플랫폼은 형식을 무시");
   });
 
   it("목표의 90%보다 짧으면 보완해 다시 저장하라고, 범위 안이면 맞음, 넘치면 줄이라고", () => {

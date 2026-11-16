@@ -1,4 +1,4 @@
-/** 초안 목록의 작성일 거르기: 여러 날을 고르고, 다른 화면에 다녀와도 기억한다 (브라우저 localStorage) */
+/** 초안 목록의 발행일 거르기: 여러 날을 고르고, 다른 화면에 다녀와도 기억한다 (브라우저 localStorage) */
 
 export const DRAFT_DATES_KEY = "toolhub:draft-dates";
 

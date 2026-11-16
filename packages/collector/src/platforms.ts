@@ -58,6 +58,23 @@ export function isConnectMode(value: unknown): value is ConnectMode {
   return typeof value === "string" && (CONNECT_MODES as readonly string[]).includes(value);
 }
 
+/**
+ * 네이버 글 형식. search: 검색해서 들어온 사람의 질문에 답하는 글, home: 홈판(추천 피드)을 넘기던 사람을 멈추게 하는 판단형 글.
+ * 규칙은 docs/prompts/platforms/naver.md의 "검색형"·"홈판형"에 있다. 홈판형 초안은 파일 이름 끝에 -home이 붙는다
+ */
+export const NAVER_FORMATS = ["search", "home"] as const;
+
+export type NaverFormat = (typeof NAVER_FORMATS)[number];
+
+export const NAVER_FORMAT_LABELS: Record<NaverFormat, string> = {
+  search: "검색형",
+  home: "홈판형",
+};
+
+export function isNaverFormat(value: unknown): value is NaverFormat {
+  return typeof value === "string" && (NAVER_FORMATS as readonly string[]).includes(value);
+}
+
 /** 네이버 브랜드커넥트가 링크 발급 시 반드시 넣으라고 안내하는 대가성 문구 (글자 그대로 쓴다) */
 export const CONNECT_DISCLOSURE = "이 포스팅은 네이버 쇼핑 커넥트 활동의 일환으로, 판매 발생 시 수수료를 제공받습니다.";
 

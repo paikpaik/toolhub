@@ -39,7 +39,12 @@ import {
   DRAFT_STATUS_LABELS,
   draftEditBlocked,
   draftPlatform,
+  draftFormat,
+  draftFileBase,
+  publishDateProblem,
   lengthFeedback,
+  titleFeedback,
+  RECENT_TITLE_COUNT,
   effectiveStatus,
   readDraftStatuses,
   draftsForKeyword,
@@ -68,6 +73,8 @@ import {
   WRITING_TYPE_LABELS,
   WRITING_TYPES,
   CONNECT_MODES,
+  NAVER_FORMATS,
+  NAVER_FORMAT_LABELS,
   type Platform,
   type ShoppingCategory,
   type WritingType,
@@ -100,6 +107,13 @@ const structureSchema = z
     `글 구성 변형. 보통은 생략해 무작위로 고르게 둔다 (글마다 구조가 같아지지 않도록). 사용자가 원할 때만 지정. ${Object.entries(STRUCTURE_NAMES)
       .map(([type, names]) => `${type}: ${Object.entries(names).map(([k, v]) => `${k}=${v}`).join(", ")}`)
       .join(" / ")}`,
+  );
+
+const formatSchema = z
+  .enum(NAVER_FORMATS)
+  .optional()
+  .describe(
+    "네이버 글 형식 (platform=naver만): search(검색형 - 검색해서 들어온 사람의 질문에 답함, 기본) | home(홈판형 - 생활과 맞닿은 일에 숫자·비교로 판단을 내려 줌). 글감 추천 표의 '형식'대로",
   );
 
 const briefSources = () => ({ searchAd: searchAdConfigFromEnv(), hub: hubConfigFromEnv() });
@@ -137,11 +151,12 @@ const server = new McpServer(
   {
     instructions: [
       "toolhub는 블로그 글감을 찾기 위한 한국어 키워드 도구다.",
-      "글감 고르기: 전략은 매일 5편, 지금 뜨는 이슈로 홈판(네이버 메인)과 검색을 함께 노리는 것이다. 반짝 이슈도 제외하지 않는다. get_daily_keywords(또는 get_live_keywords)로 키워드를 보고, get_writing_rules(task=planning)의 규칙으로 5개를 고른다. 후보는 analyze_keywords(여러 개)·research_keyword(하나)로 최근 7일(급상승)·포화도를 확인한다.",
+      "글감 고르기: 지금 뜨는 이슈로 검색과 홈판(네이버 메인)을 노린다. 반짝 이슈도 제외하지 않는다. get_daily_keywords(또는 get_live_keywords)로 키워드를 보고, get_writing_rules(task=planning)의 규칙으로 사용자가 말한 편수만큼(말하지 않으면 5개) 고른다. 후보는 analyze_keywords(여러 개)·research_keyword(하나)로 최근 7일(급상승)·포화도를 확인한다. 네이버 글감은 키워드마다 형식(홈판형·검색형)과 발행일을 정한다 (planning 규칙의 '형식과 발행일').",
       "연관어로 돌리기: 글이 적은 블로그는 대표 키워드(블로그 문서 수 수만~수십만, 포화도 보통·높음)로는 상위 노출이 어렵다. 포화도가 보통·높음이면 그 키워드로 바로 쓰지 말고 find_pivot_keywords로 검색량은 적당하고 경쟁 글이 적은 연관어를 골라 그 연관어를 메인 키워드로 쓴다. 광고 경쟁도(낮음·중간·높음)는 검색광고 입찰 경쟁이라 블로그 경쟁 판단에 쓰지 않는다.",
       "주제로 글감 찾기: 사용자가 분야·주제(캠핑, 연말정산 등)로 쓸 글감을 찾으면 discover_keywords로 꾸준히 검색되는 정보형 키워드를 찾고, 추천 키워드 중 하나를 골라 research_keyword로 확인한다.",
       "키워드 목록·화면 캡처: 사용자가 네이버 크리에이터 어드바이저(검색 유입 트렌드·메인 유입 트렌드·주제별 트렌드) 같은 캡처나 키워드 목록을 주면, 보이는 키워드를 모두 뽑아 analyze_keywords 한 번으로 분석하고 (크롬 확장이 복사한 '[크리에이터 어드바이저 트렌드 …]' 글이면 카드별 키워드를 50개씩 나눠 넣는다. 뒤의 (new)·(▲3)은 변동 표시로, new·▲를 우선한다) get_writing_rules(task=planning)의 기준으로 추천한다. 최근 7일이 급상승·상승인 키워드를 우선하고, 포화도가 보통·높음인 키워드는 find_pivot_keywords로 연관어를 찾아 함께 제안한다.",
-      "초안 쓰기: 먼저 list_drafts(keyword)로 같은 키워드의 초안이 있는지 확인해 있으면 사용자에게 알린다. get_writing_rules(task=writing, platform, type)로 규칙을 읽고, get_writing_brief로 브리프를 받는다. 브리프에 '경쟁 판단'과 '추천 타깃 키워드'가 있으면 그중 하나(검색 의도가 글로 답하기 좋은 것)를 골라 사용자에게 알리고, 그 키워드로 get_writing_brief를 다시 받아 그 키워드를 메인 키워드로 쓴다 (save_draft의 keyword도 그 키워드). 그다음 규칙대로 웹 검색으로 사실을 확인하며 쓴다. 이때 list_drafts가 보여 준 최근 초안들의 제목·도입 문장과 같은 패턴을 피한다. 사용자가 원하면 save_draft로 저장하고 open_web(page=drafts)으로 보여준다. save_draft·update_draft 결과에 본문 글자 수가 나오며, 목표보다 짧다고 하면 안내대로 보완해 update_draft로 다시 저장한다.",
+      "초안 쓰기: 먼저 list_drafts(keyword)로 같은 키워드의 초안이 있는지 확인해 있으면 사용자에게 알린다. get_writing_rules(task=writing, platform, type)로 규칙을 읽고, get_writing_brief로 브리프를 받는다. 브리프에 '경쟁 판단'과 '추천 타깃 키워드'가 있으면 그중 하나(검색 의도가 글로 답하기 좋은 것)를 골라 사용자에게 알리고, 그 키워드로 get_writing_brief를 다시 받아 그 키워드를 메인 키워드로 쓴다 (save_draft의 keyword도 그 키워드). 그다음 규칙대로 웹 검색으로 사실을 확인하며 쓴다. 이때 list_drafts가 보여 준 최근 초안들의 제목·도입 문장과 같은 패턴을 피한다. 사용자가 원하면 save_draft로 저장하고 open_web(page=drafts)으로 보여준다. save_draft·update_draft 결과에 본문 글자 수와 제목 점검이 나오며, 목표보다 짧거나 제목 점검에 걸리면 안내대로 고쳐 update_draft로 다시 저장한다.",
+      "네이버 형식과 발행일: 네이버 초안은 글감 추천에서 정한 형식을 get_writing_brief와 save_draft의 format에 같은 값으로 넘긴다 (home=홈판형, 생략=검색형). 발행일이 오늘이 아니면(행사 1~3일 전 등) save_draft의 date에 그 날을 넣는다. 초안 파일 날짜가 발행일이 되어 그날 초안 목록에 함께 보인다.",
       "초안 고치기: read_draft로 읽고 고친 뒤 update_draft로 같은 파일에 저장한다 (이전 버전은 자동 보관). 새 초안은 save_draft로 만든다. 발행됨 초안은 고치지 않는다 (정책, update_draft가 거부함): list_drafts의 상태가 발행됨이면 고치려고 읽지도 않는다 (인스타 재가공처럼 읽기만 하는 건 괜찮다).",
       "글 유형: 상품·서비스 사용기는 review, 맛집·여행지·시설 방문기는 place, 쇼핑 커넥트 제휴 링크를 넣는 상품 글은 connect, 그 밖에는 info. 리뷰 상품의 쇼핑 트렌드는 get_shopping_trend, 장소 정보는 search_places로 확인한다.",
       "쇼핑 커넥트: 사용자가 '[쇼핑 커넥트 요청]'(크롬 확장이 만든 요청문)이나 쇼핑 커넥트 링크와 함께 상품 글을 요청하면 platform=naver, type=connect로 쓴다. get_writing_brief에 요청문의 링크·글 방식·상품 정보·경험 메모를 link·mode·product·experience로 그대로 넘긴다. 메인 키워드는 요청문에 있으면 그것, 없으면 상품명에서 검색될 말(브랜드+제품군+후기·추천 등)을 정한다. 경험 메모에 없는 사용 경험은 지어내지 않는다.",
@@ -299,6 +314,7 @@ server.registerTool(
       platform: platformSchema.default("tistory"),
       type: typeSchema.default("info"),
       structure: structureSchema,
+      format: formatSchema,
       note: z.string().optional().describe("글 각도, 직접 경험 메모 등 참고 사항"),
       link: z.string().optional().describe("type=connect: 브랜드커넥트에서 복사한 쇼핑 커넥트 링크 (요청문의 링크 그대로)"),
       mode: z
@@ -310,10 +326,10 @@ server.registerTool(
     },
     annotations: { readOnlyHint: true, openWorldHint: true },
   },
-  async ({ keyword, platform, type, structure, note, link, mode, product, experience }) => {
+  async ({ keyword, platform, type, structure, format, note, link, mode, product, experience }) => {
     try {
       const connect = { link, mode, product, experience };
-      return text(await buildWritingBrief(briefSources(), keyword, platform, { type, structure, connect, note }));
+      return text(await buildWritingBrief(briefSources(), keyword, platform, { type, structure, connect, format, note }));
     } catch (e) {
       return failure(e);
     }
@@ -536,13 +552,35 @@ server.registerTool(
   },
 );
 
-/** 파일 이름에 쓸 수 없는 문자를 빼고 공백을 하이픈으로 */
-const slugify = (value: string) =>
-  value
-    .trim()
-    .replace(/[\\/:*?"<>|]/g, "")
-    .replace(/\s+/g, "-")
-    .slice(0, 60);
+/** 같은 플랫폼 최근 초안들의 추천 제목 (제목 점검용, 이 초안 제외, 최근 수정 순) */
+async function recentTitles(platform: Platform | null, except: string) {
+  const drafts = (await listDrafts(DRAFTS_DIR)).filter((d) => d.file !== except && d.platform === platform).slice(0, RECENT_TITLE_COUNT);
+  const titles = await Promise.all(
+    drafts.map(async (d) => {
+      const { titles } = parseDraft((await readDraftFile(DRAFTS_DIR, d.file)) ?? "");
+      return titles.find((t) => t.recommended)?.text ?? titles[0]?.text ?? null;
+    }),
+  );
+  return titles.filter((t): t is string => t !== null);
+}
+
+/** 저장 결과에 붙일 분량·제목 안내 */
+async function draftFeedback(file: string, content: string) {
+  const parsed = parseDraft(content);
+  const platform = draftPlatform(file);
+  const recommended = parsed.titles.find((t) => t.recommended)?.text ?? parsed.titles[0]?.text ?? null;
+  return [
+    lengthFeedback(platform, parsed.body, draftFormat(file)),
+    titleFeedback(
+      parsed.titles.map((t) => t.text),
+      recommended,
+      await recentTitles(platform, file),
+    ),
+  ]
+    .filter(Boolean)
+    .map((line) => `${line}\n`)
+    .join("");
+}
 
 const exists = (file: string) =>
   access(file).then(
@@ -554,24 +592,36 @@ server.registerTool(
   "save_draft",
   {
     title: "초안 저장",
-    description: "완성한 초안을 저장소의 drafts/ 폴더에 마크다운 파일로 저장하고 경로를 돌려준다. 같은 이름이 있으면 덮어쓰지 않고 번호를 붙인다.",
+    description:
+      "완성한 초안을 저장소의 drafts/ 폴더에 마크다운 파일로 저장하고 경로를 돌려준다. 같은 이름이 있으면 덮어쓰지 않고 번호를 붙인다. 파일 이름의 날짜는 발행일(date, 생략하면 오늘)이고, 네이버 홈판형(format=home)은 이름 끝에 -home이 붙는다. 결과에 본문 글자 수와 제목 점검이 나온다.",
     inputSchema: {
       keyword: z.string().min(1).describe("초안의 메인 키워드 (파일 이름에 쓰임)"),
       platform: platformSchema,
       content: z.string().min(1).describe("저장할 초안 전체 (마크다운)"),
+      format: formatSchema,
+      date: z
+        .string()
+        .regex(/^\d{4}-\d{2}-\d{2}$/)
+        .optional()
+        .describe("발행일 YYYY-MM-DD (KST). 생략하면 오늘. 행사 1~3일 전에 올릴 홈판형처럼 오늘이 아닐 때만. 오늘부터 14일 안"),
     },
     annotations: { readOnlyHint: false, destructiveHint: false },
   },
-  async ({ keyword, platform, content }) => {
+  async ({ keyword, platform, content, format, date }) => {
     try {
+      const today = kstNow().date;
+      const problem = date ? publishDateProblem(date, today) : null;
+      if (problem) return failure(problem);
       await mkdir(DRAFTS_DIR, { recursive: true });
-      const base = `${kstNow().date}-${slugify(keyword)}-${platform}`;
+      const base = draftFileBase(date ?? today, keyword, platform, format);
       let file = path.join(DRAFTS_DIR, `${base}.md`);
       for (let n = 2; await exists(file); n++) file = path.join(DRAFTS_DIR, `${base}-${n}.md`);
       await writeFile(file, content.endsWith("\n") ? content : `${content}\n`);
-      const length = lengthFeedback(platform, parseDraft(content).body);
+      const name = path.basename(file);
+      const when = date && date !== today ? `발행일 ${date} (그날 초안 목록에 보임)\n` : "";
+      const kind = platform === "naver" ? `형식: ${NAVER_FORMAT_LABELS[format ?? "search"]}\n` : "";
       return text(
-        `저장했습니다: ${file}\n${length ? `${length}\n` : ""}웹에서 미리보기·복사하려면 open_web(page="drafts", draft="${path.basename(file)}")을 호출하세요.`,
+        `저장했습니다: ${file}\n${kind}${when}${await draftFeedback(name, content)}웹에서 미리보기·복사하려면 open_web(page="drafts", draft="${name}")을 호출하세요.`,
       );
     } catch (e) {
       return failure(e);
@@ -586,7 +636,7 @@ server.registerTool(
   {
     title: "초안 목록",
     description:
-      "drafts/의 초안을 최근 수정 순으로 보여준다. 파일 이름·날짜·키워드·플랫폼·상태(초안·발행됨, 글 주소, 지식iN 답변 수)·추천 제목·도입 첫 문장·사람이 채울 자리 수를 포함한다. keyword를 주면 같은 키워드(공백·구두점 무시)로 쓴 초안만 보여 주므로, 새 글을 쓰기 전에 이미 쓴 주제인지 확인할 때 쓴다.",
+      "drafts/의 초안을 최근 수정 순으로 보여준다. 파일 이름·발행일·키워드·플랫폼(네이버는 검색형·홈판형)·상태(초안·발행됨, 글 주소, 지식iN 답변 수)·추천 제목·도입 첫 문장·사람이 채울 자리 수를 포함한다. keyword를 주면 같은 키워드(공백·구두점 무시)로 쓴 초안만 보여 주므로, 새 글을 쓰기 전에 이미 쓴 주제인지 확인할 때 쓴다.",
     inputSchema: {
       keyword: z.string().optional().describe("이 키워드로 쓴 초안만 (생략하면 전체)"),
       limit: z.number().int().min(1).max(100).default(20),
@@ -607,14 +657,15 @@ server.registerTool(
           const cell = (v: string) => v.replace(/\|/g, "/");
           const entry = statuses[d.file];
           const status = `${DRAFT_STATUS_LABELS[effectiveStatus(entry)]}${entry?.url ? ` ${entry.url}` : ""}${entry?.answers?.length ? ` · 지식iN 답변 ${entry.answers.length}` : ""}`;
-          return `| ${d.file} | ${d.platform ? PLATFORM_LABELS[d.platform] : "-"} | ${cell(status)} | ${cell(title)} | ${cell(draftOpening(parsed.body) ?? "-")} | 이미지 ${count("image")} · 직접 작성 ${count("write")} · 확인 ${count("check")} |`;
+          const platform = d.platform ? `${PLATFORM_LABELS[d.platform]}${d.format ? ` ${NAVER_FORMAT_LABELS[d.format]}` : ""}` : "-";
+          return `| ${d.file} | ${d.date ?? "-"} | ${platform} | ${cell(status)} | ${cell(title)} | ${cell(draftOpening(parsed.body) ?? "-")} | 이미지 ${count("image")} · 직접 작성 ${count("write")} · 확인 ${count("check")} |`;
         }),
       );
       return text(
         [
           `${keyword ? `"${keyword}" 초안` : "최근 초안"} ${drafts.length}개 (전체 ${all.length}개)`,
-          "| 파일 | 플랫폼 | 상태 | 추천 제목 | 도입 첫 문장 | 사람이 채울 자리 |",
-          "|---|---|---|---|---|---|",
+          "| 파일 | 발행일 | 플랫폼 | 상태 | 추천 제목 | 도입 첫 문장 | 사람이 채울 자리 |",
+          "|---|---|---|---|---|---|---|",
           ...rows,
         ].join("\n"),
       );
@@ -661,8 +712,7 @@ server.registerTool(
       if (blocked) return failure(blocked);
       const result = await updateDraftFile(DRAFTS_DIR, file, content);
       if (!result) return failure(`초안을 찾을 수 없습니다: ${draft}. 새 초안이면 save_draft를 쓰세요.`);
-      const length = lengthFeedback(draftPlatform(file), parseDraft(content).body);
-      return text(`고쳤습니다: ${result.file}\n이전 버전: ${result.backup}\n${length ? `${length}\n` : ""}웹에서 보려면 open_web(page="drafts", draft="${result.file}")`);
+      return text(`고쳤습니다: ${result.file}\n이전 버전: ${result.backup}\n${await draftFeedback(file, content)}웹에서 보려면 open_web(page="drafts", draft="${result.file}")`);
     } catch (e) {
       return failure(e);
     }

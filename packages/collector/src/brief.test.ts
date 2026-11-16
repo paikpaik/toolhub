@@ -114,6 +114,13 @@ describe("formatWritingBrief", () => {
     assert.match(formatWritingBrief({ platform: "naver", keyword: "x", note: "  부모님 사례  " }), /참고: 부모님 사례$/);
   });
 
+  it("네이버 글만 글 형식 줄 (기본 검색형, 쇼핑 커넥트는 빼고)", () => {
+    assert.match(formatWritingBrief({ platform: "naver", keyword: "x" }), /\n글 형식: 검색형 — .*"검색형"을 따릅니다\n키워드: x/);
+    assert.match(formatWritingBrief({ platform: "naver", keyword: "x", format: "home" }), /글 형식: 홈판형 — .*판단.*format=home/);
+    assert.doesNotMatch(formatWritingBrief({ platform: "tistory", keyword: "x", format: "home" }), /글 형식/);
+    assert.doesNotMatch(formatWritingBrief({ platform: "naver", type: "connect", keyword: "x" }), /글 형식/);
+  });
+
   it("쇼핑 커넥트: 링크·대가성 문구·상품 정보, 경험 메모가 있을 때만 실제 경험", () => {
     const connect = { link: "https://naver.me/abc", product: "상품명: 피토메스 스킨로션\n할인가: 39,000원" };
     const guide = formatWritingBrief({ platform: "naver", type: "connect", keyword: "x", connect });

@@ -3,7 +3,18 @@ import { mkdtemp, readdir, readFile, rm, writeFile } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import { after, before, describe, it } from "node:test";
-import { deleteDraftFile, draftOpening, draftsForKeyword, listDrafts, parseDraft, readDraftFile, updateDraftFile } from "./drafts.ts";
+import {
+  deleteDraftFile,
+  draftFileBase,
+  draftNameInfo,
+  draftOpening,
+  draftsForKeyword,
+  listDrafts,
+  parseDraft,
+  publishDateProblem,
+  readDraftFile,
+  updateDraftFile,
+} from "./drafts.ts";
 
 const TISTORY_DRAFT = `<details><summary>글쓰기 브리프</summary>
 
@@ -157,6 +168,29 @@ describe("초안 파일", () => {
     assert.equal(byFile["2026-10-29-기초연금-naver-2.md"]?.platform, "naver");
     assert.deepEqual([byFile["메모.md"]?.date, byFile["메모.md"]?.platform], [null, null]);
     assert.equal(draftsForKeyword(drafts, "국민연금수령나이").length, 1);
+  });
+
+  it("파일 이름: 날짜는 발행일, 네이버 홈판형은 -home (번호와 함께 써도)", () => {
+    assert.deepEqual(draftNameInfo("2026-11-19-원주-매운맛축제-naver-home.md"), {
+      date: "2026-11-19",
+      keyword: "원주 매운맛축제",
+      platform: "naver",
+      format: "home",
+    });
+    assert.equal(draftNameInfo("2026-11-19-원주-매운맛축제-naver-home-2.md").format, "home");
+    assert.equal(draftNameInfo("2026-11-19-컴포즈-모찌-naver.md").format, "search");
+    assert.equal(draftNameInfo("2026-11-19-국민연금-tistory.md").format, null);
+    assert.equal(draftFileBase("2026-11-19", " 원주 매운맛축제 ", "naver", "home"), "2026-11-19-원주-매운맛축제-naver-home");
+    assert.equal(draftFileBase("2026-11-19", "컴포즈 모찌", "naver"), "2026-11-19-컴포즈-모찌-naver");
+    assert.equal(draftFileBase("2026-11-19", "국민연금", "tistory", "home"), "2026-11-19-국민연금-tistory", "홈판형은 네이버에만");
+  });
+
+  it("발행일은 오늘부터 14일 안", () => {
+    assert.equal(publishDateProblem("2026-11-17", "2026-11-17"), null);
+    assert.equal(publishDateProblem("2026-12-01", "2026-11-17"), null);
+    assert.match(publishDateProblem("2026-11-16", "2026-11-17") ?? "", /이미 지났습니다/);
+    assert.match(publishDateProblem("2026-12-02", "2026-11-17") ?? "", /14일 안/);
+    assert.match(publishDateProblem("2026-13-01", "2026-11-17") ?? "", /YYYY-MM-DD/);
   });
 
   it("폴더 밖 파일은 읽지 않는다", async () => {

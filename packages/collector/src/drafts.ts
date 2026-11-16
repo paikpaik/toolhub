@@ -1,32 +1,62 @@
 /**
  * drafts/ 폴더의 블로그 초안 (MCP save_draft, /blog-draft 스킬이 저장)
- * 파일 이름: YYYY-MM-DD-<키워드>-<플랫폼>[-n].md
+ * 파일 이름: YYYY-MM-DD-<키워드>-<플랫폼>[-home][-n].md
+ * 날짜는 올릴 날(발행일)이다. 보통 만든 날이고, 행사 전에 미리 쓴 홈판형은 그 뒤 날짜다. -home은 네이버 홈판형.
  * 내용 형식은 docs/prompts/writing.md의 "출력 형식"을 따른다.
  */
 import { copyFile, mkdir, readdir, readFile, rm, stat, writeFile } from "node:fs/promises";
 import path from "node:path";
-import { isPlatform, type Platform } from "./platforms.ts";
+import { isPlatform, type NaverFormat, type Platform } from "./platforms.ts";
 import { normalizeKeyword } from "./sources.ts";
 
 export interface DraftSummary {
   file: string;
+  /** 발행일 */
   date: string | null;
   keyword: string;
   platform: Platform | null;
+  /** 네이버 글 형식. 네이버가 아니면 null */
+  format: NaverFormat | null;
   updatedAt: string;
 }
 
-const FILE_NAME = /^(\d{4}-\d{2}-\d{2})-(.+?)-(tistory|blogger|naver)(?:-\d+)?\.md$/;
+const FILE_NAME = /^(\d{4}-\d{2}-\d{2})-(.+?)-(tistory|blogger|naver)(-home)?(?:-\d+)?\.md$/;
 
-/** 파일 이름에서 작성일·키워드·플랫폼 */
+/** 파일 이름에서 발행일·키워드·플랫폼·형식 */
 export function draftNameInfo(file: string): Omit<DraftSummary, "file" | "updatedAt"> {
   const match = FILE_NAME.exec(file);
-  const platform = match?.[3];
+  const name = match?.[3];
+  const platform = isPlatform(name) ? name : null;
   return {
     date: match?.[1] ?? null,
     keyword: match?.[2]?.replace(/-/g, " ") ?? file.replace(/\.md$/, ""),
-    platform: isPlatform(platform) ? platform : null,
+    platform,
+    format: platform === "naver" ? (match?.[4] ? "home" : "search") : null,
   };
+}
+
+/** 파일 이름에 쓸 수 없는 문자를 빼고 공백을 하이픈으로 */
+export const slugifyKeyword = (value: string) =>
+  value
+    .trim()
+    .replace(/[\\/:*?"<>|]/g, "")
+    .replace(/\s+/g, "-")
+    .slice(0, 60);
+
+/** 새 초안 파일 이름 (번호 붙이기 전, .md 없이). 홈판형은 네이버에만 붙는다 */
+export const draftFileBase = (date: string, keyword: string, platform: Platform, format?: NaverFormat) =>
+  `${date}-${slugifyKeyword(keyword)}-${platform}${platform === "naver" && format === "home" ? "-home" : ""}`;
+
+/** 미리 쓴 초안을 올릴 날로 둘 수 있는 기간 (행사 1~3일 전 발행이라 넉넉히) */
+export const PUBLISH_AHEAD_DAYS = 14;
+
+/** 발행일로 쓸 수 없으면 이유 (지난 날, 너무 먼 날), 괜찮으면 null. 날짜는 YYYY-MM-DD (KST) */
+export function publishDateProblem(date: string, today: string) {
+  const day = (d: string) => Date.parse(`${d}T00:00:00Z`) / 86_400_000;
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(date) || Number.isNaN(day(date))) return `발행일은 YYYY-MM-DD로 주세요: ${date}`;
+  if (date < today) return `발행일 ${date}은 이미 지났습니다. 오늘(${today}) 이후로 주세요.`;
+  if (day(date) - day(today) > PUBLISH_AHEAD_DAYS) return `발행일은 오늘부터 ${PUBLISH_AHEAD_DAYS}일 안으로 주세요: ${date}`;
+  return null;
 }
 
 /** 최근에 수정한 순 */

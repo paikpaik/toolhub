@@ -47,10 +47,15 @@ export function draftEditBlocked(file: string, entry: DraftStatusEntry | undefin
   return `발행됨 초안은 고치지 않습니다 (정책): ${file}. 발행한 글은 다시 쓰지 않으므로 고치지 말고 작업을 멈추세요. 아직 발행 전인데 상태가 잘못된 거라면 사용자가 웹 초안 목록에서 상태를 초안으로 바꾼 뒤 고칩니다.`;
 }
 
-/** 초안 목록 순서: 발행됨 → 초안, 같은 상태끼리는 최근 수정 순 */
-export function sortDrafts<T extends { file: string; updatedAt: string }>(rows: T[], statuses: DraftStatusMap): T[] {
+/**
+ * 초안 목록 순서: 발행됨 → 초안, 같은 상태끼리는 발행일 늦은 순, 같은 발행일에서는 홈판형 먼저(그날 아침 먼저 올리는 글), 그다음 최근 수정 순
+ */
+export function sortDrafts<T extends { file: string; updatedAt: string; date?: string | null; format?: string | null }>(rows: T[], statuses: DraftStatusMap): T[] {
   const rank = (row: T) => (effectiveStatus(statuses[row.file]) === "published" ? 0 : 1);
-  return [...rows].sort((a, b) => rank(a) - rank(b) || b.updatedAt.localeCompare(a.updatedAt));
+  const home = (row: T) => (row.format === "home" ? 0 : 1);
+  return [...rows].sort(
+    (a, b) => rank(a) - rank(b) || (b.date ?? "").localeCompare(a.date ?? "") || home(a) - home(b) || b.updatedAt.localeCompare(a.updatedAt),
+  );
 }
 
 /** 글 주소로 쓸 수 있는 http(s) 주소만. 앞뒤 공백·꺾쇠는 걷어낸다 */

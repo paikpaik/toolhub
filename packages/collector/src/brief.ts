@@ -7,11 +7,13 @@ import { fetchRelatedKeywords, toHintKeyword, type KeywordStat, type SearchAdCon
 import {
   CONNECT_DISCLOSURE,
   CONNECT_MODE_LABELS,
+  NAVER_FORMAT_LABELS,
   PLATFORM_LABELS,
   randomStructure,
   structureLine,
   WRITING_TYPE_LABELS,
   type ConnectMode,
+  type NaverFormat,
   type Platform,
   type Structure,
   type WritingType,
@@ -63,6 +65,18 @@ export function connectBriefLines({ link, mode, product, experience }: ConnectBr
   }
   if (memo && picked === "experience") lines.push("경험 메모:", memo);
   return lines;
+}
+
+/** 네이버 글 형식 안내 (docs/prompts/platforms/naver.md의 같은 이름 절) */
+const FORMAT_GUIDES: Record<NaverFormat, string> = {
+  search: "검색해서 들어온 사람의 질문에 바로 답합니다. 네이버 규칙의 \"검색형\"을 따릅니다",
+  home: "홈판을 넘기던 사람이 멈추도록, 공개된 숫자·비교로 판단(가 볼 만한가, 누구에게 이득인가)을 내려 줍니다. 네이버 규칙의 \"홈판형\"을 따릅니다. save_draft에 format=home",
+};
+
+/** 브리프의 "글 형식:" 줄. 네이버 글에만 (쇼핑 커넥트는 따로 정한 형식이라 빼고) */
+export function formatLine(platform: Platform, type: WritingType, format: NaverFormat = "search") {
+  if (platform !== "naver" || type === "connect") return null;
+  return `글 형식: ${NAVER_FORMAT_LABELS[format]} — ${FORMAT_GUIDES[format]}`;
 }
 
 /** 검색량 표시. 네이버가 "< 10"으로 주는 값은 0으로 저장돼 있다 */
@@ -120,6 +134,8 @@ export interface WritingBriefInput {
   pivots?: PivotRow[];
   /** type이 connect일 때만 쓴다 */
   connect?: ConnectBrief;
+  /** 네이버 글 형식. 생략하면 검색형 */
+  format?: NaverFormat;
   note?: string;
 }
 
@@ -137,6 +153,7 @@ export function formatWritingBrief({
   surge,
   pivots,
   connect,
+  format,
   note,
 }: WritingBriefInput) {
   const stats =
@@ -151,9 +168,10 @@ export function formatWritingBrief({
     `플랫폼: ${PLATFORM_LABELS[platform]}`,
     `유형: ${WRITING_TYPE_LABELS[type]}`,
     structureLine(type, structure),
+    formatLine(platform, type, format),
     `키워드: ${keyword}`,
     `월간 검색량: ${stats}`,
-  ];
+  ].filter((line): line is string => line !== null);
   if (type === "connect") lines.push(...connectBriefLines(connect));
 
   if (research?.trend && research.trend.label !== "데이터 부족") {
@@ -273,7 +291,13 @@ export async function buildWritingBrief(
   { searchAd, hub }: BriefSources,
   keyword: string,
   platform: Platform,
-  { type = "info", structure, connect, note }: { type?: WritingType; structure?: Structure; connect?: ConnectBrief; note?: string } = {},
+  {
+    type = "info",
+    structure,
+    connect,
+    format,
+    note,
+  }: { type?: WritingType; structure?: Structure; connect?: ConnectBrief; format?: NaverFormat; note?: string } = {},
 ) {
   const [insight, research, daily] = await Promise.all([
     searchAd ? fetchKeywordInsight(searchAd, keyword) : null,
@@ -296,6 +320,7 @@ export async function buildWritingBrief(
     surge: points ? summarizeSurge(points) : null,
     pivots,
     connect,
+    format,
     note,
   });
 }
