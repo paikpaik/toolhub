@@ -10,6 +10,11 @@ interface ImportResult {
   reason?: string;
 }
 
+interface AccountLink {
+  name: string;
+  result: "same" | "linked" | "created" | "full";
+}
+
 /** 고른 초안을 내보내기 파일(JSON) 하나로 내려받는다. 초안 내용과 상태 기록이 함께 들어간다 */
 export function ExportDraftsButton({ targets }: { targets: { file: string; keyword: string }[] }) {
   const [busy, setBusy] = useState(false);
@@ -49,8 +54,8 @@ export function ExportDraftsButton({ targets }: { targets: { file: string; keywo
   );
 }
 
-/** 결과 안내: 몇 개 추가, 번호를 붙여 따로 저장한 것, 건너뛴 것 */
-function summary(results: ImportResult[]) {
+/** 결과 안내: 몇 개 추가, 번호를 붙여 따로 저장한 것, 건너뛴 것, 계정을 어떻게 이었는지 */
+function summary(results: ImportResult[], accounts: AccountLink[] = []) {
   const added = results.filter((r) => r.result === "added");
   const renamed = results.filter((r) => r.result === "renamed");
   const skipped = results.filter((r) => r.result === "skipped");
@@ -58,6 +63,12 @@ function summary(results: ImportResult[]) {
   if (renamed.length) lines.push("", "같은 이름이 있지만 내용이 달라 따로 저장했어요:", ...renamed.slice(0, 10).map((r) => `- ${r.file} → ${r.savedAs}`));
   if (skipped.length) lines.push("", "건너뛴 것:", ...skipped.slice(0, 10).map((r) => `- ${r.file} (${r.reason})`));
   if (renamed.length > 10 || skipped.length > 10) lines.push("…");
+  const names = (result: AccountLink["result"]) => accounts.filter((a) => a.result === result).map((a) => a.name);
+  const linked = [...names("same"), ...names("linked")];
+  if (accounts.length) lines.push("");
+  if (linked.length) lines.push(`계정 연결: ${linked.join(", ")}`);
+  if (names("created").length) lines.push(`새로 만든 계정: ${names("created").join(", ")} (배경 이미지는 계정 화면에서 다시 올려 주세요)`);
+  if (names("full").length) lines.push(`계정이 ${names("full").length}개 넘쳐 계정 없이 가져왔어요: ${names("full").join(", ")}`);
   return lines.join("\n");
 }
 
@@ -75,20 +86,27 @@ export function ImportDraftsButton() {
     setBusy(true);
     try {
       const drafts: unknown[] = [];
+      // 여러 내보내기 파일의 계정은 id로 하나만
+      const accounts = new Map<unknown, unknown>();
       for (const file of Array.from(list)) {
         const text = await file.text();
         if (/\.json$/i.test(file.name)) {
-          const parsed = JSON.parse(text) as { drafts?: unknown };
+          const parsed = JSON.parse(text) as { drafts?: unknown; accounts?: unknown };
           if (!Array.isArray(parsed?.drafts)) throw new Error(`${file.name}: toolhub 초안 내보내기 파일이 아니에요.`);
           drafts.push(...parsed.drafts);
+          if (Array.isArray(parsed.accounts)) for (const a of parsed.accounts) accounts.set((a as { id?: unknown })?.id, a);
         } else {
           drafts.push({ file: file.name, content: text });
         }
       }
-      const res = await fetch("/api/drafts/import", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ drafts }) });
-      const body = (await res.json().catch(() => null)) as { results?: ImportResult[]; error?: string } | null;
+      const res = await fetch("/api/drafts/import", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ drafts, accounts: [...accounts.values()] }),
+      });
+      const body = (await res.json().catch(() => null)) as { results?: ImportResult[]; accounts?: AccountLink[]; error?: string } | null;
       if (!res.ok || !body?.results) throw new Error(body?.error ?? `가져오지 못했어요 (${res.status})`);
-      alert(summary(body.results));
+      alert(summary(body.results, body.accounts));
       // 목록·상태를 서버에서 다시 읽는다
       router.refresh();
     } catch (e) {

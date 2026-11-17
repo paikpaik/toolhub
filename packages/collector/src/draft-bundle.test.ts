@@ -3,7 +3,9 @@ import { mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import { after, before, describe, it } from "node:test";
-import { buildDraftBundle, importDrafts, parseDraftBundle, safeDraftFileName } from "./draft-bundle.ts";
+import { addBackground, readAccounts, writeAccounts } from "./accounts-store.ts";
+import { buildDraftBundle, importDrafts, linkBundleAccounts, parseBundleAccounts, parseDraftBundle, safeDraftFileName } from "./draft-bundle.ts";
+import { DEFAULT_THUMBNAIL_STYLE } from "./thumbnail-style.ts";
 import { readDraftStatuses, setDraftStatus } from "./draft-status-store.ts";
 
 describe("초안 내보내기·가져오기", () => {
@@ -64,5 +66,66 @@ describe("초안 내보내기·가져오기", () => {
       parseDraftBundle({ drafts: [{ file: "a.md", content: "x", status: { status: "이상함" } }, { file: "b.md", content: " " }, null] }),
       [{ file: "a.md", content: "x" }],
     );
+  });
+});
+
+describe("초안 내보내기·가져오기: 계정 잇기", () => {
+  const style = (backgrounds: string[] = []) => ({ ...DEFAULT_THUMBNAIL_STYLE, backgrounds });
+  let root: string;
+  before(async () => (root = await mkdtemp(path.join(os.tmpdir(), "draft-bundle-accounts-"))));
+  after(() => rm(root, { recursive: true, force: true }));
+
+  it("id가 다른 PC에서는 이름이 같은 계정으로 잇고, 없는 계정은 새로 만들고, 이 PC 계정 설정은 그대로 둔다", async () => {
+    const from = { drafts: path.join(root, "a/drafts"), data: path.join(root, "a/data") };
+    const to = { drafts: path.join(root, "b/drafts"), data: path.join(root, "b/data") };
+    // 내보내는 PC: 여리쓰·우드·새계정 (배경 이미지 있음)
+    await writeAccounts(from.data, [
+      { id: "acc-aaaa", name: "여리쓰", topics: ["영화"], thumbnail: style() },
+      { id: "acc-bbbb", name: "우드", topics: ["맛집"], thumbnail: style() },
+      { id: "acc-cccc", name: "새계정", topics: ["게임"], thumbnail: style() },
+      { id: "acc-dddd", name: "안쓴계정", topics: [], thumbnail: style() },
+    ]);
+    await addBackground(from.data, "acc-cccc", "image/png", new Uint8Array([1]));
+    const files = ["2026-11-17-a-naver.md", "2026-11-17-b-naver.md", "2026-11-17-c-naver.md", "2026-11-17-d-naver.md"];
+    await importDrafts(from.drafts, from.data, files.map((file) => ({ file, content: file })));
+    await setDraftStatus(from.data, files[0]!, { account: "acc-aaaa", topic: "영화" });
+    await setDraftStatus(from.data, files[1]!, { account: "acc-bbbb" });
+    await setDraftStatus(from.data, files[2]!, { account: "acc-cccc" });
+
+    const bundle = JSON.parse(JSON.stringify(await buildDraftBundle(from.drafts, from.data, files)));
+    // 초안이 쓰는 계정만, 배경 이미지는 빼고
+    assert.deepEqual(bundle.accounts.map((a: { name: string }) => a.name), ["여리쓰", "우드", "새계정"]);
+    assert.deepEqual(bundle.accounts[2].thumbnail.backgrounds, []);
+
+    // 가져오는 PC: 여리쓰·우드가 다른 id로 이미 있음 (우드는 앞뒤 공백만 다름)
+    await writeAccounts(to.data, [
+      { id: "acc-xxxx", name: "여리쓰", topics: ["드라마"], thumbnail: style() },
+      { id: "acc-yyyy", name: " 우드 ", topics: [], thumbnail: style() },
+    ]);
+    const { drafts, links } = await linkBundleAccounts(to.data, parseBundleAccounts(bundle), parseDraftBundle(bundle));
+    await importDrafts(to.drafts, to.data, drafts);
+    assert.deepEqual(links, [
+      { name: "여리쓰", result: "linked" },
+      { name: "우드", result: "linked" },
+      { name: "새계정", result: "created" },
+    ]);
+    const statuses = await readDraftStatuses(to.data);
+    assert.equal(statuses[files[0]!]?.account, "acc-xxxx");
+    assert.equal(statuses[files[0]!]?.topic, "영화");
+    assert.equal(statuses[files[1]!]?.account, "acc-yyyy");
+    assert.equal(statuses[files[2]!]?.account, "acc-cccc");
+    assert.equal(statuses[files[3]!], undefined);
+    const accounts = await readAccounts(to.data);
+    assert.deepEqual(accounts.map((a) => [a.id, a.name]), [["acc-xxxx", "여리쓰"], ["acc-yyyy", "우드"], ["acc-cccc", "새계정"]]);
+    // 이 PC 계정 설정은 덮어쓰지 않는다
+    assert.deepEqual(accounts[0]!.topics, ["드라마"]);
+    assert.deepEqual(accounts[2]!.topics, ["게임"]);
+
+    // 같은 PC로 다시 가져오면 같은 id라 그대로
+    const again = await linkBundleAccounts(from.data, parseBundleAccounts(bundle), parseDraftBundle(bundle));
+    assert.deepEqual(again.links.map((l) => l.result), ["same", "same", "same"]);
+    // 예전 내보내기 파일(계정 없음)은 초안 기록을 그대로 둔다
+    const old = await linkBundleAccounts(to.data, [], parseDraftBundle(bundle));
+    assert.equal(old.drafts[0]!.status?.account, "acc-aaaa");
   });
 });
