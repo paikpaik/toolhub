@@ -145,6 +145,7 @@ describe("크리에이터 어드바이저 트렌드", () => {
     const text = formatAdvisorTrends(stored);
     assert.match(text, /^\[크리에이터 어드바이저 트렌드 · 2026\. 11\. 05\.\]/);
     assert.match(text, /\(키워드 4개\)/);
+    assert.match(text, /이 키워드들로 오늘 3개의 계정으로 네이버에 쓸 초안 15개를 작성해줘\./);
     assert.match(text, /## 검색 유입 트렌드 \(카드 1개\)\n- 맛집: 권성준 식당 가격 \(new\), 한정선 \(▲1\)/);
     assert.match(text, /## 메인 유입 트렌드 \(카드 1개\)\n- 40-44세 남자: 미국 중간선거, 오봉집 \(▼3\)/);
     assert.deepEqual(Object.keys(mergeAdvisorTrends(stored, "2026. 11. 06.", "메인 유입 트렌드", main).tabs), ["메인 유입 트렌드"]);

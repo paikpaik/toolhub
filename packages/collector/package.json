@@ -1,12 +1,14 @@
 {
   "name": "@toolhub/collector",
-  "version": "1.1.3",
+  "version": "1.2.0",
   "private": true,
   "type": "module",
   "exports": {
     ".": "./src/index.ts",
     "./platforms": "./src/platforms.ts",
     "./draft-status": "./src/draft-status.ts",
+    "./accounts": "./src/accounts.ts",
+    "./thumbnail-style": "./src/thumbnail-style.ts",
     "./kin-answer": "./src/kin-answer.ts"
   },
   "scripts": {

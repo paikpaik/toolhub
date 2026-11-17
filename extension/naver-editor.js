@@ -192,9 +192,12 @@ globalThis.ToolhubNaver = (() => {
     return count;
   }
 
-  /** 본문 이미지 자리 표시 문단 (위에서부터). 대표 썸네일 자리는 따로 만든 썸네일을 넣으므로 뺀다 */
+  /**
+   * 이미지 자리 표시 문단 (위에서부터). kind "body"는 본문 이미지 자리(대표 썸네일 자리는 뺀다),
+   * "thumbnail"은 대표 썸네일 자리 (초안 채우기가 계정 썸네일을 넣는다)
+   */
   const paragraphs = () => [...document.querySelectorAll(`${SELECTORS.content} ${SELECTORS.paragraph}`)];
-  const imageSlots = () => paragraphs().filter((p) => ToolhubLib.imageSlotKind(p.textContent) === "body");
+  const imageSlots = (kind = "body") => paragraphs().filter((p) => ToolhubLib.imageSlotKind(p.textContent) === kind);
 
   const EDITABLE = '[contenteditable="true"], [contenteditable=""]';
 
@@ -246,9 +249,13 @@ globalThis.ToolhubNaver = (() => {
    * 이미지 삽입 1단계: 위에서부터 첫 번째 본문 이미지 자리를 화면 가운데로 보이고, 드래그할 시작·끝 좌표(탭 화면 기준)를 준다.
    * 실제 에디터는 확장이 만든 키 입력·선택을 받지 않아서(2026-11-12) 패널이 이 좌표로 진짜 마우스 드래그를 보낸다 (debugger)
    */
-  async function locateImageSlot() {
-    const slots = imageSlots();
-    if (!slots.length) throw new EditorError("남은 본문 이미지 자리([이미지: …] 문단)가 없어요. 대표 썸네일 자리는 건너뛰어요");
+  async function locateImageSlot(kind = "body") {
+    const slots = imageSlots(kind);
+    if (!slots.length) {
+      throw new EditorError(
+        kind === "thumbnail" ? "대표 썸네일 자리([이미지: 대표 썸네일 …] 문단)가 없어요" : "남은 본문 이미지 자리([이미지: …] 문단)가 없어요. 대표 썸네일 자리는 건너뛰어요",
+      );
+    }
     const slot = slots[0];
     slot.scrollIntoView({ block: "center" });
     await sleep(200);

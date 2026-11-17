@@ -45,6 +45,18 @@ export interface ThumbnailSpec {
   subtitle: string;
   label: string;
   blogName: string;
+  /** 배경 이미지 (계정 썸네일). 칸을 꽉 채우게 잘라 그리고, 그 위에 배경색을 overlay만큼 덮어 글자가 읽히게 한다 */
+  background?: { image: CanvasImageSource; width: number; height: number } | null;
+  /** 0~1 */
+  overlay?: number;
+}
+
+/** 이미지를 칸에 꽉 차게(넘치는 쪽은 가운데 기준으로 잘라) 그린다 */
+function drawCover(ctx: CanvasRenderingContext2D, bg: NonNullable<ThumbnailSpec["background"]>, W: number, H: number) {
+  const scale = Math.max(W / bg.width, H / bg.height);
+  const w = bg.width * scale;
+  const h = bg.height * scale;
+  ctx.drawImage(bg.image, (W - w) / 2, (H - h) / 2, w, h);
 }
 
 interface Run {
@@ -179,6 +191,12 @@ export function drawThumbnail(ctx: CanvasRenderingContext2D, spec: ThumbnailSpec
   ctx.clearRect(0, 0, W, H);
   ctx.fillStyle = colors.bg;
   ctx.fillRect(0, 0, W, H);
+  if (spec.background) {
+    drawCover(ctx, spec.background, W, H);
+    ctx.globalAlpha = spec.overlay ?? 0.45;
+    ctx.fillRect(0, 0, W, H);
+    ctx.globalAlpha = 1;
+  }
 
   const subtitleSize = W * 0.032;
   const hasSubtitle = spec.subtitle.trim().length > 0;

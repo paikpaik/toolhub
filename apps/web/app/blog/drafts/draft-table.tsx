@@ -1,6 +1,15 @@
 "use client";
 
-import { DRAFT_STATUS_LABELS, DRAFT_STATUSES, effectiveStatus, type DraftStatus, type DraftStatusEntry, type DraftStatusMap } from "@toolhub/collector/draft-status";
+import { accountName, type BlogAccount } from "@toolhub/collector/accounts";
+import {
+  DRAFT_STATUS_LABELS,
+  DRAFT_STATUSES,
+  effectiveStatus,
+  matchesAccount,
+  type DraftStatus,
+  type DraftStatusEntry,
+  type DraftStatusMap,
+} from "@toolhub/collector/draft-status";
 import Link from "next/link";
 import { Fragment, useEffect, useState } from "react";
 import { DRAFT_DATES_KEY, parseSavedDates } from "../../../lib/draft-dates";
@@ -22,6 +31,8 @@ const COLUMNS: { column: SortColumn; label: string }[] = [
 ];
 const COLUMN_LABEL = Object.fromEntries(COLUMNS.map((c) => [c.column, c.label])) as Record<SortColumn, string>;
 const ARROW = { asc: "↑", desc: "↓" } as const;
+/** 고른 계정 거르기 (계정 id, "none"=계정 없음, 없으면 모든 계정) */
+const DRAFT_ACCOUNT_KEY = "toolhub:draft-account";
 
 /** 기억한 값을 읽고 쓴다. 못 읽거나 못 써도 이번 화면에서는 동작한다 */
 function remember(key: string, value: unknown) {
@@ -54,7 +65,7 @@ export interface DraftRow {
 const todayKst = () => new Date().toLocaleDateString("sv-SE", { timeZone: "Asia/Seoul" });
 
 /** 초안 목록. 줄을 누르면 아래로 펼쳐져 상태를 바꾸고, 그 키워드의 지식iN 질문에 답변을 준비한다 */
-export function DraftTable({ rows: allRows, statuses: initial }: { rows: DraftRow[]; statuses: DraftStatusMap }) {
+export function DraftTable({ rows: allRows, statuses: initial, accounts }: { rows: DraftRow[]; statuses: DraftStatusMap; accounts: BlogAccount[] }) {
   const [statuses, setStatuses] = useState(initial);
   // 가져오기 뒤 서버에서 다시 읽은 상태를 반영한다 (새로 생긴 초안의 발행됨 등)
   useEffect(() => setStatuses((prev) => ({ ...prev, ...initial })), [initial]);
@@ -65,12 +76,21 @@ export function DraftTable({ rows: allRows, statuses: initial }: { rows: DraftRo
   const [open, setOpen] = useState<string | null>(null);
   const [dates, setDates] = useState<string[]>([]);
   const [sort, setSort] = useState<SortRule[]>([]);
+  const [account, setAccount] = useState<string | null>(null);
 
   // 고른 발행일·정렬은 다른 화면에 다녀와도 기억한다 (브라우저에서 읽어서 서버 화면과 어긋나지 않게)
   useEffect(() => {
     setDates(parseSavedDates(recall(DRAFT_DATES_KEY), new Set(rows.flatMap((r) => (r.date ? [r.date] : [])))));
     setSort(parseSavedSort(recall(DRAFT_SORT_KEY)));
+    // 지운 계정을 기억하고 있으면 모든 계정으로
+    const saved = recall(DRAFT_ACCOUNT_KEY);
+    const id = saved ? (JSON.parse(saved) as unknown) : null;
+    if (typeof id === "string" && (id === "none" || accounts.some((a) => a.id === id))) setAccount(id);
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
+  const changeAccount = (next: string | null) => {
+    setAccount(next);
+    remember(DRAFT_ACCOUNT_KEY, next);
+  };
   const changeDates = (next: string[]) => {
     setDates(next);
     remember(DRAFT_DATES_KEY, next);
@@ -83,11 +103,12 @@ export function DraftTable({ rows: allRows, statuses: initial }: { rows: DraftRo
   const today = todayKst();
   const statusOf = (file: string) => effectiveStatus(statuses[file]);
   const matchesStatus = (r: DraftRow) => filter === "all" || statusOf(r.file) === filter;
-  // 상태 탭 개수는 고른 발행일 안에서, 달력의 날짜별 개수는 고른 상태 안에서 센다
-  const inDate = dates.length ? rows.filter((r) => r.date && dates.includes(r.date)) : rows;
+  // 계정을 먼저 거르고, 상태 탭 개수는 고른 발행일 안에서, 달력의 날짜별 개수는 고른 상태 안에서 센다
+  const inAccount = accounts.length && account ? rows.filter((r) => matchesAccount(statuses[r.file], account)) : rows;
+  const inDate = dates.length ? inAccount.filter((r) => r.date && dates.includes(r.date)) : inAccount;
   const counts = Object.fromEntries(DRAFT_STATUSES.map((s) => [s, inDate.filter((r) => statusOf(r.file) === s).length])) as Record<DraftStatus, number>;
   const dateCounts = new Map<string, number>();
-  for (const r of rows) if (r.date && matchesStatus(r)) dateCounts.set(r.date, (dateCounts.get(r.date) ?? 0) + 1);
+  for (const r of inAccount) if (r.date && matchesStatus(r)) dateCounts.set(r.date, (dateCounts.get(r.date) ?? 0) + 1);
   // 상태·답변 수 정렬은 화면을 연 때의 값으로 (펼친 줄에서 상태를 바꿔도 줄이 튀지 않게)
   const shown = sortByRules(
     inDate.filter(matchesStatus).map((r) => ({
@@ -119,6 +140,15 @@ export function DraftTable({ rows: allRows, statuses: initial }: { rows: DraftRo
   return (
     <>
       <div className="draft-filters">
+        {accounts.length > 0 && (
+          <div className="status-filter account-filter" role="tablist" aria-label="계정으로 거르기">
+            {[{ id: null, name: "모든 계정" }, ...accounts, { id: "none", name: "계정 없음" }].map((a) => (
+              <button key={a.id ?? "all"} type="button" role="tab" aria-selected={account === a.id} className={account === a.id ? "on" : ""} onClick={() => changeAccount(a.id)}>
+                {a.name} <small>{a.id ? rows.filter((r) => matchesAccount(statuses[r.file], a.id)).length : rows.length}</small>
+              </button>
+            ))}
+          </div>
+        )}
         <div className="status-filter" role="tablist" aria-label="상태로 거르기">
           {(["all", ...DRAFT_STATUSES] as const).map((s) => (
             <button key={s} type="button" role="tab" aria-selected={filter === s} className={filter === s ? "on" : ""} onClick={() => setFilter(s)}>
@@ -212,7 +242,14 @@ export function DraftTable({ rows: allRows, statuses: initial }: { rows: DraftRo
                       <StatusBadge entry={entry} />
                     </td>
                     <td className="num">{entry?.answers?.length ? `답변 ${entry.answers.length}` : "-"}</td>
-                    <td>{d.platform ?? "-"}</td>
+                    <td>
+                      {accountName(accounts, entry?.account) && (
+                        <span className="draft-chip account" title={entry?.topic ? `분야: ${entry.topic}` : undefined}>
+                          {accountName(accounts, entry?.account)}
+                        </span>
+                      )}
+                      {d.platform ?? "-"}
+                    </td>
                     <td className="draft-date">
                       {d.date ?? "-"}
                       {d.format === "home" && (
@@ -234,7 +271,7 @@ export function DraftTable({ rows: allRows, statuses: initial }: { rows: DraftRo
                   {isOpen && (
                     <tr className="draft-detail">
                       <td colSpan={COLUMNS.length + 2}>
-                        <DraftStatusControl file={d.file} entry={entry} onChange={update(d.file)} />
+                        <DraftStatusControl file={d.file} entry={entry} onChange={update(d.file)} accounts={accounts} />
                         <KinPanel file={d.file} keyword={d.keyword} entry={entry} onChange={update(d.file)} />
                       </td>
                     </tr>
@@ -247,7 +284,10 @@ export function DraftTable({ rows: allRows, statuses: initial }: { rows: DraftRo
       </div>
       {shown.length === 0 && (
         <p className="notice">
-          {[dates.length > 0 && datesLabel(dates), filter !== "all" && DRAFT_STATUS_LABELS[filter]].filter(Boolean).join(" · ")} 초안이 없어요.
+          {[
+            account && (account === "none" ? "계정 없음" : accountName(accounts, account)),
+            dates.length > 0 && datesLabel(dates),
+            filter !== "all" && DRAFT_STATUS_LABELS[filter]].filter(Boolean).join(" · ")} 초안이 없어요.
         </p>
       )}
     </>

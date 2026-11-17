@@ -396,7 +396,18 @@ button.primary {
   gap: 6px;
 }
 
-.drafts-date input {
+.drafts-pick {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px 12px;
+}
+
+.drafts-date[hidden] {
+  display: none;
+}
+
+.drafts-date input,
+.drafts-date select {
   font: inherit;
   color: inherit;
   background: var(--bg);
@@ -465,4 +476,14 @@ footer {
 footer .version {
   margin-left: auto;
   color: var(--muted);
+}
+
+/* 초안 채우기: 썸네일을 그리는 웹 화면 (보이지 않게 두되 그리기는 되도록 화면 밖에 둔다) */
+.render-frame {
+  position: fixed;
+  left: -10000px;
+  top: 0;
+  width: 1100px;
+  height: 1200px;
+  border: 0;
 }

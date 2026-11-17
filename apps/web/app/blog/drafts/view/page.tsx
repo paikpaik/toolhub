@@ -1,4 +1,4 @@
-import { buildImagePrompt, IMAGE_PROMPT_STYLES, listDrafts, parseDraft, PLATFORM_LABELS, readDraftFile, readDraftStatuses, adjacentDrafts, sortDrafts, type ImagePromptStyle } from "@toolhub/collector";
+import { buildImagePrompt, IMAGE_PROMPT_STYLES, listDrafts, parseDraft, PLATFORM_LABELS, readDraftFile, readDraftStatuses, readAccounts, adjacentDrafts, sortDrafts, type ImagePromptStyle } from "@toolhub/collector";
 import { isOpen, readStore } from "@toolhub/tasks";
 import Link from "next/link";
 import { DATA_DIR, DRAFTS_DIR } from "../../../../lib/data";
@@ -11,6 +11,8 @@ import { DraftStatusCard } from "../status-control";
 import { THUMBNAIL_FONTS } from "../../thumbnail/fonts";
 import { ImagePromptCard } from "./image-prompt";
 import { ThumbnailButton, ThumbnailPanel } from "./thumbnail-panel";
+import { DraftThumbnailCard } from "./draft-thumbnail-card";
+import { draftThumbnail } from "../../../../lib/draft-thumbnail";
 
 export const dynamic = "force-dynamic";
 
@@ -40,6 +42,8 @@ export default async function DraftViewPage({ searchParams }: { searchParams: Pr
   const platform = summary.platform;
   // 네이버 텍스트 본문은 ■·★·표를 서식으로 바꿔 복사할 수 있다
   const naverText = platform === "naver" && draft.bodyLang !== "html";
+  // 네이버 초안은 계정 스타일 자동 썸네일 (확장 초안 채우기가 대표 썸네일 자리에 넣는다)
+  const autoThumbnail = platform === "naver" ? await draftThumbnail(file) : null;
   const recommendedTitle = draft.titles.find((t) => t.recommended)?.text ?? draft.titles[0]?.text ?? summary.keyword;
   const imagePrompts = Object.fromEntries(
     (Object.keys(IMAGE_PROMPT_STYLES) as ImagePromptStyle[]).map((style) => [
@@ -51,7 +55,7 @@ export default async function DraftViewPage({ searchParams }: { searchParams: Pr
   // 이 초안으로 만든 발행 할 일 (링크로 찾는다). 있으면 새로 만들지 않고 그 할 일로 안내한다
   const draftHref = `/blog/drafts/view?file=${encodeURIComponent(file)}`;
   const publishTask = (await readStore(DATA_DIR)).tasks.find((t) => t.link === draftHref && isOpen(t));
-  const statuses = await readDraftStatuses(DATA_DIR);
+  const [statuses, accounts] = await Promise.all([readDraftStatuses(DATA_DIR), readAccounts(DATA_DIR)]);
   const status = statuses[file];
   // 초안 목록과 같은 순서(발행됨 → 초안, 최근 수정 순)에서 앞뒤의 "초안" 상태 글. 발행됨은 건너뛴다
   const near = adjacentDrafts(sortDrafts(allDrafts, statuses).map((d) => d.file), file, statuses);
@@ -127,6 +131,7 @@ export default async function DraftViewPage({ searchParams }: { searchParams: Pr
             </section>
           )}
 
+          {autoThumbnail && <DraftThumbnailCard key={file} info={autoThumbnail} fonts={THUMBNAIL_FONTS} />}
           <ThumbnailPanel key={file} fonts={THUMBNAIL_FONTS} title={recommendedTitle} />
 
           {draft.threads.length > 0 && (
@@ -157,7 +162,7 @@ export default async function DraftViewPage({ searchParams }: { searchParams: Pr
 
         <aside className="draft-side">
           {/* 이전·다음 초안으로 옮기면 화면을 새로 그리지 않으므로, 초안마다 새로 만들어 앞 초안의 상태가 남지 않게 한다 */}
-          <DraftStatusCard key={file} file={file} entry={status} />
+          <DraftStatusCard key={file} file={file} entry={status} accounts={accounts} />
 
           {draft.titles.length > 0 && (
             <section className="card">

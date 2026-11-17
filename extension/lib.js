@@ -158,7 +158,7 @@ globalThis.ToolhubLib = (() => {
     const total = tabs.reduce((sum, [, cards]) => sum + cards.reduce((n, c) => n + c.items.length, 0), 0);
     const lines = [
       `[크리에이터 어드바이저 트렌드${stored?.date ? ` · ${stored.date}` : ""}]`,
-      `이 키워드들로 오늘 쓸 글 5개를 골라줘. new·▲ 상승 키워드를 우선하고, analyze_keywords는 50개씩 나눠 조회해줘. (키워드 ${total}개)`,
+      `이 키워드들로 오늘 3개의 계정으로 네이버에 쓸 초안 15개를 작성해줘. new·▲ 상승 키워드를 우선하고, analyze_keywords는 50개씩 나눠 조회해줘. (키워드 ${total}개)`,
     ];
     for (const [tab, cards] of tabs) {
       lines.push("", `## ${tab} (카드 ${cards.length}개)`);

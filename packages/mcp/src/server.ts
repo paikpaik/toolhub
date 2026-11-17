@@ -75,6 +75,20 @@ import {
   CONNECT_MODES,
   NAVER_FORMATS,
   NAVER_FORMAT_LABELS,
+  BLOG_TOPICS,
+  readAccounts,
+  findAccount,
+  accountName,
+  accountsPlanningNote,
+  accountOverlapFeedback,
+  matchesAccount,
+  setDraftStatus,
+  assignAccountKeywords,
+  checkAgainstPlan,
+  emptyPlan,
+  formatPlan,
+  readAccountPlan,
+  writeAccountPlan,
   type Platform,
   type ShoppingCategory,
   type WritingType,
@@ -161,6 +175,7 @@ const server = new McpServer(
       "주제로 글감 찾기: 사용자가 분야·주제(캠핑, 연말정산 등)로 쓸 글감을 찾으면 discover_keywords로 꾸준히 검색되는 정보형 키워드를 찾고, 추천 키워드 중 하나를 골라 research_keyword로 확인한다.",
       "키워드 목록·화면 캡처: 사용자가 네이버 크리에이터 어드바이저(검색 유입 트렌드·메인 유입 트렌드·주제별 트렌드) 같은 캡처나 키워드 목록을 주면, 보이는 키워드를 모두 뽑아 analyze_keywords 한 번으로 분석하고 (크롬 확장이 복사한 '[크리에이터 어드바이저 트렌드 …]' 글이면 카드별 키워드를 50개씩 나눠 넣는다. 뒤의 (new)·(▲3)은 변동 표시로, new·▲를 우선한다) get_writing_rules(task=planning)의 기준으로 추천한다. 최근 7일이 급상승·상승인 키워드를 우선하고, 포화도가 보통·높음인 키워드는 find_pivot_keywords로 연관어를 찾아 함께 제안한다.",
       "초안 쓰기: 먼저 list_drafts(keyword)로 같은 키워드의 초안이 있는지 확인해 있으면 사용자에게 알린다. get_writing_rules(task=writing, platform, type)로 규칙을 읽고, get_writing_brief로 브리프를 받는다. 브리프에 '경쟁 판단'과 '추천 타깃 키워드'가 있으면 그중 하나(검색 의도가 글로 답하기 좋은 것)를 골라 사용자에게 알리고, 그 키워드로 get_writing_brief를 다시 받아 그 키워드를 메인 키워드로 쓴다 (save_draft의 keyword도 그 키워드). 그다음 규칙대로 웹 검색으로 사실을 확인하며 쓴다. 이때 list_drafts가 보여 준 최근 초안들의 제목·도입 문장과 같은 패턴을 피한다. 사용자가 원하면 save_draft로 저장하고 open_web(page=drafts)으로 보여준다. save_draft·update_draft 결과에 본문 글자 수와 제목 점검이 나오며, 목표보다 짧거나 제목 점검에 걸리면 안내대로 고쳐 update_draft로 다시 저장한다.",
+      "계정별 초안: toolhub 계정 탭에 네이버 블로그 계정이 등록돼 있으면 get_writing_rules(task=planning) 끝에 계정과 분야가 나온다. 그때 네이버 글감은 직접 나누지 말고 assign_account_keywords로 계정에 나눈다 (계정당 편수를 코드가 지킴). 그 표대로 쓰고 save_draft에 account·topic·format·date를 넣는다 (네이버는 account가 없으면 저장이 거절됨). 계정이 없으면 지금처럼 쓴다.",
       "네이버 형식과 발행일: 네이버 초안은 글감 추천에서 정한 형식을 get_writing_brief와 save_draft의 format에 같은 값으로 넘긴다 (home=홈판형, 생략=검색형). 발행일이 오늘이 아니면(행사 1~3일 전 등) save_draft의 date에 그 날을 넣는다. 초안 파일 날짜가 발행일이 되어 그날 초안 목록에 함께 보인다.",
       "초안 고치기: read_draft로 읽고 고친 뒤 update_draft로 같은 파일에 저장한다 (이전 버전은 자동 보관). 새 초안은 save_draft로 만든다. 발행됨 초안은 고치지 않는다 (정책, update_draft가 거부함): list_drafts의 상태가 발행됨이면 고치려고 읽지도 않는다 (인스타 재가공처럼 읽기만 하는 건 괜찮다).",
       "글 유형: 상품·서비스 사용기는 review, 맛집·여행지·시설 방문기는 place, 쇼핑 커넥트 제휴 링크를 넣는 상품 글은 connect, 그 밖에는 info. 리뷰 상품의 쇼핑 트렌드는 get_shopping_trend, 장소 정보는 search_places로 확인한다.",
@@ -302,7 +317,9 @@ server.registerTool(
   },
   async ({ task, platform = "tistory", type = "info" }) => {
     try {
-      return text(task === "planning" ? await planningRules() : await writingRules(platform, type));
+      if (task === "writing") return text(await writingRules(platform, type));
+      const note = accountsPlanningNote(await readAccounts(DATA_DIR));
+      return text(note ? `${await planningRules()}\n\n---\n\n${note}` : await planningRules());
     } catch (e) {
       return failure(e);
     }
@@ -558,6 +575,53 @@ server.registerTool(
   },
 );
 
+const planKeywordSchema = z.object({
+  keyword: z.string().min(1).describe("키워드 (연관어로 돌렸으면 그 연관어)"),
+  topic: z.enum(BLOG_TOPICS as [string, ...string[]]).describe("분야: 네이버 블로그 주제 분류 중 하나"),
+  format: z.enum(NAVER_FORMATS).default("search").describe("search=검색형, home=홈판형"),
+  date: z
+    .string()
+    .regex(/^\d{4}-\d{2}-\d{2}$/)
+    .optional()
+    .describe("발행일 YYYY-MM-DD. 생략하면 오늘. 행사 전에 올릴 홈판형만 뒤 날짜"),
+});
+
+server.registerTool(
+  "assign_account_keywords",
+  {
+    title: "계정별 글감 나누기",
+    description:
+      "등록된 네이버 블로그 계정에 글감을 나눈다. total을 계정 수로 나눈 몫만큼, 우선순위 순서(keywords 순서)대로 그 분야를 맡은 계정에 넣고, 몫이 찬 계정의 키워드는 남긴다. 결과는 오늘 계획으로 저장되어 save_draft가 계정·형식·발행일·편수를 대조한다. reset 없이 다시 부르면 오늘 계획에 이어 넣는다(모자란 계정 채우기). 계정이 등록돼 있을 때 네이버 글감을 고르면 반드시 이 도구로 나눈다.",
+    inputSchema: {
+      keywords: z.array(planKeywordSchema).min(1).max(60).describe("우선순위 높은 순서. 편수보다 넉넉히(1.5배쯤)"),
+      total: z.number().int().min(1).max(60).optional().describe("전체 편수 (예: 15). 오늘 계획이 있으면 생략 가능, 처음이면 생략 시 계정 수 × 5"),
+      reset: z.boolean().default(false).describe("true면 오늘 계획을 버리고 새로 나눈다 (사용자가 다시 고르자고 할 때만)"),
+    },
+    annotations: { readOnlyHint: false, destructiveHint: false },
+  },
+  async ({ keywords, total, reset }) => {
+    try {
+      const accounts = await readAccounts(DATA_DIR);
+      if (!accounts.length) return failure("등록된 계정이 없습니다. 계정 없이 지금처럼 글감을 고르세요 (사용자는 웹 블로그 자동화 › 계정에서 등록할 수 있습니다).");
+      const today = kstNow().date;
+      const current = reset ? null : await readAccountPlan(DATA_DIR, today);
+      const base =
+        current && (total === undefined || total === current.total) ? current : { ...emptyPlan(accounts, today, total ?? accounts.length * 5), saved: current?.saved ?? [] };
+      const problems = keywords.flatMap((k) => (k.date ? (publishDateProblem(k.date, today) ? [`${k.keyword}: ${publishDateProblem(k.date, today)}`] : []) : []));
+      if (problems.length) return failure(problems.join("\n"));
+      const { plan, leftover } = assignAccountKeywords(
+        accounts,
+        keywords.map((k) => ({ ...k, date: k.date ?? today })),
+        base,
+      );
+      await writeAccountPlan(DATA_DIR, plan);
+      return text(formatPlan(accounts, plan, leftover));
+    } catch (e) {
+      return failure(e);
+    }
+  },
+);
+
 /** 같은 플랫폼 최근 초안들의 추천 제목 (제목 점검용, 이 초안 제외, 최근 수정 순) */
 async function recentTitles(platform: Platform | null, except: string) {
   const drafts = (await listDrafts(DRAFTS_DIR)).filter((d) => d.file !== except && d.platform === platform).slice(0, RECENT_TITLE_COUNT);
@@ -570,7 +634,30 @@ async function recentTitles(platform: Platform | null, except: string) {
   return titles.filter((t): t is string => t !== null);
 }
 
-/** 저장 결과에 붙일 분량·제목 안내 */
+/** 다른 계정의 같은 키워드 초안과 겹침 점검 (이 초안에 계정이 없으면 null) */
+async function overlapFeedback(file: string, parsed: ReturnType<typeof parseDraft>, recommended: string | null) {
+  const [all, statuses, accounts] = await Promise.all([listDrafts(DRAFTS_DIR), readDraftStatuses(DATA_DIR), readAccounts(DATA_DIR)]);
+  const self = all.find((d) => d.file === file);
+  const account = statuses[file]?.account;
+  if (!self || !account) return null;
+  const others = await Promise.all(
+    draftsForKeyword(all, self.keyword)
+      .filter((d) => d.file !== file && d.platform === self.platform && statuses[d.file]?.account && statuses[d.file]?.account !== account)
+      .map(async (d) => {
+        const other = parseDraft((await readDraftFile(DRAFTS_DIR, d.file)) ?? "");
+        return {
+          file: d.file,
+          account: accountName(accounts, statuses[d.file]?.account) ?? "지운 계정",
+          format: d.format,
+          title: other.titles.find((t) => t.recommended)?.text ?? other.titles[0]?.text ?? null,
+          opening: draftOpening(other.body),
+        };
+      }),
+  );
+  return accountOverlapFeedback({ format: self.format, title: recommended, opening: draftOpening(parsed.body) }, others);
+}
+
+/** 저장 결과에 붙일 분량·제목·계정 겹침 안내 */
 async function draftFeedback(file: string, content: string) {
   const parsed = parseDraft(content);
   const platform = draftPlatform(file);
@@ -582,6 +669,7 @@ async function draftFeedback(file: string, content: string) {
       recommended,
       await recentTitles(platform, file),
     ),
+    await overlapFeedback(file, parsed, recommended),
   ]
     .filter(Boolean)
     .map((line) => `${line}\n`)
@@ -610,24 +698,54 @@ server.registerTool(
         .regex(/^\d{4}-\d{2}-\d{2}$/)
         .optional()
         .describe("발행일 YYYY-MM-DD (KST). 생략하면 오늘. 행사 1~3일 전에 올릴 홈판형처럼 오늘이 아닐 때만. 오늘부터 14일 안"),
+      account: z.string().optional().describe("이 초안을 올릴 블로그 계정 이름 (get_writing_rules(planning)의 '계정별 글감'에 나온 이름). 계정이 등록돼 있지 않으면 생략"),
+      topic: z.enum(BLOG_TOPICS as [string, ...string[]]).optional().describe("분야: 네이버 블로그 주제 분류 중 하나 (account와 함께)"),
+      plan_keyword: z.string().optional().describe("assign_account_keywords 표의 키워드와 다른 키워드(연관어)로 저장할 때 표의 원래 키워드"),
     },
     annotations: { readOnlyHint: false, destructiveHint: false },
   },
-  async ({ keyword, platform, content, format, date }) => {
+  async ({ keyword, platform, content, format, date, account: accountInput, topic, plan_keyword: planKeyword }) => {
     try {
       const today = kstNow().date;
       const problem = date ? publishDateProblem(date, today) : null;
       if (problem) return failure(problem);
+      const accounts = await readAccounts(DATA_DIR);
+      const account = accountInput ? findAccount(accounts, accountInput) : null;
+      if (accountInput && !account) {
+        return failure(
+          accounts.length
+            ? `알 수 없는 계정: ${accountInput}. 등록된 계정: ${accounts.map((a) => a.name).join(", ")}`
+            : `등록된 계정이 없습니다. account 없이 저장하세요 (사용자가 웹 블로그 자동화 › 계정에서 등록할 수 있습니다).`,
+        );
+      }
+      // 계정은 네이버 블로그 계정이라, 계정이 등록돼 있으면 네이버 초안은 계정을 꼭 정한다
+      if (platform === "naver" && accounts.length && !account) {
+        return failure(
+          `계정이 등록돼 있어 네이버 초안은 account가 필요합니다. assign_account_keywords 표의 계정을 넣으세요. 등록된 계정: ${accounts.map((a) => a.name).join(", ")}`,
+        );
+      }
       await mkdir(DRAFTS_DIR, { recursive: true });
       const base = draftFileBase(date ?? today, keyword, platform, format);
       let file = path.join(DRAFTS_DIR, `${base}.md`);
       for (let n = 2; await exists(file); n++) file = path.join(DRAFTS_DIR, `${base}-${n}.md`);
       await writeFile(file, content.endsWith("\n") ? content : `${content}\n`);
       const name = path.basename(file);
+      if (account || topic) await setDraftStatus(DATA_DIR, name, { account: account?.id, topic });
+      // 오늘 계정 계획과 대조 (계정·형식·발행일·편수)
+      let planNote = "";
+      const plan = platform === "naver" && account ? await readAccountPlan(DATA_DIR, today) : null;
+      if (plan && account) {
+        const checked = checkAgainstPlan(accounts, plan, { account: account.id, file: name, keyword, planKeyword, format: format ?? "search", date: date ?? today });
+        await writeAccountPlan(DATA_DIR, checked.plan);
+        planNote = `${checked.text}\n`;
+      } else if (platform === "naver" && account) {
+        planNote = "오늘 계정 계획이 없습니다. 여러 편을 계정별로 쓰는 중이면 assign_account_keywords로 먼저 나누세요.\n";
+      }
       const when = date && date !== today ? `발행일 ${date} (그날 초안 목록에 보임)\n` : "";
       const kind = platform === "naver" ? `형식: ${NAVER_FORMAT_LABELS[format ?? "search"]}\n` : "";
+      const owner = account ? `계정: ${account.name}${topic ? ` · 분야 ${topic}` : ""}\n` : "";
       return text(
-        `저장했습니다: ${file}\n${kind}${when}${await draftFeedback(name, content)}웹에서 미리보기·복사하려면 open_web(page="drafts", draft="${name}")을 호출하세요.`,
+        `저장했습니다: ${file}\n${kind}${owner}${when}${planNote}${await draftFeedback(name, content)}웹에서 미리보기·복사하려면 open_web(page="drafts", draft="${name}")을 호출하세요.`,
       );
     } catch (e) {
       return failure(e);
@@ -642,18 +760,21 @@ server.registerTool(
   {
     title: "초안 목록",
     description:
-      "drafts/의 초안을 최근 수정 순으로 보여준다. 파일 이름·발행일·키워드·플랫폼(네이버는 검색형·홈판형)·상태(초안·발행됨, 글 주소, 지식iN 답변 수)·추천 제목·도입 첫 문장·사람이 채울 자리 수를 포함한다. keyword를 주면 같은 키워드(공백·구두점 무시)로 쓴 초안만 보여 주므로, 새 글을 쓰기 전에 이미 쓴 주제인지 확인할 때 쓴다.",
+      "drafts/의 초안을 최근 수정 순으로 보여준다. 파일 이름·발행일·키워드·플랫폼(네이버는 검색형·홈판형)·계정·분야·상태(초안·발행됨, 글 주소, 지식iN 답변 수)·추천 제목·도입 첫 문장·사람이 채울 자리 수를 포함한다. keyword를 주면 같은 키워드(공백·구두점 무시)로 쓴 초안만 보여 주므로, 새 글을 쓰기 전에 이미 쓴 주제인지 확인할 때 쓴다.",
     inputSchema: {
       keyword: z.string().optional().describe("이 키워드로 쓴 초안만 (생략하면 전체)"),
+      account: z.string().optional().describe("이 계정(이름)의 초안만 (생략하면 전체)"),
       limit: z.number().int().min(1).max(100).default(20),
     },
     annotations: { readOnlyHint: true },
   },
-  async ({ keyword, limit }) => {
+  async ({ keyword, account: accountInput, limit }) => {
     try {
-      const [all, statuses] = await Promise.all([listDrafts(DRAFTS_DIR), readDraftStatuses(DATA_DIR)]);
-      const drafts = (keyword ? draftsForKeyword(all, keyword) : all).slice(0, limit);
-      if (drafts.length === 0) return text(keyword ? `키워드 "${keyword}"의 초안이 없습니다.` : "초안이 없습니다.");
+      const [all, statuses, accounts] = await Promise.all([listDrafts(DRAFTS_DIR), readDraftStatuses(DATA_DIR), readAccounts(DATA_DIR)]);
+      const account = accountInput ? findAccount(accounts, accountInput) : null;
+      if (accountInput && !account) return failure(`알 수 없는 계정: ${accountInput}. 등록된 계정: ${accounts.map((a) => a.name).join(", ") || "없음"}`);
+      const drafts = (keyword ? draftsForKeyword(all, keyword) : all).filter((d) => matchesAccount(statuses[d.file], account?.id ?? null)).slice(0, limit);
+      if (drafts.length === 0) return text(`${keyword ? `키워드 "${keyword}"의 ` : ""}${account ? `계정 ${account.name}의 ` : ""}초안이 없습니다.`);
 
       const rows = await Promise.all(
         drafts.map(async (d) => {
@@ -664,14 +785,15 @@ server.registerTool(
           const entry = statuses[d.file];
           const status = `${DRAFT_STATUS_LABELS[effectiveStatus(entry)]}${entry?.url ? ` ${entry.url}` : ""}${entry?.answers?.length ? ` · 지식iN 답변 ${entry.answers.length}` : ""}`;
           const platform = d.platform ? `${PLATFORM_LABELS[d.platform]}${d.format ? ` ${NAVER_FORMAT_LABELS[d.format]}` : ""}` : "-";
-          return `| ${d.file} | ${d.date ?? "-"} | ${platform} | ${cell(status)} | ${cell(title)} | ${cell(draftOpening(parsed.body) ?? "-")} | 이미지 ${count("image")} · 직접 작성 ${count("write")} · 확인 ${count("check")} |`;
+          const owner = [accountName(accounts, entry?.account), entry?.topic].filter(Boolean).join(" · ") || "-";
+          return `| ${d.file} | ${d.date ?? "-"} | ${platform} | ${cell(owner)} | ${cell(status)} | ${cell(title)} | ${cell(draftOpening(parsed.body) ?? "-")} | 이미지 ${count("image")} · 직접 작성 ${count("write")} · 확인 ${count("check")} |`;
         }),
       );
       return text(
         [
-          `${keyword ? `"${keyword}" 초안` : "최근 초안"} ${drafts.length}개 (전체 ${all.length}개)`,
-          "| 파일 | 발행일 | 플랫폼 | 상태 | 추천 제목 | 도입 첫 문장 | 사람이 채울 자리 |",
-          "|---|---|---|---|---|---|---|",
+          `${keyword ? `"${keyword}" 초안` : "최근 초안"}${account ? ` (계정 ${account.name})` : ""} ${drafts.length}개 (전체 ${all.length}개)`,
+          "| 파일 | 발행일 | 플랫폼 | 계정·분야 | 상태 | 추천 제목 | 도입 첫 문장 | 사람이 채울 자리 |",
+          "|---|---|---|---|---|---|---|---|",
           ...rows,
         ].join("\n"),
       );

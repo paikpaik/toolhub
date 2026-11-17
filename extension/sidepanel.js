@@ -205,8 +205,21 @@ async function insert(item) {
     return setStatus(`복사하지 못했어요: ${e.message}`, true);
   }
   setStatus("이미지 자리에 넣는 중…");
+  try {
+    const { left } = await insertClipboardImage(tab, "body");
+    setStatus(left ? `넣었어요. 남은 본문 이미지 자리 ${left}개.` : "넣었어요. 본문 이미지 자리를 모두 채웠어요.");
+  } catch (e) {
+    setStatus(`${e.message}. 이미지는 복사돼 있으니 자리에서 ⌘V로 붙여넣어 주세요.`, true);
+  }
+}
+
+/**
+ * 클립보드에 담아 둔 이미지를 글쓰기 탭의 첫 번째 이미지 자리(kind: "body" 본문, "thumbnail" 대표 썸네일)에 넣는다.
+ * 패널 이미지 삽입과 초안 채우기(썸네일)가 함께 쓴다. 못 넣으면 이유를 담은 오류를 던진다. { left: 남은 본문 이미지 자리 수 }
+ */
+async function insertClipboardImage(tab, kind) {
   const step = async (name) => {
-    const response = await chrome.tabs.sendMessage(tab.id, { type: "image-insert-step", step: name }).catch(() => null);
+    const response = await chrome.tabs.sendMessage(tab.id, { type: "image-insert-step", step: name, kind }).catch(() => null);
     if (!response) throw new Error("글쓰기 화면이 응답하지 않아요. 확장을 새로고침했다면 글쓰기 탭도 새로고침해 주세요");
     if (response.error) throw new Error(response.error);
     return response.result;
@@ -215,7 +228,7 @@ async function insert(item) {
   try {
     await chrome.debugger.attach(target, "1.3");
   } catch (e) {
-    return setStatus(`글쓰기 화면에 연결하지 못했어요 (${e.message}). 이미지는 복사돼 있으니 자리에서 ⌘V로 붙여넣어 주세요.`, true);
+    throw new Error(`글쓰기 화면에 연결하지 못했어요 (${e.message})`);
   }
   const send = (method, params) => chrome.debugger.sendCommand(target, method, params);
   try {
@@ -237,10 +250,7 @@ async function insert(item) {
       throw new Error("[이미지: …] 문단 말고 다른 글자가 바뀌어서 되돌렸어요 (바뀐 글이 있으면 ⌘Z로 확인해 주세요)");
     }
     if (status === "unchanged") throw new Error("[이미지: …] 문단을 지우지 못했어요");
-    const { left } = await step("paste");
-    setStatus(left ? `넣었어요. 남은 본문 이미지 자리 ${left}개.` : "넣었어요. 본문 이미지 자리를 모두 채웠어요.");
-  } catch (e) {
-    setStatus(`${e.message}. 이미지는 복사돼 있으니 자리에서 ⌘V로 붙여넣어 주세요.`, true);
+    return await step("paste");
   } finally {
     await chrome.debugger.detach(target).catch(() => {});
   }

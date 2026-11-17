@@ -39,10 +39,18 @@
         <h1>초안 채우기</h1>
         <button type="button" class="link" id="drafts-reload" title="toolhub 웹에서 목록을 다시 불러와요">새로고침</button>
       </header>
-      <label class="drafts-date">
-        발행일 <input id="drafts-date" type="date" />
+      <div class="drafts-pick">
+        <label class="drafts-date" id="drafts-account-row" title="toolhub 웹 블로그 자동화 › 계정에 등록한 계정" hidden>
+          계정 <select id="drafts-account"></select>
+        </label>
+        <label class="drafts-date">
+          발행일 <input id="drafts-date" type="date" />
+        </label>
+      </div>
+      <label class="auto" title="toolhub 웹 계정 탭의 계정 썸네일(배경·글꼴·색)로 이 초안 문구를 그려 [이미지: 대표 썸네일] 자리에 넣어요">
+        <input type="checkbox" id="drafts-thumbnail" checked /> 썸네일도 자동으로 넣기 <small>계정 썸네일</small>
       </label>
-      <p class="hint">네이버 <b>새 글쓰기 화면</b>을 띄우고 초안을 누르면 제목·본문(서식 포함, 맨 아래 태그)을 넣고 소제목 정리까지 해요. 확인한 뒤 <b>저장·발행은 직접</b> 눌러 주세요.</p>
+      <p class="hint">네이버 <b>새 글쓰기 화면</b>을 띄우고 초안을 누르면 제목·본문(서식 포함, 맨 아래 태그)을 넣고 소제목 정리, 대표 썸네일까지 넣어요. 확인한 뒤 <b>저장·발행은 직접</b> 눌러 주세요.</p>
       <ul id="drafts-list" class="drafts-list"></ul>
       <p id="drafts-status" class="status"></p>
     </section>

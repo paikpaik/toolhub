@@ -1,6 +1,7 @@
 "use client";
 
 import { DRAFT_STATUS_LABELS, DRAFT_STATUSES, effectiveStatus, type DraftStatus, type DraftStatusEntry, type DraftStatusPatch } from "@toolhub/collector/draft-status";
+import { BLOG_TOPIC_GROUPS, type BlogAccount } from "@toolhub/collector/accounts";
 import { useState } from "react";
 
 const pad = (n: number) => String(n).padStart(2, "0");
@@ -24,8 +25,18 @@ export function StatusBadge({ entry }: { entry?: DraftStatusEntry }) {
   return <span className={`status-badge ${status}`}>{DRAFT_STATUS_LABELS[status]}</span>;
 }
 
-/** 초안 / 발행됨 + 글 주소 + 발행 시각. 바꾸면 바로 저장한다 */
-export function DraftStatusControl({ file, entry, onChange }: { file: string; entry?: DraftStatusEntry; onChange: (entry: DraftStatusEntry) => void }) {
+/** 초안 / 발행됨 + 글 주소 + 발행 시각 (+ 계정이 있으면 계정·분야). 바꾸면 바로 저장한다 */
+export function DraftStatusControl({
+  file,
+  entry,
+  onChange,
+  accounts = [],
+}: {
+  file: string;
+  entry?: DraftStatusEntry;
+  onChange: (entry: DraftStatusEntry) => void;
+  accounts?: BlogAccount[];
+}) {
   const [url, setUrl] = useState(entry?.url ?? "");
   const [at, setAt] = useState(toLocalInput(entry?.at));
   const [message, setMessage] = useState("");
@@ -87,13 +98,43 @@ export function DraftStatusControl({ file, entry, onChange }: { file: string; en
           </label>
         </>
       )}
+      {accounts.length > 0 && (
+        <>
+          <label>
+            계정
+            <select value={entry?.account ?? ""} onChange={(e) => save({ account: e.target.value })}>
+              <option value="">계정 없음</option>
+              {accounts.map((a) => (
+                <option key={a.id} value={a.id}>
+                  {a.name}
+                </option>
+              ))}
+            </select>
+          </label>
+          <label>
+            분야
+            <select value={entry?.topic ?? ""} onChange={(e) => save({ topic: e.target.value })}>
+              <option value="">분야 없음</option>
+              {BLOG_TOPIC_GROUPS.map((g) => (
+                <optgroup key={g.name} label={g.name}>
+                  {g.topics.map((t) => (
+                    <option key={t} value={t}>
+                      {t}
+                    </option>
+                  ))}
+                </optgroup>
+              ))}
+            </select>
+          </label>
+        </>
+      )}
       {message && <small className="status-message">{message}</small>}
     </div>
   );
 }
 
 /** 초안 화면 옆 패널의 상태 카드 */
-export function DraftStatusCard({ file, entry: initial }: { file: string; entry?: DraftStatusEntry }) {
+export function DraftStatusCard({ file, entry: initial, accounts }: { file: string; entry?: DraftStatusEntry; accounts?: BlogAccount[] }) {
   const [entry, setEntry] = useState(initial);
   return (
     <section className="card">
@@ -101,7 +142,7 @@ export function DraftStatusCard({ file, entry: initial }: { file: string; entry?
         상태 <StatusBadge entry={entry} />
         {entry?.answers?.length ? <small> · 지식iN 답변 {entry.answers.length}</small> : null}
       </h3>
-      <DraftStatusControl file={file} entry={entry} onChange={setEntry} />
+      <DraftStatusControl file={file} entry={entry} onChange={setEntry} accounts={accounts} />
       <p className="hint-text">지식iN 답변은 초안 목록에서 이 줄을 눌러 준비해요.</p>
     </section>
   );

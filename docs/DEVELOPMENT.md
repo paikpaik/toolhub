@@ -174,9 +174,38 @@ toolhub 전체가 하나의 버전(`1.0.0` 형식)을 씁니다. 올릴 때는 �
 
 초안 화면의 썸네일은 `/blog/thumbnail`의 `ThumbnailMaker`를 그대로 씁니다 (`apps/web/app/blog/drafts/view/thumbnail-panel.tsx`). 헤더의 버튼과 본문 열의 `<details>` 패널은 떨어져 있어서 창 이벤트(`toolhub:open-thumbnail`)로 열고 스크롤합니다. 썸네일의 **랜덤 조합**은 `apps/web/lib/random-colors.ts`가 배경 분위기(파스텔·어두운 색·선명한 색)와 색상환 관계(보색·분할 보색·삼각·유사색)로 뽑고, WCAG 대비가 글자 7:1·강조 3:1 이상인 조합만 씁니다 (평균 1.6번 만에 나옴, 50번 실패하면 기본 조합). 부제·라벨·블로그 이름·스타일은 `localStorage`의 `toolhub:thumbnail-brand`에 기억하고(주소의 `subtitle`·`label`이 있으면 그 값이 먼저, 고치면 기억), 제목만 초안마다 새로 채웁니다. 캔버스와 글꼴은 처음 펼칠 때 그리기 시작하고, 접어도 언마운트하지 않아 고친 제목이 남습니다. 태그 **전체 복사**는 네이버면 화면에 보이는 `#태그 #태그`, 티스토리·Blogger면 쉼표로 잇습니다. 네이버 태그 칸은 띄어쓰기에서 태그를 끊으므로 `parseDraft`가 태그 안의 공백을 지우고 겹치는 태그를 합칩니다 (규칙 문서에도 붙여 쓰라고 적었지만, 이미 쓴 초안과 모델 실수를 함께 막기 위해).
 
+### 블로그 계정 `data/accounts.json`
+
+`{ "accounts": [{ id, name, topics }] }`. 계정이 여러 개일 때 트렌드 상위를 나눠 쓰면 계정이 늘수록 아래쪽 약한 키워드까지 내려갑니다(계정 3개 → 1~15위, 6개 → 1~30위). 그래서 계정마다 분야를 정해 각자 자기 분야의 1~5위를 쓰게 했습니다(2026-11-17). 계정마다 주제가 일관되면 홈판의 주제 전문성에도 유리합니다. **계정이 없으면 모든 흐름이 예전과 같습니다.**
+
+- `id`는 `acc-xxxxxxxx`(`newAccountId`)라 이름을 바꿔도 초안 기록이 유지됩니다. 이름은 20자, 계정은 `ACCOUNT_MAX`(10)개까지입니다. 저장할 때 `sanitizeAccounts`가 정해진 필드만 남기고 이름·id 중복을 거절합니다.
+- `topics`는 네이버 블로그 주제 분류 32개(`BLOG_TOPIC_GROUPS`)에서 고릅니다. 직접 지은 분야 대신 이 분류를 쓴 이유는 크리에이터 어드바이저 트렌드가 같은 분류라 키워드를 계정에 나누는 기준이 흔들리지 않기 때문입니다.
+- 초안이 어느 계정 것인지는 초안 파일 이름이 아니라 `data/draft-status.json`의 `account`·`topic`에 둡니다. 파일 이름 규칙(발행일·형식)을 또 바꾸지 않고, 내보내기·가져오기(`sanitizeStatusEntry`)와 초안 삭제(`removeDraftStatus`)도 그대로 따라오게 하려는 것입니다.
+- 화면은 `/blog/accounts`(`accounts-editor.tsx`, `PUT /api/accounts`로 통째로 저장)이고, 계정마다 분야별 초안·발행 수(`accountTopicStats`)를 보여 줍니다. 분야가 계정에 맞는지는 지금은 이 편수로만 봅니다. 계정별 조회수 기록은 아직 없습니다.
+- MCP
+  - `get_writing_rules(task=planning)`은 계정이 있으면 `accountsPlanningNote`(계정·분야와 나누는 규칙)를 끝에 붙입니다.
+  - `save_draft`는 `account`(이름이나 id, `findAccount`)와 `topic`을 받아 상태 기록에 넣습니다. 모르는 계정이면 등록된 계정을 알려 주며 거절합니다.
+  - `get_writing_rules(task=planning)`의 계정 안내는 "직접 나누지 말고 `assign_account_keywords`로"입니다.
+  - `list_drafts`에는 `계정·분야` 칸과 `account` 거르기가 있습니다.
+  - **계정 겹침 점검** (`accountOverlapFeedback`): 저장·수정 결과에 붙습니다. 다른 계정에 같은 키워드·같은 플랫폼 초안이 있으면, 형식이 같은지, 추천 제목이 비슷한지(두 글자 묶음 겹침 `textSimilarity` 0.5 이상), 도입 첫 문장이 비슷한지(0.4 이상) 봅니다. 계정끼리 같은 키워드는 허용합니다(홈판 경쟁력이 있는 키워드는 겹치는 게 나을 수 있음). 다만 같은 사람이 비슷한 글을 여러 계정에 올리면 유사문서로 함께 밀리므로 글의 형태가 다르게 나오게 합니다.
+- **계정별 글감 나누기** (`account-plan.ts`, `account-plan-store.ts`, MCP `assign_account_keywords`): 규칙 문장만으로는 Claude가 계정당 편수를 어기거나 계정을 빠뜨려서, 나누기와 개수 세기를 코드로 옮겼습니다. Claude는 우선순위(넘기는 순서)와 키워드마다 분야·형식·발행일만 정합니다.
+  - `accountQuotas`: 편수 ÷ 계정 수, 나머지는 앞 계정부터.
+  - `assignAccountKeywords`: 순서대로 그 분야를 맡은 계정(분야를 안 고른 계정은 모든 분야) 중 몫이 남고 적게 받은 계정에 넣습니다. 몫이 찼거나 맡은 계정이 없거나 이미 계획에 있으면 이유와 함께 남깁니다. 다시 부르면 오늘 계획에 이어 넣고(모자란 계정 채우기), `reset`이면 새로 나눕니다.
+  - 계획은 만든 날(KST)별로 `data/account-plans.json`에 둡니다(최근 14일). 행사 전 홈판형은 파일 날짜(발행일)가 뒤라서, 발행일이 아니라 만든 날 계획으로 세야 "오늘 5편"이 맞습니다.
+  - `save_draft`: 계정이 등록돼 있으면 네이버 초안은 `account`가 없을 때 거절합니다(계정은 네이버 블로그 계정이라 티스토리·Blogger는 그대로). 오늘 계획이 있으면 `checkAgainstPlan`으로 계정 몫·형식·발행일·편수를 대조해 현황과 경고를 붙입니다. 연관어로 메인 키워드를 바꾸면 계획 키워드와 달라지므로 `plan_keyword`로 원래 키워드를 받습니다. 어긋나도 거절하지 않고 경고만 합니다(연관어·사용자 요청으로 바뀌는 경우가 있어서).
+- **계정 썸네일** (2026-11-17, `thumbnail-style.ts`): 썸네일이 하루 15편의 병목이라, 계정마다 스타일을 두고 초안 채우기 때 자동으로 넣게 했습니다.
+  - `BlogAccount.thumbnail`(`ThumbnailStyle`: template·fontId·colors·blogName·label·overlay·backgrounds). 예전 `accounts.json`에 없으면 `sanitizeThumbnailStyle`이 기본값을 넣습니다.
+  - 배경 이미지는 `data/thumbnails/<계정 id>/bg-<hex>.<png|jpg|webp>`(`addBackground`·`removeBackground`, `/api/accounts/background` GET·POST·DELETE). 배경 목록은 올리기·지우기로만 바뀌고, `writeAccounts`(계정 목록 통째 저장)는 디스크의 목록을 지킵니다(화면이 오래된 목록으로 저장해도 빠지지 않게). 계정을 지우면 그 폴더도 지웁니다.
+  - 어느 배경을 쓸지는 `pickBackground`: 초안에서 고른 배경 → 없으면 파일 이름 해시로 돌려 고름(한 장이면 고정, 같은 초안은 늘 같음), `none`이면 단색.
+  - 문구는 `thumbnailText`: 초안 기록의 `thumbnail.text` → 대표 썸네일 표시의 `문구:`(` / `는 줄바꿈) → 추천 제목. 작성 규칙(writing.md)이 `문구:`를 2줄로 쓰게 합니다.
+  - 그리기는 웹 `draw.ts`(배경 이미지는 꽉 차게 잘라 그리고 배경색을 `overlay`만큼 덮음)와 `account-thumbnail.tsx`(`renderAccountThumbnail`, 1080×1080). 계정 화면·초안 화면 미리보기와 확장이 같은 코드·글꼴을 씁니다.
+  - **확장이 받는 방법**: 초안 채우기는 본문을 붙여넣는 동안 `/blog/thumbnail/render?file=`을 화면 밖 iframe으로 열고, 그 화면이 그린 PNG(data URL)를 `postMessage`로 받습니다(`e.origin`이 찾은 웹 주소일 때만). 확장에 그리기 코드·글꼴을 따로 두지 않으려는 것입니다. 배경 이미지는 웹과 같은 주소에서 불러와 캔버스가 오염되지 않습니다. 소제목 정리 뒤 클립보드에 PNG를 쓰고 `insertClipboardImage(tab, "thumbnail")`(패널 이미지 삽입과 같은 드래그 → 지우기 → 확인 → 붙여넣기, `locateImageSlot(kind)`)로 대표 썸네일 자리에 넣습니다. 썸네일이 실패해도 제목·본문은 그대로 두고 이유만 알립니다. 패널의 `썸네일도 자동으로 넣기`(`draftsThumbnail`)로 끕니다.
+  - 확인 (2026-11-17): Chrome for Testing에서 가짜 글쓰기 화면(이미지 붙여넣기 흉내 추가)과 실제 3000번 웹의 렌더 화면으로 제목·본문·소제목·태그에 이어 PNG 썸네일이 대표 썸네일 자리에 들어가고 본문 이미지 자리는 남는 것을 확인했습니다. 배경 이미지를 얹은 그림은 실제 데이터를 바꾸지 않으려고 자동 확인하지 않았습니다.
+- 초안 목록은 `모든 계정 · 계정들 · 계정 없음` 탭(`matchesAccount`, `localStorage`의 `toolhub:draft-account`)으로 거르고, 줄을 펼치면 계정·분야를 바꿀 수 있습니다(`PUT /api/drafts/status`의 `account`·`topic`, 빈 문자열은 지움).
+
 ### 초안 상태 `data/draft-status.json`
 
-초안 파일(.md)은 Claude가 `update_draft`로 통째로 고쳐 쓰므로 상태를 파일 안에 두지 않고 따로 둡니다. `{ "drafts": { "<초안 파일 이름>": { status, url?, at?, answers? } } }`.
+초안 파일(.md)은 Claude가 `update_draft`로 통째로 고쳐 쓰므로 상태를 파일 안에 두지 않고 따로 둡니다. `{ "drafts": { "<초안 파일 이름>": { status, url?, at?, answers?, account?, topic? } } }`.
 
 | 필드 | 설명 |
 |---|---|
@@ -184,6 +213,8 @@ toolhub 전체가 하나의 버전(`1.0.0` 형식)을 씁니다. 올릴 때는 �
 | `url` | 발행한 글 주소. http(s)만 (`normalizePostUrl`). 지식iN 답변 링크로 씀 |
 | `at` | 발행 시각 (ISO). 발행됨으로 바꿀 때 비어 있으면 그 시각 |
 | `answers` | 이 글로 답한 지식iN 질문 `{ link, title, answeredAt }` (같은 질문 주소는 하나만) |
+| `account` | 이 초안을 올릴 블로그 계정 id (`data/accounts.json`). MCP `save_draft`의 `account`나 초안 목록에서 정함. 지운 계정 id는 계정 없음으로 보임 |
+| `topic` | 분야 (네이버 블로그 주제 분류, `BLOG_TOPICS`). 계정 탭의 분야별 집계에 씀 |
 
 **초안 삭제**: 목록 맨 앞 칸에서 고르고 필터 줄의 `선택 삭제`를 누르면, 초안마다 `DELETE /api/drafts/content?file=`을 차례로 부릅니다. 고른 것 중 지금 보이는 줄만 지웁니다(거르기를 바꿔 안 보이게 된 줄은 빠짐). 지우는 것은 아래와 같습니다.
 - 초안 파일과 `drafts/.history`의 이전 버전(`deleteDraftFile`). 이름이 `<이름>.<ISO 시각>.md`라서 `…-naver-2`의 이전 버전은 `…-naver`와 섞이지 않습니다.
@@ -307,7 +338,7 @@ stdio 전송은 stdout을 프로토콜에 쓰므로 서버 코드에서 `console
 
 ## 크롬 확장 (`extension/`)
 
-- **크리에이터 어드바이저 트렌드 복사** (`advisor.js`, 2026-11-06): 검색 유입·메인 유입 트렌드가 카드 슬라이드라 캡처가 번거로워서, 우클릭 메뉴(`documentUrlPatterns`가 `creator-advisor.naver.com`)를 누르면 background가 `lib.js`·`advisor.js`를 그 탭에 주입해 카드별 키워드를 읽습니다. 버튼을 누를 때 한 번 읽는 방식이라 늘 붙어 있는 content script로 두지 않았습니다.
+- **크리에이터 어드바이저 트렌드 복사** (`advisor.js`, 2026-11-06): 복사한 글 맨 위 요청 문장은 "이 키워드들로 오늘 3개의 계정으로 네이버에 쓸 초안 15개를 작성해줘."입니다(2026-11-17, 계정 3개 기준. `formatAdvisorTrends`). 검색 유입·메인 유입 트렌드가 카드 슬라이드라 캡처가 번거로워서, 우클릭 메뉴(`documentUrlPatterns`가 `creator-advisor.naver.com`)를 누르면 background가 `lib.js`·`advisor.js`를 그 탭에 주입해 카드별 키워드를 읽습니다. 버튼을 누를 때 한 번 읽는 방식이라 늘 붙어 있는 content script로 두지 않았습니다.
   - 로그인 화면이라 HTML 구조를 볼 수 없어(스크린샷만 확인) 클래스 이름 대신 **모양**으로 찾습니다: 글자 조각이 2~4개이고 끝이 변동 표시(`new`·숫자·`-`, `isTrendMarker`)인 요소 = 줄, 같은 부모 아래 3줄 이상 = 목록, 목록 앞의 가장 가까운 줄 밖 글자(위로 6단계까지) = 카드 제목. 이어진 목록의 제목이 같으면(카드 안이 5줄씩 나뉜 경우) 한 카드로 합칩니다. 80자 넘는 요소는 줄이 아니라 건너뛰어 화면 전체를 여러 번 훑지 않습니다.
   - 변동 방향(`trendChange`): ▲▼가 아이콘이라 글자에 없을 수 있어 숫자의 계산된 색으로 봅니다(빨강 상승·파랑 하락). 네이버식 숨은 낭독 글자(`상승`·`하락`·`신규`)와 앞의 순위 번호도 처리합니다.
   - 지금 탭: `aria-selected`·`aria-current`·`on|active|selected|current` 클래스 → 없으면 배경색이 혼자 다른 탭. 날짜는 `2026. 11. 05.` 형식 글자.
@@ -403,8 +434,9 @@ stdio 전송은 stdout을 프로토콜에 쓰므로 서버 코드에서 `console
 패널 메뉴는 `이미지 모음 | 초안 | 쇼핑 커넥트`입니다. 초안 메뉴(`sidepanel-drafts.js`)는 toolhub 웹에서 그날 올릴 네이버 초안을 받아 네이버 새 글쓰기 화면에 채웁니다. 저장(임시저장)·발행은 누르지 않습니다. 클릭 한 번 아끼는 효과는 작은데, "자동 등록"으로 보일 위험은 그 클릭에서 생기기 때문입니다.
 
 - **웹 API**
-  - `GET /api/drafts/naver?date=` → `{ date, drafts: [{ file, keyword, format, title }] }`. `naverDraftsFor`가 네이버·그 발행일·초안 상태만 고르고, 목록과 같은 순서(홈판형 먼저)로 둡니다.
-  - `GET /api/drafts/naver/fill?file=` → `{ file, title, text, html, tags, images }`. `naverFillContent`가 만드는 `html`은 초안 화면 "서식 포함 복사"와 같은 `naverPasteHtml` 뒤에 빈 문단 5개와 `#태그 #태그…` 문단을 붙인 것입니다(`text`도 같은 모양). 사용자가 손으로 하던 대로 태그를 본문 맨 아래에 두면 네이버가 본문의 #태그를 태그로 등록하므로, 발행 설정 창의 태그 칸을 따로 채우지 않습니다. 같은 글을 두 번 올리지 않게 발행됨은 409로 거절합니다.
+  - `GET /api/drafts/naver?date=&account=` → `{ date, drafts: [{ file, keyword, format, title }] }`. `naverDraftsFor`가 네이버·그 발행일·초안 상태(·그 계정, `none`이면 계정 없음)만 고르고, 목록과 같은 순서(홈판형 먼저)로 둡니다.
+  - 계정 고르기는 메뉴를 열 때 `GET /api/accounts`로 채웁니다. 계정이 없거나 옛 웹이면 숨기고 모든 초안을 보여 줍니다. 고른 계정은 `chrome.storage.local`의 `draftsAccount`에 둬서 크롬 프로필마다 따로 기억합니다.
+  - `GET /api/drafts/naver/fill?file=` → `{ file, title, text, html, tags, images, thumbnail }` (`thumbnail`: 대표 썸네일 자리가 있는지). `naverFillContent`가 만드는 `html`은 초안 화면 "서식 포함 복사"와 같은 `naverPasteHtml` 뒤에 빈 문단 5개와 `#태그 #태그…` 문단을 붙인 것입니다(`text`도 같은 모양). 사용자가 손으로 하던 대로 태그를 본문 맨 아래에 두면 네이버가 본문의 #태그를 태그로 등록하므로, 발행 설정 창의 태그 칸을 따로 채우지 않습니다. 같은 글을 두 번 올리지 않게 발행됨은 409로 거절합니다.
   - 확장은 `http://localhost:3000`(npm run web) → `3100`(MCP open_web) 순으로 찾습니다. 옛 웹(404)은 건너뛰고, 찾은 주소를 기억합니다. 확장 권한(`<all_urls>`)이라 CORS 설정은 필요 없습니다.
 - **에디터 구조** (2026-11-17 진단): 제목 칸도 본문과 같은 글쓰기 iframe, 같은 `.se-content`의 첫 덩어리(`.se-component.se-documentTitle`)입니다. 빈 칸의 "제목"·"본문" 글자는 `.se-placeholder`라서 글자로 세지 않습니다(`ownText`).
 - **순서** (`fill`, 단계는 content.js의 `draft-fill-step` → naver-editor.js)

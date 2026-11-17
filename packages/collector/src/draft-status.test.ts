@@ -3,7 +3,18 @@ import { mkdtemp, readFile, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { describe, it } from "node:test";
-import { adjacentDrafts, applyStatusPatch, draftEditBlocked, effectiveStatus, naverDraftsFor, normalizePostUrl, sortDrafts, toggleKinAnswer } from "./draft-status.ts";
+import {
+  adjacentDrafts,
+  applyStatusPatch,
+  draftEditBlocked,
+  effectiveStatus,
+  matchesAccount,
+  naverDraftsFor,
+  normalizePostUrl,
+  sanitizeStatusEntry,
+  sortDrafts,
+  toggleKinAnswer,
+} from "./draft-status.ts";
 import { readDraftStatuses, removeDraftStatus, setDraftStatus, setKinAnswered } from "./draft-status-store.ts";
 
 describe("초안 상태", () => {
@@ -41,6 +52,28 @@ describe("초안 상태", () => {
     ];
     const picked = naverDraftsFor(rows, { "발행.md": { status: "published" } }, "2026-11-17");
     assert.deepEqual(picked.map((r) => r.file), ["홈판.md", "검색.md"]);
+  });
+
+  it("계정으로 거르기: 모두, 그 계정, 계정 없음", () => {
+    const row = (file: string) => ({ file, date: "2026-11-17", platform: "naver", format: "search", updatedAt: "2026-11-17T00:00:00Z" });
+    const rows = [row("a.md"), row("b.md"), row("none.md")];
+    const statuses = { "a.md": { status: "draft" as const, account: "acc-a" }, "b.md": { status: "draft" as const, account: "acc-b" } };
+    const files = (account: string | null) => naverDraftsFor(rows, statuses, "2026-11-17", account).map((r) => r.file).sort();
+    assert.deepEqual(files(null), ["a.md", "b.md", "none.md"]);
+    assert.deepEqual(files("acc-a"), ["a.md"]);
+    assert.deepEqual(files("none"), ["none.md"]);
+    assert.equal(matchesAccount(undefined, "none"), true);
+    assert.equal(matchesAccount(undefined, "acc-a"), false);
+  });
+
+  it("계정·분야를 정하고 지운다, 모르는 분야는 거절, 가져오기에서도 남긴다", () => {
+    const set = applyStatusPatch(undefined, { account: "acc-a", topic: "국내여행" });
+    assert.deepEqual(set, { status: "draft", account: "acc-a", topic: "국내여행" });
+    assert.deepEqual(applyStatusPatch(set as never, { account: "", topic: "" }), { status: "draft" });
+    assert.match(applyStatusPatch(undefined, { topic: "아무거나" }) as string, /알 수 없는 분야/);
+    assert.match(applyStatusPatch(undefined, { account: "A B" }) as string, /알 수 없는 계정/);
+    assert.deepEqual(sanitizeStatusEntry({ status: "draft", account: "acc-a", topic: "맛집" }), { status: "draft", account: "acc-a", topic: "맛집" });
+    assert.deepEqual(sanitizeStatusEntry({ status: "draft", account: "../x", topic: "없는분야" }), { status: "draft" });
   });
 
   it("같은 상태에서는 발행일 늦은 순, 같은 날이면 홈판형 먼저", () => {

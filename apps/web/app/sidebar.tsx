@@ -85,6 +85,7 @@ export function Sidebar({ data, version, commit }: { data: SidebarData; version:
     { href: "/blog/history", label: "키워드 기록", icon: "history" },
     { href: "/blog/keyword", label: "키워드 분석", icon: "search" },
     { href: "/blog/drafts", label: "초안", icon: "file" },
+    { href: "/blog/accounts", label: "계정", icon: "users" },
     { href: "/blog/schedule", label: "예약 발행", icon: "clock" },
     { href: "/blog/thumbnail", label: "썸네일", icon: "image" },
     { href: "/blog/guide", label: "작성 가이드", icon: "book" },

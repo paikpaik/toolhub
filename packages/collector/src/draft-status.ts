@@ -1,3 +1,6 @@
+import { isAccountId, isBlogTopic } from "./accounts.ts";
+import { BACKGROUND_NAME } from "./thumbnail-style.ts";
+
 /**
  * 초안의 발행 상태와 지식iN 답변 기록 (브라우저에서도 쓰는 순수 로직. 파일 저장은 draft-status-store.ts)
  * 초안 파일(.md)은 Claude가 통째로 고쳐 쓰므로 상태는 data/draft-status.json에 파일 이름별로 따로 둔다.
@@ -26,6 +29,19 @@ export interface DraftStatusEntry {
   /** 발행 시각 (ISO) */
   at?: string;
   answers?: KinAnswer[];
+  /** 이 초안을 올릴 블로그 계정 id (data/accounts.json) */
+  account?: string;
+  /** 네이버 블로그 주제 분류 (계정 탭의 분야별 집계) */
+  topic?: string;
+  /** 이 초안의 썸네일 설정 (없으면 대표 썸네일 표시의 문구·계정 배경 자동) */
+  thumbnail?: DraftThumbnail;
+}
+
+export interface DraftThumbnail {
+  /** 썸네일 문구 (줄바꿈 \n, *강조*) */
+  text?: string;
+  /** 배경 이미지 이름, "none"이면 단색 */
+  background?: string;
 }
 
 export type DraftStatusMap = Record<string, DraftStatusEntry>;
@@ -58,14 +74,27 @@ export function sortDrafts<T extends { file: string; updatedAt: string; date?: s
   );
 }
 
-/** 확장 "초안" 메뉴의 목록: 그날 올릴 네이버 초안 (발행됨 제외), 목록과 같은 순서 (홈판형 먼저) */
+/**
+ * 확장 "초안" 메뉴의 목록: 그날 올릴 네이버 초안 (발행됨 제외), 목록과 같은 순서 (홈판형 먼저).
+ * account를 주면 그 계정 초안만 (계정 id, "none"이면 계정을 정하지 않은 초안)
+ */
 export function naverDraftsFor<T extends { file: string; updatedAt: string; date: string | null; platform: string | null; format?: string | null }>(
   rows: T[],
   statuses: DraftStatusMap,
   date: string,
+  account: string | null = null,
 ): T[] {
-  const picked = rows.filter((row) => row.platform === "naver" && row.date === date && effectiveStatus(statuses[row.file]) === "draft");
+  const picked = rows.filter(
+    (row) => row.platform === "naver" && row.date === date && effectiveStatus(statuses[row.file]) === "draft" && matchesAccount(statuses[row.file], account),
+  );
   return sortDrafts(picked, statuses);
+}
+
+/** 계정 거르기: null이면 모두, "none"이면 계정을 정하지 않은 초안, 그 밖에는 그 계정 id */
+export function matchesAccount(entry: DraftStatusEntry | undefined, account: string | null) {
+  if (account === null) return true;
+  if (account === "none") return !entry?.account;
+  return entry?.account === account;
 }
 
 /** 글 주소로 쓸 수 있는 http(s) 주소만. 앞뒤 공백·꺾쇠는 걷어낸다 */
@@ -85,6 +114,32 @@ export interface DraftStatusPatch {
   /** 빈 문자열이면 지운다 */
   url?: string;
   at?: string | null;
+  /** 계정 id. 빈 문자열이면 지운다 */
+  account?: string;
+  /** 분야 (네이버 블로그 주제). 빈 문자열이면 지운다 */
+  topic?: string;
+  /** 썸네일 문구·배경. 각 값이 빈 문자열이면 그 값을 지운다 (자동으로) */
+  thumbnail?: DraftThumbnail;
+}
+
+const THUMBNAIL_TEXT_MAX = 80;
+const isThumbnailBackground = (v: unknown): v is string => typeof v === "string" && (v === "none" || BACKGROUND_NAME.test(v));
+
+/** 썸네일 설정을 확인해 고친 값. 빈 설정이면 undefined, 잘못됐으면 오류 메시지 */
+function applyThumbnail(current: DraftThumbnail | undefined, patch: DraftThumbnail): DraftThumbnail | undefined | string {
+  const next: DraftThumbnail = { ...current };
+  if (patch.text !== undefined) {
+    const text = String(patch.text).trim();
+    if (text.length > THUMBNAIL_TEXT_MAX) return `썸네일 문구는 ${THUMBNAIL_TEXT_MAX}자까지예요`;
+    if (text) next.text = text;
+    else delete next.text;
+  }
+  if (patch.background !== undefined) {
+    if (!patch.background) delete next.background;
+    else if (!isThumbnailBackground(patch.background)) return `알 수 없는 배경: ${patch.background}`;
+    else next.background = patch.background;
+  }
+  return Object.keys(next).length ? next : undefined;
 }
 
 /** 상태를 고친 새 기록. 주소가 잘못됐으면 오류 메시지를 돌려준다 */
@@ -106,6 +161,22 @@ export function applyStatusPatch(entry: DraftStatusEntry | undefined, patch: Dra
     if (patch.at === null || patch.at === "") delete next.at;
     else if (Number.isNaN(Date.parse(patch.at))) return `알 수 없는 시각: ${patch.at}`;
     else next.at = new Date(patch.at).toISOString();
+  }
+  if (patch.account !== undefined) {
+    if (!patch.account) delete next.account;
+    else if (!isAccountId(patch.account)) return `알 수 없는 계정: ${patch.account}`;
+    else next.account = patch.account;
+  }
+  if (patch.topic !== undefined) {
+    if (!patch.topic) delete next.topic;
+    else if (!isBlogTopic(patch.topic)) return `알 수 없는 분야: ${patch.topic}`;
+    else next.topic = patch.topic;
+  }
+  if (patch.thumbnail !== undefined) {
+    const thumbnail = applyThumbnail(next.thumbnail, patch.thumbnail ?? {});
+    if (typeof thumbnail === "string") return thumbnail;
+    if (thumbnail) next.thumbnail = thumbnail;
+    else delete next.thumbnail;
   }
   return next;
 }
@@ -149,5 +220,9 @@ export function sanitizeStatusEntry(raw: unknown): DraftStatusEntry | null {
       })
     : [];
   if (answers.length) entry.answers = answers;
+  if (isAccountId(r.account)) entry.account = r.account;
+  if (isBlogTopic(r.topic)) entry.topic = r.topic;
+  const thumbnail = r.thumbnail && typeof r.thumbnail === "object" ? applyThumbnail(undefined, r.thumbnail as DraftThumbnail) : undefined;
+  if (thumbnail && typeof thumbnail !== "string") entry.thumbnail = thumbnail;
   return entry;
 }

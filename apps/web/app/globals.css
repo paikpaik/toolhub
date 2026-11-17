@@ -4268,3 +4268,245 @@ td.related {
 .draft-nav + .draft-nav {
   margin-right: 4px;
 }
+
+/* 계정 탭: 계정 카드를 누르면 분야 칩·분야별 초안 수가 펼쳐진다 */
+.account-list {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.account-head {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  width: 100%;
+  padding: 0;
+  border: none;
+  background: none;
+  color: inherit;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.account-topics {
+  min-width: 0;
+  overflow: hidden;
+  color: var(--muted);
+  font-size: 13px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.account-body {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  margin-top: 12px;
+}
+
+.account-body h4 {
+  margin: 8px 0 0;
+  font-size: 13px;
+}
+
+.account-name-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.account-name-row label {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  font-size: 12px;
+  color: var(--muted);
+}
+
+.topic-group small {
+  display: block;
+  margin-bottom: 4px;
+  color: var(--muted);
+}
+
+.topic-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.topic-chip {
+  padding: 3px 10px;
+  border: 1px solid var(--border);
+  border-radius: 14px;
+  background: var(--surface);
+  color: var(--text);
+  font-size: 12.5px;
+  cursor: pointer;
+}
+
+.topic-chip:hover {
+  background: var(--hover);
+}
+
+.topic-chip.on {
+  border-color: var(--accent);
+  background: color-mix(in srgb, var(--accent) 14%, transparent);
+  color: var(--accent);
+  font-weight: 600;
+}
+
+.account-stats {
+  width: 100%;
+  max-width: 360px;
+  border-collapse: collapse;
+  font-size: 13px;
+}
+
+.account-stats th,
+.account-stats td {
+  padding: 4px 8px;
+  border-bottom: 1px solid var(--border);
+  text-align: left;
+}
+
+.account-stats .num {
+  text-align: right;
+}
+
+.account-add {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 14px;
+}
+
+.account-add input {
+  flex: 1 1 220px;
+}
+
+/* 초안 목록: 계정 거르기와 줄의 계정 표시 */
+.account-filter {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+}
+
+.draft-chip.account {
+  margin-left: 0;
+  margin-right: 6px;
+  background: color-mix(in srgb, var(--low) 14%, transparent);
+  color: var(--low);
+}
+
+/* 계정·초안 썸네일: 왼쪽 미리보기, 오른쪽 설정 */
+.account-thumb {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 16px;
+  align-items: flex-start;
+}
+
+.account-thumbnail {
+  width: 240px;
+  max-width: 100%;
+  height: auto;
+  aspect-ratio: 1;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--surface-2);
+}
+
+.account-thumb-controls {
+  display: flex;
+  flex: 1 1 260px;
+  flex-direction: column;
+  gap: 10px;
+  min-width: 0;
+}
+
+.account-thumb-controls label {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  font-size: 12px;
+  color: var(--muted);
+}
+
+.account-thumb-controls textarea {
+  font: inherit;
+  font-size: 14px;
+  resize: vertical;
+}
+
+.account-thumb-controls .color-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  gap: 10px;
+}
+
+.color-row input[type="color"] {
+  width: 44px;
+  height: 30px;
+  padding: 2px;
+}
+
+.background-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-top: 4px;
+}
+
+.background-item {
+  position: relative;
+}
+
+.background-item img {
+  display: block;
+  width: 56px;
+  height: 56px;
+  object-fit: cover;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+}
+
+.background-item button {
+  position: absolute;
+  top: -6px;
+  right: -6px;
+  display: grid;
+  place-items: center;
+  width: 20px;
+  height: 20px;
+  padding: 0;
+  border: 1px solid var(--border);
+  border-radius: 50%;
+  background: var(--surface);
+  color: var(--muted);
+  cursor: pointer;
+}
+
+.background-add {
+  display: flex !important;
+  flex-direction: row !important;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+  width: 56px;
+  height: 56px;
+  border: 1px dashed var(--border);
+  border-radius: 6px;
+  color: var(--muted);
+  font-size: 11px !important;
+  cursor: pointer;
+}
+
+.background-add:hover {
+  background: var(--hover);
+}

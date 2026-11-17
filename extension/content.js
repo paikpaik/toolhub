@@ -186,7 +186,7 @@
     }
     // 패널의 이미지 "삽입" 단계 (자리 찾기 → 지운 뒤 확인 → 붙여넣기). 드래그·백스페이스는 패널이 debugger로 보낸다. 에디터가 있는 프레임만 답한다
     if (message?.type === "image-insert-step") {
-      const steps = { locate: naver.locateImageSlot, check: naver.imageSlotStatus, paste: naver.pasteImageAtCaret };
+      const steps = { locate: () => naver.locateImageSlot(message.kind), check: naver.imageSlotStatus, paste: naver.pasteImageAtCaret };
       if (!naver.hasEditor() || !steps[message.step]) return false;
       Promise.resolve()
         .then(() => steps[message.step]())
