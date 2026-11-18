@@ -19,6 +19,8 @@ export * from "./draft-status-store.ts";
 export * from "./accounts.ts";
 export * from "./thumbnail-style.ts";
 export * from "./accounts-store.ts";
+export * from "./inflow.ts";
+export * from "./inflow-store.ts";
 export * from "./account-plan.ts";
 export * from "./account-plan-store.ts";
 export * from "./draft-bundle.ts";

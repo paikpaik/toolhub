@@ -81,6 +81,10 @@ import {
   accountName,
   accountsPlanningNote,
   formatAccounts,
+  inflowPlanningNote,
+  matchInflow,
+  readInflow,
+  writeInflow,
   isConnectBody,
   accountOverlapFeedback,
   matchesAccount,
@@ -152,9 +156,9 @@ const failure = (e: unknown) => ({
 const readPrompt = async (file: string) =>
   (await readFile(path.join(PROMPTS_DIR, file), "utf-8")).replace(/<!--[\s\S]*?-->\s*/g, "");
 
-/** 초안 작성에 필요한 규칙 전체 (프로젝트 지침 + 작성 공통 + 유형 + 플랫폼 + 스레드) */
+/** 초안 작성에 필요한 규칙 전체 (프로젝트 지침 + 작성 공통 + 유형 + 플랫폼) */
 async function writingRules(platform: Platform, type: WritingType) {
-  const files = ["project-instructions.md", "writing.md", `types/${type}.md`, `platforms/${platform}.md`, "threads.md"];
+  const files = ["project-instructions.md", "writing.md", `types/${type}.md`, `platforms/${platform}.md`];
   return (await Promise.all(files.map(readPrompt))).join("\n\n---\n\n");
 }
 
@@ -178,6 +182,7 @@ const server = new McpServer(
       "키워드 목록·화면 캡처: 사용자가 네이버 크리에이터 어드바이저(검색 유입 트렌드·메인 유입 트렌드·주제별 트렌드) 같은 캡처나 키워드 목록을 주면, 보이는 키워드를 모두 뽑아 analyze_keywords 한 번으로 분석하고 (크롬 확장이 복사한 '[크리에이터 어드바이저 트렌드 …]' 글이면 카드별 키워드를 50개씩 나눠 넣는다. 뒤의 (new)·(▲3)은 변동 표시로, new·▲를 우선한다) get_writing_rules(task=planning)의 기준으로 추천한다. 최근 7일이 급상승·상승인 키워드를 우선하고, 포화도가 보통·높음인 키워드는 find_pivot_keywords로 연관어를 찾아 함께 제안한다.",
       "초안 쓰기: 먼저 list_drafts(keyword)로 같은 키워드의 초안이 있는지 확인해 있으면 사용자에게 알린다. get_writing_rules(task=writing, platform, type)로 규칙을 읽고, get_writing_brief로 브리프를 받는다. 브리프에 '경쟁 판단'과 '추천 타깃 키워드'가 있으면 그중 하나(검색 의도가 글로 답하기 좋은 것)를 골라 사용자에게 알리고, 그 키워드로 get_writing_brief를 다시 받아 그 키워드를 메인 키워드로 쓴다 (save_draft의 keyword도 그 키워드). 그다음 규칙대로 웹 검색으로 사실을 확인하며 쓴다. 이때 list_drafts가 보여 준 최근 초안들의 제목·도입 문장과 같은 패턴을 피한다. 사용자가 원하면 save_draft로 저장하고 open_web(page=drafts)으로 보여준다. save_draft·update_draft 결과에 본문 글자 수와 제목 점검이 나오며, 목표보다 짧거나 제목 점검에 걸리면 안내대로 고쳐 update_draft로 다시 저장한다.",
       "계정별 초안: toolhub 계정 탭에 네이버 블로그 계정이 등록돼 있으면 get_writing_rules(task=planning) 끝에 계정과 분야가 나온다. 그때 네이버 글감은 직접 나누지 말고 assign_account_keywords로 계정에 나눈다 (계정당 편수를 코드가 지킴). 그 표대로 쓰고 save_draft에 account·topic·format·date를 넣는다 (네이버는 account가 없으면 저장이 거절됨). 계정이 없으면 지금처럼 쓴다. 계정이 몇 개인지·어떤 계정이 있는지 물으면 list_accounts로 답한다 (초안 기록으로 짐작하면 아직 글을 쓰지 않은 계정이 빠진다).",
+      "유입 검색어: 사용자가 '[블로그 유입 검색어 · 계정 · 기간]'(크롬 확장이 블로그 통계 유입분석에서 복사한 글)을 붙여넣으면 계정마다 review_search_inflow를 불러 결과를 계정별로 보여 준다. 저장된 후보는 다음 글감 계획(get_writing_rules planning)에 나오고, 쓰기로 한 후보는 assign_account_keywords에 account를 넣어 그 계정에 고정한다.",
       "네이버 형식과 발행일: 네이버 초안은 글감 추천에서 정한 형식을 get_writing_brief와 save_draft의 format에 같은 값으로 넘긴다 (home=홈판형, 생략=검색형). 발행일이 오늘이 아니면(행사 1~3일 전 등) save_draft의 date에 그 날을 넣는다. 초안 파일 날짜가 발행일이 되어 그날 초안 목록에 함께 보인다.",
       "초안 고치기: read_draft로 읽고 고친 뒤 update_draft로 같은 파일에 저장한다 (이전 버전은 자동 보관). 새 초안은 save_draft로 만든다. 발행됨 초안은 고치지 않는다 (정책, update_draft가 거부함): list_drafts의 상태가 발행됨이면 고치려고 읽지도 않는다 (인스타 재가공처럼 읽기만 하는 건 괜찮다).",
       "글 유형: 상품·서비스 사용기는 review, 맛집·여행지·시설 방문기는 place, 쇼핑 커넥트 제휴 링크를 넣는 상품 글은 connect, 그 밖에는 info. 리뷰 상품의 쇼핑 트렌드는 get_shopping_trend, 장소 정보는 search_places로 확인한다.",
@@ -320,8 +325,9 @@ server.registerTool(
   async ({ task, platform = "tistory", type = "info" }) => {
     try {
       if (task === "writing") return text(await writingRules(platform, type));
-      const note = accountsPlanningNote(await readAccounts(DATA_DIR));
-      return text(note ? `${await planningRules()}\n\n---\n\n${note}` : await planningRules());
+      const accounts = await readAccounts(DATA_DIR);
+      const notes = [accountsPlanningNote(accounts), accounts.length ? inflowPlanningNote(accounts, await readInflow(DATA_DIR), await draftKeywords()) : null];
+      return text([await planningRules(), ...notes.filter(Boolean)].join("\n\n---\n\n"));
     } catch (e) {
       return failure(e);
     }
@@ -586,6 +592,7 @@ const planKeywordSchema = z.object({
     .regex(/^\d{4}-\d{2}-\d{2}$/)
     .optional()
     .describe("발행일 YYYY-MM-DD. 생략하면 오늘. 행사 전에 올릴 홈판형만 뒤 날짜"),
+  account: z.string().optional().describe("이 계정(이름)에 고정. 유입 검색어 후보처럼 그 계정 블로그에서 나온 키워드만. 보통은 생략"),
 });
 
 server.registerTool(
@@ -609,15 +616,72 @@ server.registerTool(
       const current = reset ? null : await readAccountPlan(DATA_DIR, today);
       const base =
         current && (total === undefined || total === current.total) ? current : { ...emptyPlan(accounts, today, total ?? accounts.length * 5), saved: current?.saved ?? [] };
-      const problems = keywords.flatMap((k) => (k.date ? (publishDateProblem(k.date, today) ? [`${k.keyword}: ${publishDateProblem(k.date, today)}`] : []) : []));
+      const problems = keywords.flatMap((k) => [
+        ...(k.date && publishDateProblem(k.date, today) ? [`${k.keyword}: ${publishDateProblem(k.date, today)}`] : []),
+        ...(k.account && !findAccount(accounts, k.account) ? [`${k.keyword}: 알 수 없는 계정 ${k.account} (등록된 계정: ${accounts.map((a) => a.name).join(", ")})`] : []),
+      ]);
       if (problems.length) return failure(problems.join("\n"));
       const { plan, leftover } = assignAccountKeywords(
         accounts,
-        keywords.map((k) => ({ ...k, date: k.date ?? today })),
+        keywords.map(({ account, ...k }) => ({ ...k, date: k.date ?? today, ...(account && { pin: findAccount(accounts, account)!.id }) })),
         base,
       );
       await writeAccountPlan(DATA_DIR, plan);
       return text(formatPlan(accounts, plan, leftover));
+    } catch (e) {
+      return failure(e);
+    }
+  },
+);
+
+/** 초안마다 키워드와 계정 id (유입 검색어가 이미 다룬 주제인지 맞춰 볼 때) */
+async function draftKeywords() {
+  const [all, statuses] = await Promise.all([listDrafts(DRAFTS_DIR), readDraftStatuses(DATA_DIR)]);
+  return all.map((d) => ({ keyword: d.keyword, account: statuses[d.file]?.account }));
+}
+
+server.registerTool(
+  "review_search_inflow",
+  {
+    title: "유입 검색어로 글감 찾기",
+    description:
+      "크롬 확장이 블로그 통계 › 유입분석 › 검색 유입 화면에서 복사한 '[블로그 유입 검색어 · 계정 · 기간]' 글을 받아, 그 계정 초안과 맞춰 보고 아직 전용 글이 없는 검색어를 검색량·블로그 문서 수·포화도로 분석한다. 결과는 계정에 저장되어 다음 get_writing_rules(task=planning)에 그 계정의 글감 후보로 나온다. 계정이 여러 개 붙어 있으면 계정마다 한 번씩 부른다. 발행된 글은 고치지 않으므로 기존 글 보완이 아니라 새 글감으로만 쓴다.",
+    inputSchema: {
+      account: z.string().min(1).describe("계정 이름 (복사한 글의 계정)"),
+      period: z.string().min(1).describe("통계 기간 (예: 2026-11-09~2026-11-15)"),
+      keywords: z
+        .array(z.object({ keyword: z.string().min(1), share: z.number().min(0).max(100).describe("검색 유입 중 비율 %") }))
+        .min(1)
+        .max(100)
+        .describe("복사한 글의 검색어와 비율 그대로"),
+    },
+    annotations: { readOnlyHint: false, destructiveHint: false, openWorldHint: true },
+  },
+  async ({ account: name, period, keywords }) => {
+    try {
+      const accounts = await readAccounts(DATA_DIR);
+      const account = findAccount(accounts, name);
+      if (!account) return failure(`알 수 없는 계정: ${name}. 등록된 계정: ${accounts.map((a) => a.name).join(", ") || "없음"}`);
+      await writeInflow(DATA_DIR, account.id, { period, at: new Date().toISOString(), keywords });
+      const { covered, open } = matchInflow(keywords, await draftKeywords(), account.id);
+      const lines = [
+        `${account.name} · ${period} · 검색어 ${keywords.length}개 (저장함, 다음 글감 계획에 후보로 나옴)`,
+        covered.length ? `이미 글이 있는 검색어 ${covered.length}개: ${covered.map((k) => `${k.keyword} ${k.share}% (← ${k.draftKeyword})`).join(", ")}` : "이미 글이 있는 검색어: 없음",
+      ];
+      if (!open.length) return text([...lines, "전용 글이 없는 검색어가 없습니다."].join("\n"));
+      const sources = briefSources();
+      if (!sources.searchAd && !sources.hub) return text([...lines, `전용 글이 없는 검색어: ${open.map((k) => `${k.keyword} ${k.share}%`).join(", ")}`, "검색광고·API HUB 키가 없어 분석은 하지 못했습니다."].join("\n"));
+      const picked = [...open].sort((a, b) => b.share - a.share).slice(0, MAX_BATCH_KEYWORDS);
+      const { rows, error } = await analyzeKeywords(sources, picked.map((k) => k.keyword));
+      return text(
+        [
+          ...lines,
+          `전용 글이 없는 검색어 ${open.length}개 (유입 비율: ${picked.map((k) => `${k.keyword} ${k.share}%`).join(", ")})`,
+          ...(error ? [`검색량 조회 실패: ${error}`] : []),
+          "",
+          formatBatchTable(rows),
+        ].join("\n"),
+      );
     } catch (e) {
       return failure(e);
     }

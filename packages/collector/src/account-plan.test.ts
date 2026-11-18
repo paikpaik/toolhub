@@ -58,6 +58,17 @@ describe("계정별 글감 나누기", () => {
     );
   });
 
+  it("고정한 키워드(유입 검색어 후보)는 분야와 상관없이 그 계정 몫에, 몫이 차면 남긴다", () => {
+    const base = emptyPlan(accounts, "2026-11-17", 3);
+    const { plan, leftover } = assignAccountKeywords(accounts, [{ ...kw("한경선", "스타·연예인"), pin: "acc-c" }, { ...kw("라우식", "문학·책"), pin: "acc-c" }], base);
+    assert.deepEqual(
+      plan.items.map((i) => [i.keyword, i.account]),
+      [["한경선", "acc-c"]],
+    );
+    assert.ok(!("pin" in plan.items[0]!));
+    assert.match(leftover[0]!.reason, /우드 몫이 다 참/);
+  });
+
   it("결과 글: 계정별 표·홈판형 수, 모자라면 discover_keywords 안내", () => {
     const { plan, leftover } = assignAccountKeywords(accounts, [kw("축제", "국내여행", "home", "2026-11-19")], emptyPlan(accounts, "2026-11-17", 3));
     const text = formatPlan(accounts, plan, leftover);

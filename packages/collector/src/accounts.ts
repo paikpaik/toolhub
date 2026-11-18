@@ -29,11 +29,14 @@ export interface BlogAccount {
   topics: BlogTopic[];
   /** 이 계정 썸네일 스타일 (배경 이미지·템플릿·글꼴·색) */
   thumbnail: ThumbnailStyle;
+  /** 네이버 블로그 아이디 (blog.naver.com/<아이디>). 확장이 블로그 통계 화면이 어느 계정인지 알아볼 때 쓴다 */
+  blogId?: string;
 }
 
 export const ACCOUNT_MAX = 10;
 const NAME_MAX = 20;
 const ID_PATTERN = /^[a-z0-9-]{1,32}$/;
+const BLOG_ID_PATTERN = /^[a-z0-9_-]{1,30}$/;
 
 export const isAccountId = (value: unknown): value is string => typeof value === "string" && ID_PATTERN.test(value);
 
@@ -54,7 +57,11 @@ export function sanitizeAccounts(raw: unknown): BlogAccount[] | string {
     if (accounts.some((a) => a.id === r.id)) return "계정 id가 겹쳐요";
     if (accounts.some((a) => a.name === name)) return `같은 이름의 계정이 있어요: ${name}`;
     const topics = Array.isArray(r.topics) ? [...new Set(r.topics.filter(isBlogTopic))] : [];
-    accounts.push({ id: r.id, name, topics, thumbnail: sanitizeThumbnailStyle(r.thumbnail) });
+    // 블로그 아이디는 선택. 주소째 넣어도 아이디만 남긴다 (네이버 아이디는 대소문자를 가리지 않음)
+    const blogId = typeof r.blogId === "string" ? r.blogId.trim().replace(/^.*blog\.naver\.com\//i, "").replace(/[/?#].*$/, "").toLowerCase() : "";
+    if (blogId && !BLOG_ID_PATTERN.test(blogId)) return `블로그 아이디가 잘못됐어요: ${r.blogId}`;
+    if (blogId && accounts.some((a) => a.blogId === blogId)) return `같은 블로그 아이디의 계정이 있어요: ${blogId}`;
+    accounts.push({ id: r.id, name, topics, thumbnail: sanitizeThumbnailStyle(r.thumbnail), ...(blogId && { blogId }) });
   }
   return accounts;
 }

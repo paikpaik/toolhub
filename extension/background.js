@@ -9,6 +9,9 @@ importScripts("lib.js", "shelf-store.js");
 const MENU_ID = "toolhub-add-image";
 const ADVISOR_MENU_ID = "toolhub-advisor-trends";
 const ADVISOR_PAGES = ["https://creator-advisor.naver.com/*"];
+const INFLOW_MENU_ID = "toolhub-blog-inflow";
+/** 블로그 관리 › 내 블로그 통계 (통계가 다른 주소의 프레임에 그려질 수도 있어 통계 주소도 함께) */
+const INFLOW_PAGES = ["https://admin.blog.naver.com/*", "https://blog.stat.naver.com/*", "https://*.blog.stat.naver.com/*"];
 
 // 확장 아이콘을 누르면 사이드 패널(이미지 모음)을 연다. 패널 위치(왼쪽·오른쪽)는 크롬 설정 › 모양 › 사이드 패널에서 정한다
 chrome.sidePanel.setPanelBehavior({ openPanelOnActionClick: true }).catch(() => {});
@@ -30,6 +33,12 @@ chrome.runtime.onInstalled.addListener(() => {
     title: "toolhub: 트렌드 키워드 복사",
     contexts: ["page", "selection", "link"],
     documentUrlPatterns: ADVISOR_PAGES,
+  });
+  chrome.contextMenus.create({
+    id: INFLOW_MENU_ID,
+    title: "toolhub: 유입 검색어 복사",
+    contexts: ["page", "selection", "link"],
+    documentUrlPatterns: INFLOW_PAGES,
   });
 });
 
@@ -162,41 +171,44 @@ chrome.runtime.onMessage.addListener((message, sender) => {
   }
 });
 
+/** 페이지 아래에 잠깐 안내를 띄우고, copy가 있으면 클립보드에 쓴다 (메뉴를 누른 직후라 페이지 안에서 쓴다) */
+function showInPage(tabId, text, copy) {
+  return chrome.scripting
+    .executeScript({
+      target: { tabId },
+      args: [text, copy],
+      func: async (message, copy) => {
+        // 클립보드는 페이지 안에서 쓴다. 메뉴를 누른 직후라 막히면 숨긴 입력칸으로 한 번 더
+        if (copy) {
+          try {
+            await navigator.clipboard.writeText(copy);
+          } catch {
+            const area = Object.assign(document.createElement("textarea"), { value: copy });
+            document.body.append(area);
+            area.select();
+            document.execCommand("copy");
+            area.remove();
+          }
+        }
+        const toast = Object.assign(document.createElement("div"), { textContent: message });
+        Object.assign(toast.style, {
+          position: "fixed", left: "50%", bottom: "32px", transform: "translateX(-50%)", zIndex: 2147483647,
+          maxWidth: "min(560px, 90vw)", padding: "12px 16px", borderRadius: "10px", background: "#1f2430", color: "#fff",
+          font: "14px/1.5 -apple-system, sans-serif", boxShadow: "0 6px 24px rgba(0,0,0,.25)", whiteSpace: "pre-line",
+        });
+        document.body.append(toast);
+        setTimeout(() => toast.remove(), 4000);
+      },
+    })
+    .catch(() => {});
+}
+
 /**
  * 크리에이터 어드바이저 트렌드: 화면의 카드별 키워드를 읽어(advisor.js) 탭별로 모아 두고, 지금까지 모은 것을 복사한다.
  * 검색 유입 트렌드에서 한 번, 메인 유입 트렌드에서 한 번 누르면 둘이 함께 복사된다 (같은 날짜끼리, 브라우저를 닫으면 비워짐)
  */
 async function copyAdvisorTrends(tabId) {
-  const show = (text, ok) =>
-    chrome.scripting
-      .executeScript({
-        target: { tabId },
-        args: [text, ok],
-        func: async (message, copy) => {
-          // 클립보드는 페이지 안에서 쓴다. 메뉴를 누른 직후라 막히면 숨긴 입력칸으로 한 번 더
-          if (copy) {
-            try {
-              await navigator.clipboard.writeText(copy);
-            } catch {
-              const area = Object.assign(document.createElement("textarea"), { value: copy });
-              document.body.append(area);
-              area.select();
-              document.execCommand("copy");
-              area.remove();
-            }
-          }
-          const toast = Object.assign(document.createElement("div"), { textContent: message });
-          Object.assign(toast.style, {
-            position: "fixed", left: "50%", bottom: "32px", transform: "translateX(-50%)", zIndex: 2147483647,
-            maxWidth: "min(560px, 90vw)", padding: "12px 16px", borderRadius: "10px", background: "#1f2430", color: "#fff",
-            font: "14px/1.5 -apple-system, sans-serif", boxShadow: "0 6px 24px rgba(0,0,0,.25)", whiteSpace: "pre-line",
-          });
-          document.body.append(toast);
-          setTimeout(() => toast.remove(), 4000);
-        },
-      })
-      .catch(() => {});
-
+  const show = (text, copy) => showInPage(tabId, text, copy);
   try {
     const [{ result }] = await chrome.scripting.executeScript({ target: { tabId }, files: ["lib.js", "advisor.js"] });
     if (!result || result.error) return show(result?.error ?? "키워드를 읽지 못했어요.", null);
@@ -214,6 +226,44 @@ async function copyAdvisorTrends(tabId) {
   }
 }
 
+/**
+ * 블로그 통계 › 유입분석 › 검색 유입: 화면의 검색어·비율을 읽어(parseInflowPage) 블로그마다 모아 두고, 모은 것을 복사한다.
+ * 계정 5개를 차례로 열어 누르면 한 번에 붙여넣을 수 있다. 화면을 읽기만 하고 아무것도 누르지 않는다
+ */
+async function copyBlogInflow(tabId, tabUrl) {
+  const show = (text, copy) => showInPage(tabId, text, copy);
+  try {
+    const frames = await chrome.scripting.executeScript({
+      target: { tabId, allFrames: true },
+      func: () => ({ url: location.href, lines: document.body?.innerText.split("\n") ?? [] }),
+    });
+    const pages = frames.map((f) => f.result).filter(Boolean);
+    const parsed = pages.map((p) => ToolhubLib.parseInflowPage(p.lines));
+    const found = parsed.filter((p) => !p.error).sort((a, b) => b.keywords.length - a.keywords.length)[0];
+    if (!found) return show(`${parsed.find((p) => p.error)?.error ?? "검색어를 읽지 못했어요."}\n주소: ${tabUrl}`, null);
+    const blogId = ToolhubLib.blogIdFromUrls([tabUrl, ...pages.map((p) => p.url)]);
+    const { blogInflow } = await chrome.storage.session.get("blogInflow");
+    const merged = ToolhubLib.mergeInflow(blogInflow, blogId ?? tabUrl, { blogId, ...found });
+    await chrome.storage.session.set({ blogInflow: merged });
+    const accounts = (await ToolhubLib.fetchWebAccounts()) ?? [];
+    const name = accounts.find((a) => a.blogId && a.blogId === blogId)?.name;
+    const count = Object.keys(merged.entries).length;
+    await show(
+      [
+        `${name ?? blogId ?? "블로그"} · ${found.period ?? ""}: 검색어 ${found.keywords.length}개를 읽었어요.`,
+        name ? "" : blogId ? `toolhub 계정 화면에 블로그 아이디 ${blogId}를 넣으면 계정 이름으로 붙어요.` : "블로그 아이디를 찾지 못했어요.",
+        `모은 블로그 ${count}개 — 다른 계정 통계에서도 누르면 함께 복사돼요. Claude 앱에 붙여넣으세요.`,
+      ]
+        .filter(Boolean)
+        .join("\n"),
+      ToolhubLib.formatInflow(merged, accounts),
+    );
+  } catch (e) {
+    show(`검색어를 읽지 못했어요: ${e?.message ?? e}`, null);
+  }
+}
+
 chrome.contextMenus.onClicked.addListener((info, tab) => {
   if (info.menuItemId === ADVISOR_MENU_ID && tab?.id) copyAdvisorTrends(tab.id);
+  if (info.menuItemId === INFLOW_MENU_ID && tab?.id) copyBlogInflow(tab.id, tab.url ?? "");
 });

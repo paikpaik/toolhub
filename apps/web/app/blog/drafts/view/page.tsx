@@ -6,7 +6,6 @@ import { AddTaskPopover } from "../../../add-task-popover";
 import { countBodyChars, naverPasteHtml, previewDocument } from "../../../../lib/preview";
 import { Icon } from "../../../icons";
 import { CopyButton } from "../../copy-button";
-import { DraftChecklist } from "../checklist";
 import { DraftStatusCard } from "../status-control";
 import { THUMBNAIL_FONTS } from "../../thumbnail/fonts";
 import { ImagePromptCard } from "./image-prompt";
@@ -60,13 +59,6 @@ export default async function DraftViewPage({ searchParams }: { searchParams: Pr
   // 초안 목록과 같은 순서(발행됨 → 초안, 최근 수정 순)에서 앞뒤의 "초안" 상태 글. 발행됨은 건너뛴다
   const near = adjacentDrafts(sortDrafts(allDrafts, statuses).map((d) => d.file), file, statuses);
   const keywordOf = (f: string | null) => allDrafts.find((d) => d.file === f)?.keyword ?? "";
-  // 남은 사람이 채울 자리를 발행 할 일의 하위 할 일로
-  const markerLabel = { image: "이미지", write: "직접 작성", check: "확인" } as const;
-  const subtasks = draft.markers.map((m, i) => ({
-    id: `m${i}`,
-    text: `${markerLabel[m.type]}: ${m.text.split("|")[0]!.trim().slice(0, 60)}`,
-    done: false,
-  }));
 
   return (
     <main>
@@ -84,9 +76,9 @@ export default async function DraftViewPage({ searchParams }: { searchParams: Pr
           <AddTaskPopover
             key={file}
             text={`${summary.keyword} 글 발행 내일`}
-            defaults={{ link: draftHref, subtasks }}
+            defaults={{ link: draftHref }}
             label="발행 할 일"
-            title={`발행 할 일 만들기${subtasks.length ? ` (남은 자리 ${subtasks.length}개가 하위 할 일로)` : ""}`}
+            title="발행 할 일 만들기"
           />
         )}
         <ThumbnailButton />
@@ -205,10 +197,6 @@ export default async function DraftViewPage({ searchParams }: { searchParams: Pr
 
           <ImagePromptCard prompts={imagePrompts} />
 
-          <section className="card">
-            <h3>발행 전 체크리스트</h3>
-            <DraftChecklist file={file} markers={draft.markers} />
-          </section>
         </aside>
       </div>
     </main>

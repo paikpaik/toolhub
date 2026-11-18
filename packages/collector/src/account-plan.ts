@@ -15,9 +15,11 @@ export interface PlanKeyword {
   format: NaverFormat;
   /** 발행일 YYYY-MM-DD */
   date: string;
+  /** 이 계정(id)에 고정 (유입 검색어 후보처럼 그 계정 블로그에서 나온 키워드). 분야와 상관없이 그 계정 몫에 넣는다 */
+  pin?: string;
 }
 
-export interface PlanItem extends PlanKeyword {
+export interface PlanItem extends Omit<PlanKeyword, "pin"> {
   /** 계정 id */
   account: string;
 }
@@ -68,7 +70,7 @@ export function assignAccountKeywords(accounts: BlogAccount[], keywords: PlanKey
       leftover.push({ ...k, reason: "이미 계획에 있음" });
       continue;
     }
-    const owners = accounts.filter((a) => takes(a, k.topic));
+    const owners = k.pin ? accounts.filter((a) => a.id === k.pin) : accounts.filter((a) => takes(a, k.topic));
     if (!owners.length) {
       leftover.push({ ...k, reason: "이 분야를 맡은 계정 없음" });
       continue;
@@ -79,7 +81,8 @@ export function assignAccountKeywords(accounts: BlogAccount[], keywords: PlanKey
       continue;
     }
     const pick = open.reduce((best, a) => (count(a.id) < count(best.id) ? a : best));
-    items.push({ ...k, account: pick.id });
+    const { pin: _pin, ...item } = k;
+    items.push({ ...item, account: pick.id });
   }
   return { plan: { ...base, items }, leftover };
 }

@@ -37,6 +37,11 @@ describe("계정", () => {
     assert.match(sanitizeAccounts([A, { ...B, name: "여행계정" }]) as string, /같은 이름/);
     assert.match(sanitizeAccounts([A, { ...B, id: "acc-a" }]) as string, /id가 겹쳐요/);
     assert.match(newAccountId(), /^acc-[0-9a-f]{8}$/);
+    // 블로그 아이디: 주소째 넣어도 아이디만, 소문자로, 잘못됐거나 겹치면 오류, 비우면 없음
+    assert.equal((sanitizeAccounts([{ ...A, blogId: " https://blog.naver.com/Wood_01?tab=1 " }]) as { blogId?: string }[])[0]!.blogId, "wood_01");
+    assert.ok(!("blogId" in (sanitizeAccounts([{ ...A, blogId: " " }]) as object[])[0]!));
+    assert.match(sanitizeAccounts([{ ...A, blogId: "한글아이디" }]) as string, /블로그 아이디가 잘못/);
+    assert.match(sanitizeAccounts([{ ...A, blogId: "wood" }, { ...B, blogId: "WOOD" }]) as string, /같은 블로그 아이디/);
   });
 
   it("id나 이름(대소문자 무시)으로 찾고, 지운 계정 이름은 null", () => {

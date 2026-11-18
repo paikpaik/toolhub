@@ -180,6 +180,88 @@ globalThis.ToolhubLib = (() => {
     return lines.join("\n");
   }
 
+  // ── 블로그 통계 › 유입분석 › 검색 유입: 검색어와 비율 ──
+
+  /** 검색어가 아닌 줄 (탭·머리글) */
+  const INFLOW_LABELS = new Set(["전체", "검색 유입", "사이트 유입", "유입경로", "상세 유입경로", "일간", "주간", "월간", "유입분석"]);
+  /** 오른쪽 "상세 유입경로" 줄 (네이버 통합검색_모바일, 다음 통합검색, 구글 …): 검색어가 아니다 */
+  const INFLOW_DETAIL = /^(네이버|다음|구글|google|bing|빙|zum|줌|네이트|yahoo)(\s|$)/i;
+  const isInflowDetail = (text) => INFLOW_DETAIL.test(text) && (/검색|VIEW|뷰|_(모바일|PC)$/i.test(text) || /^(구글|google|bing|빙|yahoo)$/i.test(text));
+  const PERCENT = /^(\d{1,3}(?:\.\d+)?)\s*%$/;
+  const pad = (n) => String(n).padStart(2, "0");
+
+  /**
+   * 유입분석 화면 글자 줄 → { period, total, keywords: [{ keyword, share }] } | { error }.
+   * 화면 구조(클래스 이름)를 몰라 글자로 읽는다: "검색어" 다음 줄(또는 같은 줄 탭 뒤)이 "8.39%"인 줄이 검색어다
+   */
+  function parseInflowPage(rawLines) {
+    const lines = rawLines.map((line) => String(line ?? "").replace(/\s+/g, " ").trim()).filter(Boolean);
+    const all = lines.join(" ");
+    if (!lines.some((line) => line === "검색 유입" || /^검색 유입\s/.test(line))) return { error: "유입분석의 검색 유입 탭이 아니에요. 블로그 통계 › 유입분석 › 검색 유입을 열어 주세요." };
+    const range = all.match(/(\d{4})\.\s?(\d{1,2})\.\s?(\d{1,2})\.?\s*~\s*(\d{4})\.\s?(\d{1,2})\.\s?(\d{1,2})/);
+    const day = all.match(/(\d{4})\.\s?(\d{1,2})\.\s?(\d{1,2})\./);
+    const period = range
+      ? `${range[1]}-${pad(range[2])}-${pad(range[3])}~${range[4]}-${pad(range[5])}-${pad(range[6])}`
+      : day
+        ? `${day[1]}-${pad(day[2])}-${pad(day[3])}`
+        : null;
+    const total = Number(all.match(/검색 유입\s*(\d{1,3}(?:\.\d+)?)\s*%/)?.[1]) || null;
+    const keywords = [];
+    const add = (keyword, share) => {
+      const text = keyword.trim();
+      if (!text || INFLOW_LABELS.has(text) || /^검색 유입/.test(text) || isInflowDetail(text) || PERCENT.test(text) || text.length > 60) return;
+      if (!keywords.some((k) => k.keyword === text)) keywords.push({ keyword: text, share: Number(share) });
+    };
+    for (let i = 0; i < lines.length; i++) {
+      const same = lines[i].match(/^(.+?)\s+(\d{1,3}(?:\.\d+)?)\s*%$/);
+      if (same) add(same[1], same[2]);
+      else if (i > 0 && PERCENT.test(lines[i]) && !PERCENT.test(lines[i - 1])) add(lines[i - 1], lines[i].match(PERCENT)[1]);
+    }
+    if (!keywords.length) return { error: "검색어를 찾지 못했어요. 표가 다 뜬 뒤 다시 눌러 주세요." };
+    return { period, total, keywords };
+  }
+
+  /** 지금 탭·프레임 주소에서 네이버 블로그 아이디 (주소의 blogId=, 또는 blog.naver.com/<아이디>) */
+  function blogIdFromUrls(urls) {
+    const ids = urls.flatMap((raw) => {
+      let url;
+      try {
+        url = new URL(raw);
+      } catch {
+        return [];
+      }
+      const param = url.searchParams.get("blogId");
+      if (param) return [{ id: param, strong: true }];
+      const first = url.pathname.split("/").filter(Boolean)[0] ?? "";
+      return /(^|\.)blog\.naver\.com$/.test(url.hostname) && /^[A-Za-z0-9_-]{1,30}$/.test(first) && !/\.(naver|nhn)$/i.test(first) ? [{ id: first, strong: false }] : [];
+    });
+    const pick = ids.find((i) => i.strong) ?? ids[0];
+    return pick ? pick.id.toLowerCase() : null;
+  }
+
+  /** 복사한 유입 검색어를 블로그마다 모은다. 계정 여러 개를 차례로 누르면 함께 복사된다 (반나절 지난 것은 버림) */
+  const INFLOW_KEEP_MS = 12 * 60 * 60 * 1000;
+  function mergeInflow(stored, key, entry, now = Date.now()) {
+    const kept = Object.entries(stored?.entries ?? {}).filter(([k, e]) => k !== key && now - e.at < INFLOW_KEEP_MS);
+    return { entries: { ...Object.fromEntries(kept), [key]: { ...entry, at: now } } };
+  }
+
+  /** Claude 앱에 붙여넣을 글. 계정마다 한 묶음. accounts: 웹 계정 [{ name, blogId }] (모르면 []) */
+  function formatInflow(stored, accounts = []) {
+    const entries = Object.values(stored?.entries ?? {});
+    const lines = [
+      "[블로그 유입 검색어]",
+      `이 검색어들로 계정마다 review_search_inflow를 불러 아직 글이 없는 검색어를 새 글감 후보로 정리해줘. (블로그 ${entries.length}개)`,
+    ];
+    for (const e of entries) {
+      const name = accounts.find((a) => a.blogId && a.blogId === e.blogId)?.name;
+      const who = name ?? `블로그 아이디 ${e.blogId ?? "모름"} (toolhub 계정 화면에 블로그 아이디를 넣어 주세요)`;
+      lines.push("", `## ${who} · ${e.period ?? "기간 모름"}${e.total ? ` · 검색 유입 ${e.total}%` : ""}`);
+      for (const k of e.keywords) lines.push(`- ${k.keyword} ${k.share}%`);
+    }
+    return lines.join("\n");
+  }
+
   /** 사용자가 직접 띄운 웹(npm run web, 3000)을 먼저, 없으면 MCP open_web이 띄운 웹(3100) */
   const WEB_BASES = ["http://localhost:3000", "http://localhost:3100"];
 
@@ -234,6 +316,10 @@ globalThis.ToolhubLib = (() => {
     mergeAdvisorTrends,
     formatAdvisorTrends,
     trendRequestGoal,
+    parseInflowPage,
+    blogIdFromUrls,
+    mergeInflow,
+    formatInflow,
     WEB_BASES,
     fetchWebAccounts,
     fillProblem,

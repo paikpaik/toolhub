@@ -170,3 +170,60 @@ describe("초안 채우기", () => {
     assert.ok(!sameText("원주 매운맛축제", "원주 매운맛축제, 아이와 가도 될까"));
   });
 });
+
+describe("블로그 유입 검색어", () => {
+  const { parseInflowPage, blogIdFromUrls, mergeInflow, formatInflow } = globalThis.ToolhubLib;
+  // 2026-11-19 사용자 화면(블로그 통계 › 유입분석 › 검색 유입, 주간) 글자 그대로
+  const page = [
+    "내 블로그 통계",
+    "유입분석",
+    "2026.11.09. ~ 2026.11.15.",
+    "일간", "주간", "월간",
+    "전체", "검색 유입", "사이트 유입",
+    "검색 유입 93.51%",
+    "유입경로", "상세 유입경로",
+    "한경선", "8.39%",
+    "컴포즈 모찌", "5.56%",
+    "이유진 차경은 결혼 임신 발표\t5.21%",
+    "컴포즈 직영점", "2.95%",
+    "네이버 통합검색_모바일", "6.31%",
+    "네이버 통합검색_PC", "2.07%",
+    "한경선", "8.39%",
+  ];
+
+  it("기간·검색 유입 비율·검색어와 비율 (상세 유입경로·머리글·중복 제외)", () => {
+    assert.deepEqual(parseInflowPage(page), {
+      period: "2026-11-09~2026-11-15",
+      total: 93.51,
+      keywords: [
+        { keyword: "한경선", share: 8.39 },
+        { keyword: "컴포즈 모찌", share: 5.56 },
+        { keyword: "이유진 차경은 결혼 임신 발표", share: 5.21 },
+        { keyword: "컴포즈 직영점", share: 2.95 },
+      ],
+    });
+  });
+
+  it("검색 유입 탭이 아니거나 검색어가 없으면 이유", () => {
+    assert.match(parseInflowPage(["유입분석", "사이트 유입", "blog.naver.com", "3%"]).error, /검색 유입 탭이 아니에요/);
+    assert.match(parseInflowPage(["유입분석", "검색 유입", "2026.11.15."]).error, /검색어를 찾지 못했어요/);
+    assert.equal(parseInflowPage(["2026.11.15.", "검색 유입", "가습기", "1%"]).period, "2026-11-15");
+  });
+
+  it("블로그 아이디: 주소의 blogId=를 먼저, 없으면 blog.naver.com/<아이디>", () => {
+    assert.equal(blogIdFromUrls(["https://admin.blog.naver.com/Wood_01/stat/inflow", "https://blog.stat.naver.com/x?blogId=Wood_01"]), "wood_01");
+    assert.equal(blogIdFromUrls(["https://admin.blog.naver.com/myblog/stat"]), "myblog");
+    assert.equal(blogIdFromUrls(["https://admin.blog.naver.com/BlogStatistics.naver", "not a url"]), null);
+  });
+
+  it("블로그마다 모으고(같은 블로그는 새것으로, 반나절 지나면 버림) 계정 이름으로 묶어 복사", () => {
+    const hour = 60 * 60 * 1000;
+    let stored = mergeInflow(null, "wood", { blogId: "wood", period: "2026-11-09~2026-11-15", total: 93.5, keywords: [{ keyword: "한경선", share: 8.39 }] }, 0);
+    stored = mergeInflow(stored, "issue", { blogId: "issue", period: "2026-11-09~2026-11-15", total: null, keywords: [{ keyword: "물가", share: 3 }] }, hour);
+    assert.deepEqual(Object.keys(mergeInflow(stored, "x", { blogId: "x", keywords: [] }, 12.5 * hour).entries), ["issue", "x"]);
+    const text = formatInflow(stored, [{ name: "우드", blogId: "wood" }]);
+    assert.match(text, /^\[블로그 유입 검색어\]\n.*review_search_inflow.*\(블로그 2개\)/);
+    assert.match(text, /## 우드 · 2026-11-09~2026-11-15 · 검색 유입 93.5%\n- 한경선 8.39%/);
+    assert.match(text, /## 블로그 아이디 issue \(toolhub 계정 화면에 블로그 아이디를 넣어 주세요\) · 2026-11-09~2026-11-15\n- 물가 3%/);
+  });
+});

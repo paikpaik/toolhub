@@ -115,6 +115,16 @@ export function AccountsEditor({ initial, stats, fonts }: { initial: BlogAccount
                         onKeyDown={(e) => e.key === "Enter" && e.currentTarget.blur()}
                       />
                     </label>
+                    <label title="blog.naver.com/아이디 의 아이디. 확장의 '유입 검색어 복사'가 블로그 통계 화면이 어느 계정인지 알아볼 때 써요">
+                      블로그 아이디
+                      <input
+                        defaultValue={account.blogId ?? ""}
+                        maxLength={60}
+                        placeholder="예: myblog123"
+                        onBlur={(e) => e.target.value.trim() !== (account.blogId ?? "") && change(account.id, { blogId: e.target.value.trim() || undefined })}
+                        onKeyDown={(e) => e.key === "Enter" && e.currentTarget.blur()}
+                      />
+                    </label>
                     <button type="button" className="button small" onClick={() => remove(account)}>
                       <Icon name="trash" size={14} /> 계정 지우기
                     </button>
