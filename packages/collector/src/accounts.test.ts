@@ -10,6 +10,7 @@ import {
   accountTopicStats,
   BLOG_TOPICS,
   findAccount,
+  formatAccounts,
   newAccountId,
   sanitizeAccounts,
   textSimilarity,
@@ -60,6 +61,18 @@ describe("계정", () => {
     assert.deepEqual(stats[0], { topic: "맛집", drafts: 1, published: 1 });
     assert.equal(stats.length, 3);
     assert.ok(stats.some((s) => s.topic === "분야 없음"));
+  });
+
+  it("계정 목록: 초안이 없는 계정도 빠지지 않고, 계정마다 초안·발행 수", () => {
+    assert.match(formatAccounts([], []), /등록된 계정이 없습니다/);
+    const text = formatAccounts([A as never, { ...B, topics: [] }], [
+      { account: "acc-a", status: "draft" },
+      { account: "acc-a", status: "published" },
+      { status: "draft" },
+    ]);
+    assert.match(text, /^등록된 네이버 블로그 계정 2개/);
+    assert.match(text, /- 여행계정: 분야 국내여행, 맛집 · 초안 1개 · 발행 1개/);
+    assert.match(text, /- 돈계정: 분야 미정 \(어느 분야든\) · 초안 0개 · 발행 0개/);
   });
 
   it("글감 규칙: 계정이 없으면 null(지금처럼), 있으면 계정·분야와 나누는 규칙", () => {

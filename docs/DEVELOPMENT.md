@@ -187,6 +187,8 @@ toolhub 전체가 하나의 버전(`1.0.0` 형식)을 씁니다. 올릴 때는 �
   - `save_draft`는 `account`(이름이나 id, `findAccount`)와 `topic`을 받아 상태 기록에 넣습니다. 모르는 계정이면 등록된 계정을 알려 주며 거절합니다.
   - `get_writing_rules(task=planning)`의 계정 안내는 "직접 나누지 말고 `assign_account_keywords`로"입니다.
   - `list_drafts`에는 `계정·분야` 칸과 `account` 거르기가 있습니다.
+  - `list_accounts` (`formatAccounts`): 등록된 계정마다 이름·분야·초안·발행 수. Claude 앱이 "계정 몇 개야?"에 초안 기록만 보고 3개라고 답했던 일(2026-11-18, 실제 5개, 글을 안 쓴 2개가 빠짐)이 있어 넣었습니다. 서버 안내문도 계정 질문은 이 도구로 답하게 합니다.
+  - 쇼핑 커넥트 글(`isConnectBody`)은 계정을 받아 저장하지만 `checkAgainstPlan`으로 대조하지 않습니다. 계획에 없는 키워드라는 경고와 몫 초과 경고가 나고, 계획 편수(`saved`)를 먹기 때문입니다.
   - **계정 겹침 점검** (`accountOverlapFeedback`): 저장·수정 결과에 붙습니다. 다른 계정에 같은 키워드·같은 플랫폼 초안이 있으면, 형식이 같은지, 추천 제목이 비슷한지(두 글자 묶음 겹침 `textSimilarity` 0.5 이상), 도입 첫 문장이 비슷한지(0.4 이상) 봅니다. 계정끼리 같은 키워드는 허용합니다(홈판 경쟁력이 있는 키워드는 겹치는 게 나을 수 있음). 다만 같은 사람이 비슷한 글을 여러 계정에 올리면 유사문서로 함께 밀리므로 글의 형태가 다르게 나오게 합니다.
 - **계정별 글감 나누기** (`account-plan.ts`, `account-plan-store.ts`, MCP `assign_account_keywords`): 규칙 문장만으로는 Claude가 계정당 편수를 어기거나 계정을 빠뜨려서, 나누기와 개수 세기를 코드로 옮겼습니다. Claude는 우선순위(넘기는 순서)와 키워드마다 분야·형식·발행일만 정합니다.
   - `accountQuotas`: 편수 ÷ 계정 수, 나머지는 앞 계정부터.
@@ -303,7 +305,7 @@ toolhub 전체가 하나의 버전(`1.0.0` 형식)을 씁니다. 올릴 때는 �
 
 **일정**: `list_tasks`, `add_task`(자연어 `text` 또는 필드 지정), `update_task`, `complete_task`, `delete_task`, `add_project`
 
-**블로그**: `get_live_keywords`, `get_daily_keywords`, `analyze_keyword`, `analyze_keywords`(목록·캡처 묶음 분석), `discover_keywords`(주제로 키워드 찾기), `research_keyword`, `search_places`, `get_shopping_trend`, `get_writing_rules`, `get_writing_brief`, `save_draft`, `list_drafts`, `read_draft`, `update_draft`, `get_version`(버전·최신 여부)
+**블로그**: `get_live_keywords`, `get_daily_keywords`, `analyze_keyword`, `analyze_keywords`(목록·캡처 묶음 분석), `discover_keywords`(주제로 키워드 찾기), `research_keyword`, `search_places`, `get_shopping_trend`, `get_writing_rules`, `get_writing_brief`, `assign_account_keywords`, `list_accounts`(등록된 계정), `save_draft`, `list_drafts`, `read_draft`, `update_draft`, `get_version`(버전·최신 여부)
 
 **인스타**: `get_insta_rules`(task: reel·caption·carousel·story·comment·repurpose, 내 계정 정보 포함), `check_reel_script`(훅 후보·대본 점검), `check_caption` — `insta-tools.ts`. 게시·댓글·DM은 사람이 직접 합니다 (자동화는 약관 위반이라 만들지 않음).
 
@@ -339,7 +341,7 @@ stdio 전송은 stdout을 프로토콜에 쓰므로 서버 코드에서 `console
 
 ## 크롬 확장 (`extension/`)
 
-- **크리에이터 어드바이저 트렌드 복사** (`advisor.js`, 2026-11-06): 복사한 글 맨 위 요청 문장은 "이 키워드들로 오늘 3개의 계정으로 네이버에 쓸 초안 15개를 작성해줘."입니다(2026-11-17, 계정 3개 기준. `formatAdvisorTrends`). 검색 유입·메인 유입 트렌드가 카드 슬라이드라 캡처가 번거로워서, 우클릭 메뉴(`documentUrlPatterns`가 `creator-advisor.naver.com`)를 누르면 background가 `lib.js`·`advisor.js`를 그 탭에 주입해 카드별 키워드를 읽습니다. 버튼을 누를 때 한 번 읽는 방식이라 늘 붙어 있는 content script로 두지 않았습니다.
+- **크리에이터 어드바이저 트렌드 복사** (`advisor.js`, 2026-11-06): 복사한 글 맨 위 요청 문장은 "이 키워드들로 오늘 N개의 계정으로 네이버에 쓸 초안 N×5개를 작성해줘."입니다(`formatAdvisorTrends`·`trendRequestGoal`). 2026-11-17에는 "3개의 계정으로 15개"로 고정이었는데, 계정이 5개가 되자 15편을 5개로 나눠 계정당 3편이 됐습니다. 그래서 2026-11-18부터 background가 웹 `/api/accounts`(`fetchWebAccounts`, 3000 → 3100)로 계정 수를 읽어 넣습니다. 웹이 꺼져 있으면 "등록된 계정마다 5개씩"(편수를 말하지 않으면 `assign_account_keywords`가 계정 수 × 5로 정함), 계정이 없으면 "초안 15개"입니다. 검색 유입·메인 유입 트렌드가 카드 슬라이드라 캡처가 번거로워서, 우클릭 메뉴(`documentUrlPatterns`가 `creator-advisor.naver.com`)를 누르면 background가 `lib.js`·`advisor.js`를 그 탭에 주입해 카드별 키워드를 읽습니다. 버튼을 누를 때 한 번 읽는 방식이라 늘 붙어 있는 content script로 두지 않았습니다.
   - 로그인 화면이라 HTML 구조를 볼 수 없어(스크린샷만 확인) 클래스 이름 대신 **모양**으로 찾습니다: 글자 조각이 2~4개이고 끝이 변동 표시(`new`·숫자·`-`, `isTrendMarker`)인 요소 = 줄, 같은 부모 아래 3줄 이상 = 목록, 목록 앞의 가장 가까운 줄 밖 글자(위로 6단계까지) = 카드 제목. 이어진 목록의 제목이 같으면(카드 안이 5줄씩 나뉜 경우) 한 카드로 합칩니다. 80자 넘는 요소는 줄이 아니라 건너뛰어 화면 전체를 여러 번 훑지 않습니다.
   - 변동 방향(`trendChange`): ▲▼가 아이콘이라 글자에 없을 수 있어 숫자의 계산된 색으로 봅니다(빨강 상승·파랑 하락). 네이버식 숨은 낭독 글자(`상승`·`하락`·`신규`)와 앞의 순위 번호도 처리합니다.
   - 지금 탭: `aria-selected`·`aria-current`·`on|active|selected|current` 클래스 → 없으면 배경색이 혼자 다른 탭. 날짜는 `2026. 11. 05.` 형식 글자.
@@ -406,6 +408,8 @@ stdio 전송은 stdout을 프로토콜에 쓰므로 서버 코드에서 `console
 패널 위쪽 메뉴(`sidepanel.js`의 `showTab`)로 **이미지 모음**·**초안**·**쇼핑 커넥트** 화면을 나눕니다. 패널을 열면 늘 이미지 모음부터 보입니다. 메뉴의 이미지 모음 옆에는 담긴 장수를 달아, 쇼핑 커넥트 화면에서 담아도 늘어난 게 보입니다. ⌘V로 이미지 담기는 이미지 모음 화면에서만 받습니다.
 
 쇼핑 커넥트 화면의 입력 영역(`#connect-body`)은 브랜드커넥트 상품 페이지(`brandconnect.naver.com/<채널>/affiliate/products/<상품>`)를 보고 있을 때만 보이고, 아니면 안내 문구(`#connect-none`)만 보입니다. 사람이 입력할 것을 링크 붙여넣기와 글 방식 고르기로 줄이고, 나머지는 페이지에서 읽어 [쇼핑 커넥트 요청] 글을 만듭니다. Claude 앱이 이 글을 받아 MCP `get_writing_brief(type=connect, link, mode, product, experience)`로 초안을 씁니다(서버 안내문의 "쇼핑 커넥트").
+
+웹에 계정이 등록돼 있으면 계정 고르기(`#connect-account`, `fetchWebAccounts`)가 보이고, 고른 계정 이름이 요청문의 `계정:` 줄로 들어갑니다(Claude가 `save_draft`의 `account`로 넘김). 계정이 있으면 네이버 초안은 `account` 없이 저장되지 않아서, 고르지 않으면 `connectRequestProblem`이 복사를 막습니다. 고른 계정은 상품별 입력(`connectInputs`)과 마지막 계정(`connectAccount`)에 기억합니다. 웹이 꺼져 있으면 계정 고르기를 숨기고 계정 없이 복사합니다(Claude 앱이 계정을 묻습니다).
 
 - **보일 때** (`sidepanel-connect.js`의 `refresh`): `tabs.onActivated`, 그리고 `tabs.onUpdated`의 주소 변경·로딩 완료 때 지금 탭 주소를 `connectProductId`로 봅니다. 브랜드커넥트는 페이지를 새로 열지 않고 주소만 바꿔 상품을 옮기기 때문입니다.
 - **읽기**: `scripting.executeScript`(모든 프레임)로 `document.body.innerText` 줄과 "네이버 쇼핑에서 보기" 링크 주소를 받아 `parseConnectPage`로 해석합니다. **상세 정보는 본문이 아니라 스마트스토어 iframe**(`m.smartstore.naver.com/<스토어>/products/<번호>/shopping-connect-contents`, `isDetailFrame`) 안에 있습니다(2026-11-16 실제 페이지 진단 정보로 확인). 그래서 상세 글자는 그 프레임에서 읽습니다. 본문의 "상세 정보" 뒤에는 사이트 아래쪽 메뉴(TOP·로그아웃·이용약관)만 있어서, 처음 버전은 그걸 상세 정보로 읽었습니다. 페이지가 늦게 그려질 수 있어 못 찾으면 1초 간격으로 5번까지 다시 읽습니다.

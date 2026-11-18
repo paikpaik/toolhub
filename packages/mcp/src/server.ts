@@ -80,6 +80,8 @@ import {
   findAccount,
   accountName,
   accountsPlanningNote,
+  formatAccounts,
+  isConnectBody,
   accountOverlapFeedback,
   matchesAccount,
   setDraftStatus,
@@ -175,11 +177,11 @@ const server = new McpServer(
       "주제로 글감 찾기: 사용자가 분야·주제(캠핑, 연말정산 등)로 쓸 글감을 찾으면 discover_keywords로 꾸준히 검색되는 정보형 키워드를 찾고, 추천 키워드 중 하나를 골라 research_keyword로 확인한다.",
       "키워드 목록·화면 캡처: 사용자가 네이버 크리에이터 어드바이저(검색 유입 트렌드·메인 유입 트렌드·주제별 트렌드) 같은 캡처나 키워드 목록을 주면, 보이는 키워드를 모두 뽑아 analyze_keywords 한 번으로 분석하고 (크롬 확장이 복사한 '[크리에이터 어드바이저 트렌드 …]' 글이면 카드별 키워드를 50개씩 나눠 넣는다. 뒤의 (new)·(▲3)은 변동 표시로, new·▲를 우선한다) get_writing_rules(task=planning)의 기준으로 추천한다. 최근 7일이 급상승·상승인 키워드를 우선하고, 포화도가 보통·높음인 키워드는 find_pivot_keywords로 연관어를 찾아 함께 제안한다.",
       "초안 쓰기: 먼저 list_drafts(keyword)로 같은 키워드의 초안이 있는지 확인해 있으면 사용자에게 알린다. get_writing_rules(task=writing, platform, type)로 규칙을 읽고, get_writing_brief로 브리프를 받는다. 브리프에 '경쟁 판단'과 '추천 타깃 키워드'가 있으면 그중 하나(검색 의도가 글로 답하기 좋은 것)를 골라 사용자에게 알리고, 그 키워드로 get_writing_brief를 다시 받아 그 키워드를 메인 키워드로 쓴다 (save_draft의 keyword도 그 키워드). 그다음 규칙대로 웹 검색으로 사실을 확인하며 쓴다. 이때 list_drafts가 보여 준 최근 초안들의 제목·도입 문장과 같은 패턴을 피한다. 사용자가 원하면 save_draft로 저장하고 open_web(page=drafts)으로 보여준다. save_draft·update_draft 결과에 본문 글자 수와 제목 점검이 나오며, 목표보다 짧거나 제목 점검에 걸리면 안내대로 고쳐 update_draft로 다시 저장한다.",
-      "계정별 초안: toolhub 계정 탭에 네이버 블로그 계정이 등록돼 있으면 get_writing_rules(task=planning) 끝에 계정과 분야가 나온다. 그때 네이버 글감은 직접 나누지 말고 assign_account_keywords로 계정에 나눈다 (계정당 편수를 코드가 지킴). 그 표대로 쓰고 save_draft에 account·topic·format·date를 넣는다 (네이버는 account가 없으면 저장이 거절됨). 계정이 없으면 지금처럼 쓴다.",
+      "계정별 초안: toolhub 계정 탭에 네이버 블로그 계정이 등록돼 있으면 get_writing_rules(task=planning) 끝에 계정과 분야가 나온다. 그때 네이버 글감은 직접 나누지 말고 assign_account_keywords로 계정에 나눈다 (계정당 편수를 코드가 지킴). 그 표대로 쓰고 save_draft에 account·topic·format·date를 넣는다 (네이버는 account가 없으면 저장이 거절됨). 계정이 없으면 지금처럼 쓴다. 계정이 몇 개인지·어떤 계정이 있는지 물으면 list_accounts로 답한다 (초안 기록으로 짐작하면 아직 글을 쓰지 않은 계정이 빠진다).",
       "네이버 형식과 발행일: 네이버 초안은 글감 추천에서 정한 형식을 get_writing_brief와 save_draft의 format에 같은 값으로 넘긴다 (home=홈판형, 생략=검색형). 발행일이 오늘이 아니면(행사 1~3일 전 등) save_draft의 date에 그 날을 넣는다. 초안 파일 날짜가 발행일이 되어 그날 초안 목록에 함께 보인다.",
       "초안 고치기: read_draft로 읽고 고친 뒤 update_draft로 같은 파일에 저장한다 (이전 버전은 자동 보관). 새 초안은 save_draft로 만든다. 발행됨 초안은 고치지 않는다 (정책, update_draft가 거부함): list_drafts의 상태가 발행됨이면 고치려고 읽지도 않는다 (인스타 재가공처럼 읽기만 하는 건 괜찮다).",
       "글 유형: 상품·서비스 사용기는 review, 맛집·여행지·시설 방문기는 place, 쇼핑 커넥트 제휴 링크를 넣는 상품 글은 connect, 그 밖에는 info. 리뷰 상품의 쇼핑 트렌드는 get_shopping_trend, 장소 정보는 search_places로 확인한다.",
-      "쇼핑 커넥트: 사용자가 '[쇼핑 커넥트 요청]'(크롬 확장이 만든 요청문)이나 쇼핑 커넥트 링크와 함께 상품 글을 요청하면 platform=naver, type=connect로 쓴다. get_writing_brief에 요청문의 링크·글 방식·상품 정보·경험 메모를 link·mode·product·experience로 그대로 넘긴다. 메인 키워드는 요청문에 있으면 그것, 없으면 상품명에서 검색될 말(브랜드+제품군+후기·추천 등)을 정한다. 경험 메모에 없는 사용 경험은 지어내지 않는다.",
+      "쇼핑 커넥트: 사용자가 '[쇼핑 커넥트 요청]'(크롬 확장이 만든 요청문)이나 쇼핑 커넥트 링크와 함께 상품 글을 요청하면 platform=naver, type=connect로 쓴다. get_writing_brief에 요청문의 링크·글 방식·상품 정보·경험 메모를 link·mode·product·experience로 그대로 넘긴다. 메인 키워드는 요청문에 있으면 그것, 없으면 상품명에서 검색될 말(브랜드+제품군+후기·추천 등)을 정한다. 요청문의 '계정:'을 save_draft의 account에 넣는다 (계정이 등록돼 있는데 요청문에 없으면 list_accounts로 계정을 보여 주고 사용자에게 묻는다. 쇼핑 커넥트 글은 계정 계획 몫에 세지 않는다). 경험 메모에 없는 사용 경험은 지어내지 않는다.",
       "버전: 사용자가 toolhub 버전·최신인지·업데이트가 적용됐는지 물으면 get_version을 부른다.",
       "사용자가 플랫폼을 말하지 않으면 티스토리(tistory)로 쓴다 (쇼핑 커넥트는 네이버).",
       "인스타그램: 릴스 대본·캡션·카드뉴스·스토리·댓글/답글·블로그 글을 인스타 게시물로 바꾸기는 먼저 get_insta_rules(task)로 규칙과 계정 말투를 읽고 쓴다. 릴스 대본은 훅 후보 3개와 대본을 check_reel_script로, 캡션은 check_caption으로 점검해 고친 뒤 보여 준다. 게시·댓글·DM은 사람이 직접 한다 (자동으로 올리지 않음).",
@@ -733,8 +735,11 @@ server.registerTool(
       if (account || topic) await setDraftStatus(DATA_DIR, name, { account: account?.id, topic });
       // 오늘 계정 계획과 대조 (계정·형식·발행일·편수)
       let planNote = "";
-      const plan = platform === "naver" && account ? await readAccountPlan(DATA_DIR, today) : null;
-      if (plan && account) {
+      const connect = isConnectBody(content);
+      const plan = platform === "naver" && account && !connect ? await readAccountPlan(DATA_DIR, today) : null;
+      if (connect && account) {
+        planNote = "쇼핑 커넥트 글이라 계정 계획(몫)과 대조하지 않았습니다.\n";
+      } else if (plan && account) {
         const checked = checkAgainstPlan(accounts, plan, { account: account.id, file: name, keyword, planKeyword, format: format ?? "search", date: date ?? today });
         await writeAccountPlan(DATA_DIR, checked.plan);
         planNote = `${checked.text}\n`;
@@ -747,6 +752,24 @@ server.registerTool(
       return text(
         `저장했습니다: ${file}\n${kind}${owner}${when}${planNote}${await draftFeedback(name, content)}웹에서 미리보기·복사하려면 open_web(page="drafts", draft="${name}")을 호출하세요.`,
       );
+    } catch (e) {
+      return failure(e);
+    }
+  },
+);
+
+server.registerTool(
+  "list_accounts",
+  {
+    title: "블로그 계정 목록",
+    description:
+      "toolhub 계정 탭에 등록된 네이버 블로그 계정을 모두 보여 준다: 이름·분야·초안 수·발행 수. 아직 초안이 없는 계정도 나온다. 계정이 몇 개인지, 어떤 계정·분야가 있는지 물으면 이 도구로 답한다 (list_drafts의 초안 기록으로 짐작하지 않는다).",
+    annotations: { readOnlyHint: true },
+  },
+  async () => {
+    try {
+      const [accounts, statuses] = await Promise.all([readAccounts(DATA_DIR), readDraftStatuses(DATA_DIR)]);
+      return text(formatAccounts(accounts, Object.values(statuses)));
     } catch (e) {
       return failure(e);
     }

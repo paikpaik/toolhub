@@ -5,6 +5,7 @@
  */
 (() => {
   const { connectProductId, isDetailFrame, parseConnectPage, connectRequestProblem, formatConnectRequest } = ToolhubConnect;
+  const { fetchWebAccounts } = ToolhubLib;
   const $ = (id) => document.getElementById(id);
   const body = $("connect-body");
   const none = $("connect-none");
@@ -13,12 +14,16 @@
   const memoField = $("connect-memo-field");
   const memoInput = $("connect-memo");
   const keywordInput = $("connect-keyword");
+  const accountRow = $("connect-account-row");
+  const accountSelect = $("connect-account");
   const preview = $("connect-preview");
   const statusLine = $("connect-status");
 
   /** 상품마다 입력을 기억한다 (탭을 오가거나 패널을 다시 열어도 남게). 오래된 것부터 지운다 */
   const INPUTS_KEY = "connectInputs";
   const MAX_SAVED = 30;
+  /** 마지막으로 고른 계정 (새 상품을 열면 이 계정으로 시작) */
+  const LAST_ACCOUNT_KEY = "connectAccount";
   /** 페이지가 늦게 그려질 수 있어 상품 정보를 못 찾으면 몇 번 더 읽는다 */
   const READ_TRIES = 5;
 
@@ -37,11 +42,11 @@
   async function saveInputs() {
     if (!productId) return;
     const { [INPUTS_KEY]: saved = {} } = await chrome.storage.local.get(INPUTS_KEY);
-    saved[productId] = { link: linkInput.value, mode: mode(), memo: memoInput.value, keyword: keywordInput.value, at: Date.now() };
+    saved[productId] = { link: linkInput.value, mode: mode(), memo: memoInput.value, keyword: keywordInput.value, account: accountSelect.value, at: Date.now() };
     const kept = Object.entries(saved)
       .sort(([, a], [, b]) => b.at - a.at)
       .slice(0, MAX_SAVED);
-    await chrome.storage.local.set({ [INPUTS_KEY]: Object.fromEntries(kept) });
+    await chrome.storage.local.set({ [INPUTS_KEY]: Object.fromEntries(kept), ...(accountSelect.value && { [LAST_ACCOUNT_KEY]: accountSelect.value }) });
   }
 
   async function restoreInputs() {
@@ -52,6 +57,20 @@
     keywordInput.value = inputs.keyword ?? "";
     document.querySelector(`input[name="connect-mode"][value="${inputs.mode === "experience" ? "experience" : "guide"}"]`).checked = true;
     memoField.hidden = mode() !== "experience";
+    await loadAccounts(inputs.account);
+  }
+
+  /**
+   * 웹에 등록된 계정으로 계정 고르기를 채운다. 이 상품에서 고른 계정 → 마지막으로 고른 계정 순.
+   * 계정이 없거나 웹이 꺼져 있으면 숨긴다 (요청문에 계정 없이, Claude 앱이 계정을 묻는다)
+   */
+  async function loadAccounts(chosen) {
+    const accounts = (await fetchWebAccounts()) ?? [];
+    accountRow.hidden = !accounts.length;
+    if (!accounts.length) return accountSelect.replaceChildren();
+    const { [LAST_ACCOUNT_KEY]: last } = await chrome.storage.local.get(LAST_ACCOUNT_KEY);
+    accountSelect.replaceChildren(new Option("계정 고르기", ""), ...accounts.map((a) => new Option(a.name, a.id)));
+    accountSelect.value = [chosen, last].find((id) => id && accounts.some((a) => a.id === id)) ?? "";
   }
 
   /** 모든 프레임에서 func를 돌려 [{ frameId, result }]. 본문(frameId 0)이 먼저 오게 */
@@ -127,6 +146,7 @@
 
   $("connect-read").addEventListener("click", read);
   for (const input of [linkInput, memoInput, keywordInput]) input.addEventListener("input", saveInputs);
+  accountSelect.addEventListener("change", saveInputs);
   for (const radio of document.querySelectorAll('input[name="connect-mode"]')) {
     radio.addEventListener("change", () => {
       memoField.hidden = mode() !== "experience";
@@ -136,7 +156,8 @@
 
   $("connect-copy").addEventListener("click", async () => {
     if (!product) return setStatus("상품 정보를 아직 읽지 못했어요. \"다시 읽기\"를 눌러 주세요.", true);
-    const input = { product, link: linkInput.value, mode: mode(), memo: memoInput.value, keyword: keywordInput.value };
+    const account = accountRow.hidden ? "" : (accountSelect.selectedOptions[0]?.value ? accountSelect.selectedOptions[0].text : "");
+    const input = { product, link: linkInput.value, mode: mode(), memo: memoInput.value, keyword: keywordInput.value, account, hasAccounts: !accountRow.hidden };
     const problem = connectRequestProblem(input);
     if (problem) return setStatus(problem, true);
     try {

@@ -6,7 +6,7 @@
  * sidepanel.js와 같은 전역에서 돌므로 이름이 겹치지 않게 감싼다
  */
 (() => {
-  const { fillProblem, sameText } = ToolhubLib;
+  const { fillProblem, sameText, WEB_BASES } = ToolhubLib;
   const $ = (id) => document.getElementById(id);
   const dateInput = $("drafts-date");
   const accountRow = $("drafts-account-row");
@@ -21,8 +21,6 @@
   const list = $("drafts-list");
   const statusLine = $("drafts-status");
 
-  /** 사용자가 직접 띄운 웹(npm run web, 3000)을 먼저, 없으면 MCP open_web이 띄운 웹(3100) */
-  const WEB_BASES = ["http://localhost:3000", "http://localhost:3100"];
   let web = null;
   let busy = false;
 

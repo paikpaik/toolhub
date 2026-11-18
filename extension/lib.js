@@ -152,19 +152,53 @@ globalThis.ToolhubLib = (() => {
     return { date, tabs: { ...base.tabs, [tab]: cards } };
   }
 
+  /** 계정 하나에 쓸 초안 편수 (요청문의 "계정 N개로 초안 N×5개") */
+  const DRAFTS_PER_ACCOUNT = 5;
+
+  /**
+   * 요청문 첫 문장의 편수. accountCount: 웹에 등록된 계정 수, 웹이 꺼져 있어 모르면 null.
+   * 모르면 "계정마다 5개씩"이라고만 써서 Claude가 등록된 계정 수로 정하게 한다
+   */
+  function trendRequestGoal(accountCount) {
+    if (accountCount === null || accountCount === undefined) return `오늘 등록된 계정마다 ${DRAFTS_PER_ACCOUNT}개씩 네이버에 쓸 초안을`;
+    if (accountCount === 0) return "오늘 네이버에 쓸 초안 15개를";
+    return `오늘 ${accountCount}개의 계정으로 네이버에 쓸 초안 ${accountCount * DRAFTS_PER_ACCOUNT}개를`;
+  }
+
   /** Claude 앱에 그대로 붙여넣을 글. 카드마다 한 줄, 키워드 뒤에 변동 표시 */
-  function formatAdvisorTrends(stored) {
+  function formatAdvisorTrends(stored, accountCount = null) {
     const tabs = Object.entries(stored?.tabs ?? {});
     const total = tabs.reduce((sum, [, cards]) => sum + cards.reduce((n, c) => n + c.items.length, 0), 0);
     const lines = [
       `[크리에이터 어드바이저 트렌드${stored?.date ? ` · ${stored.date}` : ""}]`,
-      `이 키워드들로 오늘 3개의 계정으로 네이버에 쓸 초안 15개를 작성해줘. new·▲ 상승 키워드를 우선하고, analyze_keywords는 50개씩 나눠 조회해줘. (키워드 ${total}개)`,
+      `이 키워드들로 ${trendRequestGoal(accountCount)} 작성해줘. new·▲ 상승 키워드를 우선하고, analyze_keywords는 50개씩 나눠 조회해줘. (키워드 ${total}개)`,
     ];
     for (const [tab, cards] of tabs) {
       lines.push("", `## ${tab} (카드 ${cards.length}개)`);
       for (const card of cards) lines.push(`- ${card.title}: ${card.items.map((i) => i.keyword + trendLabel(i)).join(", ")}`);
     }
     return lines.join("\n");
+  }
+
+  /** 사용자가 직접 띄운 웹(npm run web, 3000)을 먼저, 없으면 MCP open_web이 띄운 웹(3100) */
+  const WEB_BASES = ["http://localhost:3000", "http://localhost:3100"];
+
+  /**
+   * toolhub 웹에 등록된 블로그 계정 [{ id, name, topics }]. 웹이 꺼져 있거나 옛 웹(계정 기능 없음)이면 null.
+   * 웹이 꺼져 있으면 연결이 바로 거절되지만, 멈춘 웹에 오래 붙잡히지 않게 시간을 둔다
+   */
+  async function fetchWebAccounts() {
+    for (const base of WEB_BASES) {
+      try {
+        const res = await fetch(`${base}/api/accounts`, { signal: AbortSignal.timeout(2000) });
+        if (!res.ok) continue;
+        const { accounts } = await res.json();
+        if (Array.isArray(accounts)) return accounts;
+      } catch {
+        // 이 주소는 꺼져 있다. 다음 주소
+      }
+    }
+    return null;
   }
 
   /**
@@ -199,6 +233,9 @@ globalThis.ToolhubLib = (() => {
     trendChange,
     mergeAdvisorTrends,
     formatAdvisorTrends,
+    trendRequestGoal,
+    WEB_BASES,
+    fetchWebAccounts,
     fillProblem,
     sameText,
   };

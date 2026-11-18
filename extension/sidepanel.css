@@ -223,6 +223,7 @@ button.link {
 }
 
 .connect input:not([type="radio"]),
+.connect select,
 .connect textarea {
   font: inherit;
   color: inherit;
@@ -234,6 +235,7 @@ button.link {
 }
 
 .connect input:focus,
+.connect select:focus,
 .connect textarea:focus {
   outline: none;
   border-color: var(--accent);
@@ -241,6 +243,10 @@ button.link {
 
 .connect textarea {
   resize: vertical;
+}
+
+.connect label[hidden] {
+  display: none;
 }
 
 .connect .product {

@@ -83,17 +83,21 @@ globalThis.ToolhubConnect = (() => {
 
   const MODE_LABELS = { guide: "구매 가이드", experience: "실제 경험" };
 
-  /** 사람이 넣는 값이 모자라면 이유, 다 됐으면 null */
-  function connectRequestProblem({ link, mode, memo }) {
+  /**
+   * 사람이 넣는 값이 모자라면 이유, 다 됐으면 null.
+   * hasAccounts: 웹에 계정이 등록돼 있는지 (그러면 네이버 초안은 계정이 있어야 저장된다)
+   */
+  function connectRequestProblem({ link, mode, memo, account, hasAccounts = false }) {
     const url = link?.trim();
     if (!url) return "쇼핑 커넥트 링크를 붙여넣어 주세요 (브랜드커넥트의 \"링크 복사\").";
     if (!/^https?:\/\/\S+$/.test(url)) return "링크는 https://로 시작하는 주소 하나만 넣어 주세요.";
     if (mode === "experience" && !memo?.trim()) return "실제 경험은 경험 메모가 있어야 해요. 써 본 내용을 적거나 구매 가이드를 골라 주세요.";
+    if (hasAccounts && !account?.trim()) return "이 글을 올릴 계정을 골라 주세요.";
     return null;
   }
 
   /** MCP 안내문("[쇼핑 커넥트 요청]")과 get_writing_brief의 link·mode·product·experience에 맞춘 요청 글 */
-  function formatConnectRequest({ product, link, mode = "guide", memo, keyword }) {
+  function formatConnectRequest({ product, link, mode = "guide", memo, keyword, account }) {
     const info = [
       product.brand && `브랜드: ${product.brand}`,
       product.name && `상품명: ${product.name}`,
@@ -105,7 +109,9 @@ globalThis.ToolhubConnect = (() => {
     ].filter(Boolean);
     const lines = [
       "[쇼핑 커넥트 요청]",
-      "toolhub로 네이버 쇼핑 커넥트 초안을 써서 저장해 주세요. get_writing_brief에 아래 링크·글 방식·상품 정보·경험 메모를 그대로 넘겨 주세요.",
+      "toolhub로 네이버 쇼핑 커넥트 초안을 써서 저장해 주세요. get_writing_brief에 아래 링크·글 방식·상품 정보·경험 메모를 그대로 넘겨 주세요." +
+        (account?.trim() ? " save_draft의 account에는 아래 계정을 넣어 주세요." : ""),
+      ...(account?.trim() ? [`계정: ${account.trim()}`] : []),
       `키워드: ${keyword?.trim() || "상품명에서 검색될 말로 정해 주세요"}`,
       `쇼핑 커넥트 링크: ${link.trim()}`,
       `글 방식: ${MODE_LABELS[mode]} (${mode})`,

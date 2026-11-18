@@ -206,7 +206,9 @@ async function copyAdvisorTrends(tabId) {
     const count = result.cards.reduce((n, c) => n + c.items.length, 0);
     const tabs = Object.keys(merged.tabs);
     const next = tabs.includes("메인 유입 트렌드") ? "" : "\n메인 유입 트렌드 탭에서 한 번 더 누르면 함께 복사돼요.";
-    await show(`${result.tab}: 카드 ${result.cards.length}개 · 키워드 ${count}개를 읽었어요.\n복사한 탭: ${tabs.join(", ")} — Claude 앱에 붙여넣으세요.${next}`, ToolhubLib.formatAdvisorTrends(merged));
+    // 요청문의 계정 수·편수는 웹에 등록된 계정으로 (웹이 꺼져 있으면 "계정마다 5개씩")
+    const accounts = await ToolhubLib.fetchWebAccounts();
+    await show(`${result.tab}: 카드 ${result.cards.length}개 · 키워드 ${count}개를 읽었어요.\n복사한 탭: ${tabs.join(", ")} — Claude 앱에 붙여넣으세요.${next}`, ToolhubLib.formatAdvisorTrends(merged, accounts?.length ?? null));
   } catch (e) {
     show(`키워드를 읽지 못했어요: ${e?.message ?? e}`, null);
   }

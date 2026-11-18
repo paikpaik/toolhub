@@ -82,6 +82,22 @@ export function accountTopicStats(accountId: string, entries: { account?: string
   return [...stats.values()].sort((a, b) => b.published + b.drafts - (a.published + a.drafts) || b.published - a.published);
 }
 
+/**
+ * MCP list_accounts 결과: 등록된 계정마다 분야와 초안·발행 수. entries는 초안 기록의 값들.
+ * 초안 기록으로 계정을 짐작하면 아직 글을 쓰지 않은 계정이 빠지므로 계정 질문은 이것으로 답한다
+ */
+export function formatAccounts(accounts: BlogAccount[], entries: { account?: string; status: string }[]) {
+  if (!accounts.length) return "등록된 계정이 없습니다. 초안은 계정 없이 씁니다 (사용자가 웹 블로그 자동화 › 계정에서 등록할 수 있습니다).";
+  return [
+    `등록된 네이버 블로그 계정 ${accounts.length}개`,
+    ...accounts.map((a) => {
+      const mine = entries.filter((e) => e.account === a.id);
+      const published = mine.filter((e) => e.status !== "draft").length;
+      return `- ${a.name}: 분야 ${a.topics.length ? a.topics.join(", ") : "미정 (어느 분야든)"} · 초안 ${mine.length - published}개 · 발행 ${published}개`;
+    }),
+  ].join("\n");
+}
+
 /** get_writing_rules(task=planning) 뒤에 붙일 계정 안내. 계정이 없으면 null (지금처럼 쓴다) */
 export function accountsPlanningNote(accounts: BlogAccount[]) {
   if (!accounts.length) return null;

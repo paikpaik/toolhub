@@ -92,6 +92,8 @@ describe("쇼핑 커넥트 요청문", () => {
     assert.match(connectRequestProblem({ link: "naver.me/abc", mode: "guide" }), /https:\/\//);
     assert.match(connectRequestProblem({ link: "https://naver.me/abc", mode: "experience", memo: " " }), /경험 메모/);
     assert.equal(connectRequestProblem({ link: "https://naver.me/abc", mode: "guide" }), null);
+    assert.match(connectRequestProblem({ link: "https://naver.me/abc", mode: "guide", account: " ", hasAccounts: true }), /계정을 골라/);
+    assert.equal(connectRequestProblem({ link: "https://naver.me/abc", mode: "guide", account: "우드", hasAccounts: true }), null);
   });
 
   it("구매 가이드: 링크·글 방식·상품 정보, 수수료와 경험 메모는 넣지 않는다", () => {
@@ -103,7 +105,12 @@ describe("쇼핑 커넥트 요청문", () => {
     assert.match(text, /평점: 4\.79 \(리뷰 20,474\)/);
     assert.match(text, /할인가: 31% 39,000원/);
     assert.match(text, /상세 정보 \(판매자 설명\):\n피토메스 안티포어/);
-    assert.doesNotMatch(text, /수수료: |23%|경험 메모:|안 쓰는 메모/);
+    assert.doesNotMatch(text, /수수료: |23%|경험 메모:|안 쓰는 메모|계정:|account/);
+  });
+
+  it("계정을 고르면 계정 줄과 save_draft account 안내를 넣는다", () => {
+    const text = formatConnectRequest({ product, link: "https://naver.me/abc", mode: "guide", account: " 우드 " });
+    assert.match(text, /save_draft의 account에는 아래 계정을 넣어 주세요\.\n계정: 우드\n키워드: /);
   });
 
   it("실제 경험: 경험 메모와 정한 키워드를 넣는다", () => {
