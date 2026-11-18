@@ -227,8 +227,8 @@ async function copyAdvisorTrends(tabId) {
 }
 
 /**
- * 블로그 통계 › 유입분석 › 검색 유입: 화면의 검색어·비율을 읽어(parseInflowPage) 블로그마다 모아 두고, 모은 것을 복사한다.
- * 계정 5개를 차례로 열어 누르면 한 번에 붙여넣을 수 있다. 화면을 읽기만 하고 아무것도 누르지 않는다
+ * 블로그 통계 › 유입분석 › 검색 유입: 화면의 검색어·비율을 읽어(parseInflowPage) 그 블로그 것만 복사한다.
+ * 누른 것을 따로 모아 두지 않는다 (계정마다 각각 붙여넣음). 화면을 읽기만 하고 아무것도 누르지 않는다
  */
 async function copyBlogInflow(tabId, tabUrl) {
   const show = (text, copy) => showInPage(tabId, text, copy);
@@ -241,22 +241,20 @@ async function copyBlogInflow(tabId, tabUrl) {
     const parsed = pages.map((p) => ToolhubLib.parseInflowPage(p.lines));
     const found = parsed.filter((p) => !p.error).sort((a, b) => b.keywords.length - a.keywords.length)[0];
     if (!found) return show(`${parsed.find((p) => p.error)?.error ?? "검색어를 읽지 못했어요."}\n주소: ${tabUrl}`, null);
+    // 일간·월간이나 아직 안 끝난 주는 복사하지 않는다 (sv-SE 로캘은 YYYY-MM-DD)
+    const periodProblem = ToolhubLib.inflowPeriodProblem(found.period, new Date().toLocaleDateString("sv-SE"));
+    if (periodProblem) return show(periodProblem, null);
     const blogId = ToolhubLib.blogIdFromUrls([tabUrl, ...pages.map((p) => p.url)]);
-    const { blogInflow } = await chrome.storage.session.get("blogInflow");
-    const merged = ToolhubLib.mergeInflow(blogInflow, blogId ?? tabUrl, { blogId, ...found });
-    await chrome.storage.session.set({ blogInflow: merged });
     const accounts = (await ToolhubLib.fetchWebAccounts()) ?? [];
     const name = accounts.find((a) => a.blogId && a.blogId === blogId)?.name;
-    const count = Object.keys(merged.entries).length;
     await show(
       [
-        `${name ?? blogId ?? "블로그"} · ${found.period ?? ""}: 검색어 ${found.keywords.length}개를 읽었어요.`,
+        `${name ?? blogId ?? "블로그"} · ${found.period ?? ""}: 검색어 ${found.keywords.length}개를 복사했어요. Claude 앱에 붙여넣으세요.`,
         name ? "" : blogId ? `toolhub 계정 화면에 블로그 아이디 ${blogId}를 넣으면 계정 이름으로 붙어요.` : "블로그 아이디를 찾지 못했어요.",
-        `모은 블로그 ${count}개 — 다른 계정 통계에서도 누르면 함께 복사돼요. Claude 앱에 붙여넣으세요.`,
       ]
         .filter(Boolean)
         .join("\n"),
-      ToolhubLib.formatInflow(merged, accounts),
+      ToolhubLib.formatInflow({ blogId, ...found }, accounts),
     );
   } catch (e) {
     show(`검색어를 읽지 못했어요: ${e?.message ?? e}`, null);

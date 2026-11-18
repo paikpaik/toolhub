@@ -4323,6 +4323,42 @@ td.related {
   text-align: right;
 }
 
+/* 유입 검색어 탭: 계정마다 기록 요약 줄 + 검색어 표 */
+.inflow-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px 10px;
+}
+
+.inflow-head .muted {
+  font-size: 13px;
+}
+
+.inflow-head .button {
+  margin-left: auto;
+}
+
+.inflow-card .status-filter {
+  margin: 12px 0 4px;
+}
+
+.inflow-table {
+  max-width: 560px;
+}
+
+.inflow-remove {
+  padding: 2px;
+  border: none;
+  background: none;
+  color: var(--muted);
+  cursor: pointer;
+}
+
+.inflow-remove:hover {
+  color: var(--up);
+}
+
 .account-add {
   display: flex;
   flex-wrap: wrap;

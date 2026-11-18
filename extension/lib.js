@@ -239,27 +239,32 @@ globalThis.ToolhubLib = (() => {
     return pick ? pick.id.toLowerCase() : null;
   }
 
-  /** 복사한 유입 검색어를 블로그마다 모은다. 계정 여러 개를 차례로 누르면 함께 복사된다 (반나절 지난 것은 버림) */
-  const INFLOW_KEEP_MS = 12 * 60 * 60 * 1000;
-  function mergeInflow(stored, key, entry, now = Date.now()) {
-    const kept = Object.entries(stored?.entries ?? {}).filter(([k, e]) => k !== key && now - e.at < INFLOW_KEEP_MS);
-    return { entries: { ...Object.fromEntries(kept), [key]: { ...entry, at: now } } };
+  /**
+   * 주에 한 번 받는 데이터라 다 끝난 주간(7일)만 받는다. 문제가 있으면 이유, 괜찮으면 null.
+   * today: 오늘 "YYYY-MM-DD" (그날이 기간 안이면 아직 안 끝난 주)
+   */
+  function inflowPeriodProblem(period, today) {
+    const m = String(period ?? "").match(/^(\d{4}-\d{2}-\d{2})~(\d{4}-\d{2}-\d{2})$/);
+    if (!m || (Date.parse(m[2]) - Date.parse(m[1])) / 86_400_000 !== 6)
+      return `주간 통계가 아니에요 (기간: ${period ?? "모름"}). 주간을 고르고 지난주로 맞춘 뒤 다시 눌러 주세요.`;
+    if (m[2] >= today) return `이번 주(${period})는 아직 안 끝났어요. 날짜 화살표로 지난주로 넘긴 뒤 다시 눌러 주세요.`;
+    return null;
   }
 
-  /** Claude 앱에 붙여넣을 글. 계정마다 한 묶음. accounts: 웹 계정 [{ name, blogId }] (모르면 []) */
-  function formatInflow(stored, accounts = []) {
-    const entries = Object.values(stored?.entries ?? {});
-    const lines = [
+  /**
+   * Claude 앱에 붙여넣을 글. 지금 화면의 블로그 하나만 (누른 것을 따로 모아 두지 않는다).
+   * entry: { blogId, period, total, keywords }, accounts: 웹 계정 [{ name, blogId }] (모르면 [])
+   */
+  function formatInflow(entry, accounts = []) {
+    const name = accounts.find((a) => a.blogId && a.blogId === entry.blogId)?.name;
+    const who = name ?? `블로그 아이디 ${entry.blogId ?? "모름"} (toolhub 계정 화면에 블로그 아이디를 넣어 주세요)`;
+    return [
       "[블로그 유입 검색어]",
-      `이 검색어들로 계정마다 review_search_inflow를 불러 아직 글이 없는 검색어를 새 글감 후보로 정리해줘. (블로그 ${entries.length}개)`,
-    ];
-    for (const e of entries) {
-      const name = accounts.find((a) => a.blogId && a.blogId === e.blogId)?.name;
-      const who = name ?? `블로그 아이디 ${e.blogId ?? "모름"} (toolhub 계정 화면에 블로그 아이디를 넣어 주세요)`;
-      lines.push("", `## ${who} · ${e.period ?? "기간 모름"}${e.total ? ` · 검색 유입 ${e.total}%` : ""}`);
-      for (const k of e.keywords) lines.push(`- ${k.keyword} ${k.share}%`);
-    }
-    return lines.join("\n");
+      "이 검색어들로 review_search_inflow를 불러 아직 글이 없는 검색어를 새 글감 후보로 정리해줘.",
+      "",
+      `## ${who} · ${entry.period ?? "기간 모름"}${entry.total ? ` · 검색 유입 ${entry.total}%` : ""}`,
+      ...entry.keywords.map((k) => `- ${k.keyword} ${k.share}%`),
+    ].join("\n");
   }
 
   /** 사용자가 직접 띄운 웹(npm run web, 3000)을 먼저, 없으면 MCP open_web이 띄운 웹(3100) */
@@ -318,7 +323,7 @@ globalThis.ToolhubLib = (() => {
     trendRequestGoal,
     parseInflowPage,
     blogIdFromUrls,
-    mergeInflow,
+    inflowPeriodProblem,
     formatInflow,
     WEB_BASES,
     fetchWebAccounts,

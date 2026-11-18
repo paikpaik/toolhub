@@ -172,7 +172,7 @@ describe("초안 채우기", () => {
 });
 
 describe("블로그 유입 검색어", () => {
-  const { parseInflowPage, blogIdFromUrls, mergeInflow, formatInflow } = globalThis.ToolhubLib;
+  const { parseInflowPage, blogIdFromUrls, inflowPeriodProblem, formatInflow } = globalThis.ToolhubLib;
   // 2026-11-19 사용자 화면(블로그 통계 › 유입분석 › 검색 유입, 주간) 글자 그대로
   const page = [
     "내 블로그 통계",
@@ -216,14 +216,22 @@ describe("블로그 유입 검색어", () => {
     assert.equal(blogIdFromUrls(["https://admin.blog.naver.com/BlogStatistics.naver", "not a url"]), null);
   });
 
-  it("블로그마다 모으고(같은 블로그는 새것으로, 반나절 지나면 버림) 계정 이름으로 묶어 복사", () => {
-    const hour = 60 * 60 * 1000;
-    let stored = mergeInflow(null, "wood", { blogId: "wood", period: "2026-11-09~2026-11-15", total: 93.5, keywords: [{ keyword: "한경선", share: 8.39 }] }, 0);
-    stored = mergeInflow(stored, "issue", { blogId: "issue", period: "2026-11-09~2026-11-15", total: null, keywords: [{ keyword: "물가", share: 3 }] }, hour);
-    assert.deepEqual(Object.keys(mergeInflow(stored, "x", { blogId: "x", keywords: [] }, 12.5 * hour).entries), ["issue", "x"]);
-    const text = formatInflow(stored, [{ name: "우드", blogId: "wood" }]);
-    assert.match(text, /^\[블로그 유입 검색어\]\n.*review_search_inflow.*\(블로그 2개\)/);
-    assert.match(text, /## 우드 · 2026-11-09~2026-11-15 · 검색 유입 93.5%\n- 한경선 8.39%/);
-    assert.match(text, /## 블로그 아이디 issue \(toolhub 계정 화면에 블로그 아이디를 넣어 주세요\) · 2026-11-09~2026-11-15\n- 물가 3%/);
+  it("주간이 아니거나(일간·월간) 아직 안 끝난 주면 이유", () => {
+    assert.equal(inflowPeriodProblem("2026-11-09~2026-11-15", "2026-11-19"), null);
+    assert.match(inflowPeriodProblem("2026-11-18", "2026-11-19"), /주간 통계가 아니에요 \(기간: 2026-11-18\)/);
+    assert.match(inflowPeriodProblem("2026-10-01~2026-10-31", "2026-11-19"), /주간 통계가 아니에요/);
+    assert.match(inflowPeriodProblem(null, "2026-11-19"), /기간: 모름/);
+    assert.match(inflowPeriodProblem("2026-11-16~2026-11-22", "2026-11-19"), /아직 안 끝났어요/);
+    assert.match(inflowPeriodProblem("2026-11-13~2026-11-19", "2026-11-19"), /아직 안 끝났어요/);
+  });
+
+  it("지금 화면의 블로그 하나만 계정 이름으로 복사", () => {
+    const wood = { blogId: "wood", period: "2026-11-09~2026-11-15", total: 93.5, keywords: [{ keyword: "한경선", share: 8.39 }, { keyword: "컴포즈 모찌", share: 5.56 }] };
+    const text = formatInflow(wood, [{ name: "우드", blogId: "wood" }]);
+    assert.match(text, /^\[블로그 유입 검색어\]\n.*review_search_inflow/);
+    assert.equal(text.match(/^## /gm).length, 1);
+    assert.match(text, /## 우드 · 2026-11-09~2026-11-15 · 검색 유입 93.5%\n- 한경선 8.39%\n- 컴포즈 모찌 5.56%$/);
+    const unknown = formatInflow({ blogId: "issue", period: "2026-11-09~2026-11-15", total: null, keywords: [{ keyword: "물가", share: 3 }] });
+    assert.match(unknown, /## 블로그 아이디 issue \(toolhub 계정 화면에 블로그 아이디를 넣어 주세요\) · 2026-11-09~2026-11-15\n- 물가 3%/);
   });
 });
